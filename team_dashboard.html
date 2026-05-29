@@ -1,0 +1,1210 @@
+<!DOCTYPE html>
+<html lang="ko">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0">
+<meta name="apple-mobile-web-app-capable" content="yes">
+<meta name="apple-mobile-web-app-status-bar-style" content="default">
+<title>팀 업무 현황 v2</title>
+<style>
+  :root {
+    --primary: #2563eb;
+    --primary-light: #eff6ff;
+    --success: #16a34a;
+    --success-light: #f0fdf4;
+    --warning: #d97706;
+    --warning-light: #fffbeb;
+    --danger: #dc2626;
+    --danger-light: #fef2f2;
+    --gray: #6b7280;
+    --gray-light: #f9fafb;
+    --border: #e5e7eb;
+    --text: #111827;
+    --text-light: #6b7280;
+    --radius: 12px;
+    --shadow: 0 1px 3px rgba(0,0,0,0.1);
+  }
+  * { box-sizing: border-box; margin: 0; padding: 0; }
+  body { font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', sans-serif; background: #f3f4f6; color: var(--text); min-height: 100vh; }
+
+  /* ── 헤더 ── */
+  .header { background: white; border-bottom: 1px solid var(--border); padding: 12px 16px; display: flex; align-items: center; justify-content: space-between; position: sticky; top: 0; z-index: 100; }
+  .header-title { font-size: 18px; font-weight: 700; color: var(--primary); }
+  .header-user { font-size: 13px; color: var(--gray); cursor: pointer; display: flex; align-items: center; gap: 6px; }
+  .avatar { width: 32px; height: 32px; border-radius: 50%; background: var(--primary); color: white; display: flex; align-items: center; justify-content: center; font-size: 13px; font-weight: 600; }
+
+  /* ── 탭 ── */
+  .tabs { background: white; border-bottom: 1px solid var(--border); display: flex; overflow-x: auto; }
+  .tab { padding: 12px 20px; font-size: 14px; font-weight: 500; color: var(--gray); cursor: pointer; border-bottom: 2px solid transparent; white-space: nowrap; transition: all 0.2s; }
+  .tab.active { color: var(--primary); border-bottom-color: var(--primary); }
+
+  /* ── 메인 컨텐츠 ── */
+  .content { padding: 16px; max-width: 800px; margin: 0 auto; }
+  .screen { display: none; }
+  .screen.active { display: block; }
+
+  /* ── 카드 ── */
+  .card { background: white; border-radius: var(--radius); padding: 16px; margin-bottom: 12px; box-shadow: var(--shadow); }
+  .card-header { display: flex; align-items: center; justify-content: space-between; margin-bottom: 12px; }
+  .card-title { font-size: 15px; font-weight: 600; }
+
+  /* ── 팀원 카드 ── */
+  .member-card { background: white; border-radius: var(--radius); padding: 16px; margin-bottom: 12px; box-shadow: var(--shadow); border-left: 4px solid var(--border); }
+  .member-card.has-delay { border-left-color: var(--danger); }
+  .member-card.all-good { border-left-color: var(--success); }
+  .member-header { display: flex; align-items: center; gap: 10px; margin-bottom: 12px; }
+  .member-name { font-size: 16px; font-weight: 600; }
+  .member-role { font-size: 11px; color: white; background: var(--primary); padding: 2px 8px; border-radius: 20px; }
+  .member-stats { font-size: 12px; color: var(--gray); margin-left: auto; }
+
+  /* ── 업무 아이템 ── */
+  .task-item { display: flex; align-items: flex-start; gap: 10px; padding: 10px 0; border-top: 1px solid var(--border); cursor: pointer; }
+  .task-item:first-child { border-top: none; }
+  .task-status-dot { width: 10px; height: 10px; border-radius: 50%; flex-shrink: 0; margin-top: 4px; }
+  .dot-done { background: var(--success); }
+  .dot-progress { background: var(--warning); }
+  .dot-delay { background: var(--danger); }
+  .dot-waiting { background: var(--gray); }
+  .task-info { flex: 1; min-width: 0; }
+  .task-name { font-size: 14px; font-weight: 500; white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
+  .task-meta { font-size: 12px; color: var(--gray); margin-top: 2px; display: flex; gap: 8px; flex-wrap: wrap; }
+  .task-badge { font-size: 11px; padding: 1px 6px; border-radius: 4px; }
+  .badge-assigned { background: #eff6ff; color: var(--primary); }
+  .badge-self { background: #f0fdf4; color: var(--success); }
+  .badge-high { background: #fef2f2; color: var(--danger); }
+  .badge-mid { background: #fffbeb; color: var(--warning); }
+  .badge-low { background: #f9fafb; color: var(--gray); }
+  .task-progress { font-size: 12px; color: var(--gray); white-space: nowrap; }
+
+  /* ── 빈 상태 ── */
+  .empty { text-align: center; color: var(--gray); padding: 32px 16px; }
+  .empty-icon { font-size: 40px; margin-bottom: 8px; }
+
+  /* ── 버튼 ── */
+  .btn { padding: 10px 20px; border-radius: 8px; font-size: 14px; font-weight: 600; border: none; cursor: pointer; transition: all 0.2s; }
+  .btn-primary { background: var(--primary); color: white; }
+  .btn-primary:hover { background: #1d4ed8; }
+  .btn-outline { background: white; color: var(--primary); border: 1px solid var(--primary); }
+  .btn-danger { background: var(--danger); color: white; }
+  .btn-sm { padding: 6px 14px; font-size: 13px; }
+  .btn-block { width: 100%; }
+  .btn-group { display: flex; gap: 8px; flex-wrap: wrap; }
+
+  /* ── FAB ── */
+  .fab { position: fixed; bottom: 24px; right: 20px; width: 56px; height: 56px; border-radius: 50%; background: var(--primary); color: white; font-size: 28px; border: none; cursor: pointer; box-shadow: 0 4px 12px rgba(37,99,235,0.4); display: flex; align-items: center; justify-content: center; z-index: 200; transition: transform 0.2s; }
+  .fab:hover { transform: scale(1.05); }
+
+  /* ── 폼 ── */
+  .form-group { margin-bottom: 16px; }
+  .form-label { font-size: 13px; font-weight: 600; color: var(--text); margin-bottom: 6px; display: block; }
+  .form-control { width: 100%; padding: 10px 12px; border: 1px solid var(--border); border-radius: 8px; font-size: 14px; outline: none; transition: border-color 0.2s; }
+  .form-control:focus { border-color: var(--primary); }
+  select.form-control { background: white; }
+  .form-row { display: grid; grid-template-columns: 1fr 1fr; gap: 12px; }
+
+  /* ── 분석 ── */
+  .stat-grid { display: grid; grid-template-columns: repeat(3, 1fr); gap: 10px; margin-bottom: 16px; }
+  .stat-box { background: white; border-radius: var(--radius); padding: 14px; text-align: center; box-shadow: var(--shadow); }
+  .stat-num { font-size: 28px; font-weight: 700; }
+  .stat-label { font-size: 12px; color: var(--gray); margin-top: 4px; }
+  .stat-danger { color: var(--danger); }
+  .stat-warning { color: var(--warning); }
+  .stat-success { color: var(--success); }
+
+  /* ── 섹션 타이틀 ── */
+  .section-title { font-size: 13px; font-weight: 600; color: var(--gray); text-transform: uppercase; letter-spacing: 0.5px; margin: 20px 0 10px; }
+
+  /* ── 모달 ── */
+  .modal-overlay { display: none; position: fixed; inset: 0; background: rgba(0,0,0,0.5); z-index: 300; align-items: flex-end; }
+  .modal-overlay.open { display: flex; }
+  .modal { background: white; width: 100%; max-width: 500px; margin: 0 auto; border-radius: 20px 20px 0 0; padding: 24px 20px; max-height: 90vh; overflow-y: auto; }
+  @media (min-width: 600px) { .modal-overlay { align-items: center; } .modal { border-radius: 16px; margin: 20px; } }
+  .modal-handle { width: 40px; height: 4px; background: var(--border); border-radius: 2px; margin: 0 auto 20px; }
+  .modal-title { font-size: 18px; font-weight: 700; margin-bottom: 20px; }
+
+  /* ── 로그인 ── */
+  .login-screen { min-height: 100vh; display: flex; align-items: center; justify-content: center; background: linear-gradient(135deg, #eff6ff 0%, #e0e7ff 100%); padding: 20px; }
+  .login-box { background: white; border-radius: 20px; padding: 32px 24px; width: 100%; max-width: 360px; box-shadow: 0 8px 32px rgba(0,0,0,0.1); }
+  .login-logo { font-size: 40px; text-align: center; margin-bottom: 8px; }
+  .login-title { font-size: 22px; font-weight: 700; text-align: center; margin-bottom: 4px; }
+  .login-sub { font-size: 14px; color: var(--gray); text-align: center; margin-bottom: 28px; }
+  .member-list { display: flex; flex-direction: column; gap: 8px; }
+  .member-btn { padding: 14px 16px; border: 1px solid var(--border); border-radius: 10px; background: white; cursor: pointer; display: flex; align-items: center; gap: 12px; transition: all 0.2s; text-align: left; }
+  .member-btn:hover { border-color: var(--primary); background: var(--primary-light); }
+  .member-btn-name { font-size: 15px; font-weight: 600; }
+  .member-btn-role { font-size: 12px; color: var(--gray); }
+  .pin-input { margin-top: 16px; }
+  .pin-back { background: none; border: none; color: var(--primary); font-size: 14px; cursor: pointer; margin-bottom: 12px; padding: 0; }
+
+  /* ── 메시지 ── */
+  .msg-item { padding: 12px; border-radius: 10px; margin-bottom: 8px; }
+  .msg-sent { background: var(--primary-light); margin-left: 40px; }
+  .msg-received { background: var(--gray-light); margin-right: 40px; }
+  .msg-sender { font-size: 12px; font-weight: 600; color: var(--primary); margin-bottom: 4px; }
+  .msg-text { font-size: 14px; }
+  .msg-time { font-size: 11px; color: var(--gray); margin-top: 4px; }
+  .msg-input-area { display: flex; gap: 8px; margin-top: 12px; }
+  .msg-input-area .form-control { flex: 1; }
+
+  /* ── 설정 ── */
+  .settings-item { display: flex; align-items: center; justify-content: space-between; padding: 14px 0; border-top: 1px solid var(--border); }
+  .settings-item:first-child { border-top: none; }
+  .settings-label { font-size: 15px; }
+  .settings-value { font-size: 14px; color: var(--gray); }
+
+  /* ── 알림 토스트 ── */
+  .toast { position: fixed; top: 70px; left: 50%; transform: translateX(-50%); background: #1f2937; color: white; padding: 10px 20px; border-radius: 8px; font-size: 14px; z-index: 999; opacity: 0; transition: opacity 0.3s; pointer-events: none; white-space: nowrap; }
+  .toast.show { opacity: 1; }
+
+  /* ── 사진 첨부 ── */
+  .photo-upload-area { border: 2px dashed var(--border); border-radius: 10px; padding: 16px; text-align: center; cursor: pointer; transition: border-color 0.2s; }
+  .photo-upload-area:hover { border-color: var(--primary); }
+  .photo-upload-area input { display: none; }
+  .photo-preview { display: flex; flex-wrap: wrap; gap: 8px; margin-top: 8px; }
+  .photo-thumb { width: 72px; height: 72px; border-radius: 8px; object-fit: cover; border: 1px solid var(--border); }
+  .photo-thumb-wrap { position: relative; }
+  .photo-remove { position: absolute; top: -6px; right: -6px; width: 18px; height: 18px; background: var(--danger); color: white; border-radius: 50%; font-size: 11px; border: none; cursor: pointer; display: flex; align-items: center; justify-content: center; }
+  .task-photo { width: 48px; height: 48px; border-radius: 6px; object-fit: cover; cursor: pointer; }
+
+  /* ── 달력 ── */
+  .calendar-wrap { background: white; border-radius: var(--radius); padding: 16px; box-shadow: var(--shadow); margin-bottom: 12px; }
+  .cal-header { display: flex; align-items: center; justify-content: space-between; margin-bottom: 12px; }
+  .cal-title { font-size: 16px; font-weight: 700; }
+  .cal-nav { background: none; border: 1px solid var(--border); border-radius: 6px; width: 32px; height: 32px; cursor: pointer; font-size: 16px; display: flex; align-items: center; justify-content: center; }
+  .cal-grid { display: grid; grid-template-columns: repeat(7, 1fr); gap: 2px; }
+  .cal-day-label { text-align: center; font-size: 11px; font-weight: 600; color: var(--gray); padding: 4px 0; }
+  .cal-day-label:first-child { color: var(--danger); }
+  .cal-day-label:last-child { color: var(--primary); }
+  .cal-cell { min-height: 52px; border-radius: 6px; padding: 4px; font-size: 12px; cursor: pointer; transition: background 0.15s; }
+  .cal-cell:hover { background: var(--primary-light); }
+  .cal-cell.other-month { color: var(--border); }
+  .cal-cell.today { background: var(--primary-light); font-weight: 700; }
+  .cal-cell.today .cal-date { color: var(--primary); }
+  .cal-date { font-size: 12px; font-weight: 500; margin-bottom: 2px; }
+  .cal-dot { width: 6px; height: 6px; border-radius: 50%; display: inline-block; margin: 1px; }
+  .cal-dot-start { background: var(--primary); }
+  .cal-dot-due { background: var(--danger); }
+  .cal-dot-progress { background: var(--warning); }
+</style>
+</head>
+<body>
+
+<!-- ═══════════════════════════════════════════
+     설정: 여기에 Google Sheets 정보 입력
+═══════════════════════════════════════════ -->
+<script>
+const CONFIG = {
+  SHEET_ID: '1ktVWlvQsSD-nhueOeK0tJDQhyguHCdHXFuc0Em08P8s',
+  API_KEY:  'AIzaSyAbxFX5vCTC7-y2ZLbRERFv8bUOC3cb3uo',
+  APP_NAME: '팀 업무 현황',
+};
+</script>
+
+<!-- 토스트 -->
+<div class="toast" id="toast"></div>
+
+<!-- ═══ 로그인 화면 ═══ -->
+<div id="loginScreen" class="login-screen">
+  <div class="login-box">
+    <div class="login-logo">📋</div>
+    <div class="login-title" id="loginTitle">팀 업무 현황</div>
+    <div class="login-sub">이름을 선택하세요</div>
+    <div class="member-list" id="memberList">
+      <div style="text-align:center;color:var(--gray);padding:20px;">로딩 중...</div>
+    </div>
+    <!-- PIN 입력 -->
+    <div class="pin-input" id="pinInput" style="display:none;">
+      <button class="pin-back" onclick="showMemberList()">← 뒤로</button>
+      <div class="form-group">
+        <label class="form-label" id="pinLabel">PIN 번호 입력</label>
+        <input type="password" class="form-control" id="pinField" placeholder="PIN" maxlength="6" inputmode="numeric">
+      </div>
+      <button class="btn btn-primary btn-block" onclick="submitPin()">로그인</button>
+    </div>
+  </div>
+</div>
+
+<!-- ═══ 메인 앱 ═══ -->
+<div id="appScreen" style="display:none;">
+  <!-- 헤더 -->
+  <div class="header">
+    <div class="header-title" id="appTitle">📋 팀 업무 현황</div>
+    <div class="header-user" onclick="logout()">
+      <div class="avatar" id="userAvatar">?</div>
+      <span id="userName">-</span>
+    </div>
+  </div>
+
+  <!-- 탭 -->
+  <div class="tabs" id="tabBar">
+    <div class="tab active" onclick="showTab('dashboard')">현황판</div>
+    <div class="tab" onclick="showTab('calendar')">달력</div>
+    <div class="tab" onclick="showTab('analysis')">분석</div>
+    <div class="tab manager-only" onclick="showTab('messages')" style="display:none;">비밀메시지</div>
+    <div class="tab manager-only" onclick="showTab('settings')" style="display:none;">설정</div>
+  </div>
+
+  <!-- 현황판 -->
+  <div class="content">
+    <div class="screen active" id="screen-dashboard">
+      <div id="memberCards">
+        <div class="empty"><div class="empty-icon">📭</div>데이터 로딩 중...</div>
+      </div>
+    </div>
+
+    <!-- 달력 -->
+    <div class="screen" id="screen-calendar">
+      <div class="calendar-wrap">
+        <div class="cal-header">
+          <button class="cal-nav" onclick="calMove(-1)">‹</button>
+          <div class="cal-title" id="calTitle"></div>
+          <button class="cal-nav" onclick="calMove(1)">›</button>
+        </div>
+        <div class="cal-grid" id="calDayLabels">
+          <div class="cal-day-label">일</div><div class="cal-day-label">월</div>
+          <div class="cal-day-label">화</div><div class="cal-day-label">수</div>
+          <div class="cal-day-label">목</div><div class="cal-day-label">금</div>
+          <div class="cal-day-label">토</div>
+        </div>
+        <div class="cal-grid" id="calGrid"></div>
+      </div>
+      <div id="calDayDetail"></div>
+    </div>
+
+    <!-- 분석 -->
+    <div class="screen" id="screen-analysis">
+      <div class="stat-grid">
+        <div class="stat-box"><div class="stat-num stat-danger" id="stat-delay">0</div><div class="stat-label">지연</div></div>
+        <div class="stat-box"><div class="stat-num stat-warning" id="stat-progress">0</div><div class="stat-label">진행중</div></div>
+        <div class="stat-box"><div class="stat-num stat-success" id="stat-done">0</div><div class="stat-label">완료</div></div>
+      </div>
+      <div class="section-title">🔴 지연 업무</div>
+      <div id="delayList"></div>
+      <div class="section-title">📊 업무 몰림 현황</div>
+      <div id="workloadList"></div>
+    </div>
+
+    <!-- 비밀메시지 -->
+    <div class="screen" id="screen-messages">
+      <div class="card">
+        <div class="card-header">
+          <div class="card-title">🔒 실장 ↔ 팀장 비밀메시지</div>
+        </div>
+        <div id="messageList" style="min-height:200px; max-height:400px; overflow-y:auto;"></div>
+        <div class="msg-input-area">
+          <input type="text" class="form-control" id="msgInput" placeholder="메시지 입력...">
+          <button class="btn btn-primary btn-sm" onclick="sendMessage()">전송</button>
+        </div>
+      </div>
+    </div>
+
+    <!-- 설정 -->
+    <div class="screen" id="screen-settings">
+      <div class="card">
+        <div class="card-title" style="margin-bottom:12px;">👥 팀원 관리</div>
+        <div id="memberSettingList"></div>
+        <button class="btn btn-outline btn-sm" style="margin-top:12px;" onclick="openAddMember()">+ 팀원 추가</button>
+      </div>
+      <div class="card" style="margin-top:12px;">
+        <div class="card-title" style="margin-bottom:12px;">⚙️ 앱 설정</div>
+        <div class="settings-item">
+          <span class="settings-label">리포트 이메일</span>
+          <input type="email" class="form-control" id="reportEmail" placeholder="이메일 입력" style="width:180px;padding:6px 10px;font-size:13px;">
+        </div>
+        <div class="settings-item">
+          <span class="settings-label">회사/팀 이름</span>
+          <input type="text" class="form-control" id="teamName" placeholder="팀 이름" style="width:140px;padding:6px 10px;font-size:13px;">
+        </div>
+        <button class="btn btn-primary btn-sm" style="margin-top:12px;" onclick="saveSettings()">저장</button>
+      </div>
+    </div>
+  </div>
+
+  <!-- FAB -->
+  <button class="fab" onclick="openAddTask()" title="업무 추가">＋</button>
+</div>
+
+<!-- ═══ 업무 추가/수정 모달 ═══ -->
+<div class="modal-overlay" id="taskModal">
+  <div class="modal">
+    <div class="modal-handle"></div>
+    <div class="modal-title" id="taskModalTitle">업무 추가</div>
+    <input type="hidden" id="editTaskId">
+    <div class="form-group">
+      <label class="form-label">업무명 *</label>
+      <input type="text" class="form-control" id="taskName" placeholder="업무 내용을 입력하세요">
+    </div>
+    <div class="form-row">
+      <div class="form-group">
+        <label class="form-label">담당자 *</label>
+        <select class="form-control" id="taskAssignee"></select>
+      </div>
+      <div class="form-group">
+        <label class="form-label">우선순위</label>
+        <select class="form-control" id="taskPriority">
+          <option value="high">🔴 높음</option>
+          <option value="mid" selected>🟡 중간</option>
+          <option value="low">🟢 낮음</option>
+        </select>
+      </div>
+    </div>
+    <div class="form-row">
+      <div class="form-group">
+        <label class="form-label">상태</label>
+        <select class="form-control" id="taskStatus">
+          <option value="waiting">대기</option>
+          <option value="in_progress" selected>진행중</option>
+          <option value="done">완료</option>
+        </select>
+      </div>
+      <div class="form-group">
+        <label class="form-label">진척률 (%)</label>
+        <input type="number" class="form-control" id="taskProgress" value="0" min="0" max="100">
+      </div>
+    </div>
+    <div class="form-row">
+      <div class="form-group">
+        <label class="form-label">시작일</label>
+        <input type="date" class="form-control" id="taskStartDate">
+      </div>
+      <div class="form-group">
+        <label class="form-label">마감일</label>
+        <input type="date" class="form-control" id="taskDueDate">
+      </div>
+    </div>
+    <div class="form-group">
+      <label class="form-label">사진 첨부 (선택)</label>
+      <div class="photo-upload-area" onclick="document.getElementById('photoInput').click()">
+        <div style="font-size:24px;">📷</div>
+        <div style="font-size:13px;color:var(--gray);margin-top:4px;">사진을 선택하세요 (자동 압축)</div>
+        <input type="file" id="photoInput" accept="image/*" multiple onchange="handlePhotoUpload(event)">
+      </div>
+      <div class="photo-preview" id="photoPreview"></div>
+    </div>
+    <div class="btn-group">
+      <button class="btn btn-primary" onclick="saveTask()">저장</button>
+      <button class="btn btn-outline" onclick="closeModal('taskModal')">취소</button>
+      <button class="btn btn-danger btn-sm" id="deleteTaskBtn" style="display:none;margin-left:auto;" onclick="deleteTask()">삭제</button>
+    </div>
+  </div>
+</div>
+
+<!-- ═══ 팀원 추가 모달 ═══ -->
+<div class="modal-overlay" id="memberModal">
+  <div class="modal">
+    <div class="modal-handle"></div>
+    <div class="modal-title">팀원 추가</div>
+    <div class="form-group">
+      <label class="form-label">이름 *</label>
+      <input type="text" class="form-control" id="newMemberName" placeholder="이름 입력">
+    </div>
+    <div class="form-group">
+      <label class="form-label">역할</label>
+      <select class="form-control" id="newMemberRole">
+        <option value="member">팀원</option>
+        <option value="manager">실장/팀장</option>
+      </select>
+    </div>
+    <div class="form-group" id="newPinGroup" style="display:none;">
+      <label class="form-label">PIN 번호 (숫자 4~6자리)</label>
+      <input type="password" class="form-control" id="newMemberPin" placeholder="PIN" maxlength="6" inputmode="numeric">
+    </div>
+    <div class="form-group">
+      <label class="form-label">이메일 (선택)</label>
+      <input type="email" class="form-control" id="newMemberEmail" placeholder="이메일">
+    </div>
+    <div class="btn-group">
+      <button class="btn btn-primary" onclick="addMember()">추가</button>
+      <button class="btn btn-outline" onclick="closeModal('memberModal')">취소</button>
+    </div>
+  </div>
+</div>
+
+<script>
+// ══════════════════════════════════════════════════════
+//  상태 관리
+// ══════════════════════════════════════════════════════
+let state = {
+  currentUser: null,   // { name, role, pin }
+  members: [],
+  tasks: [],
+  messages: [],
+  settings: {},
+};
+let uploadedPhotos = []; // 현재 업무 모달의 사진 목록 (base64)
+let calYear, calMonth; // 달력 현재 연/월
+
+// ══════════════════════════════════════════════════════
+//  Google Sheets API 헬퍼
+// ══════════════════════════════════════════════════════
+const SHEETS = {
+  MEMBERS: '팀원',
+  TASKS: '업무',
+  MESSAGES: '비밀메시지',
+  HISTORY: '히스토리',
+  SETTINGS: '설정',
+};
+
+async function readSheet(sheetName) {
+  const url = `https://sheets.googleapis.com/v4/spreadsheets/${CONFIG.SHEET_ID}/values/${encodeURIComponent(sheetName)}?key=${CONFIG.API_KEY}`;
+  const res = await fetch(url);
+  if (!res.ok) throw new Error('시트 읽기 실패: ' + sheetName);
+  const data = await res.json();
+  const rows = data.values || [];
+  if (rows.length < 2) return [];
+  const headers = rows[0];
+  return rows.slice(1).map(row => {
+    const obj = {};
+    headers.forEach((h, i) => obj[h] = row[i] || '');
+    return obj;
+  });
+}
+
+async function appendRow(sheetName, values) {
+  const url = `https://sheets.googleapis.com/v4/spreadsheets/${CONFIG.SHEET_ID}/values/${encodeURIComponent(sheetName)}!A1:append?valueInputOption=USER_ENTERED&key=${CONFIG.API_KEY}`;
+  // 쓰기는 OAuth 필요 → Apps Script Web App으로 프록시
+  return await proxyWrite({ action: 'append', sheet: sheetName, values });
+}
+
+async function updateRow(sheetName, rowIndex, values) {
+  return await proxyWrite({ action: 'update', sheet: sheetName, row: rowIndex, values });
+}
+
+async function deleteRow(sheetName, rowIndex) {
+  return await proxyWrite({ action: 'delete', sheet: sheetName, row: rowIndex });
+}
+
+// Apps Script Web App으로 쓰기 요청 프록시
+async function proxyWrite(payload) {
+  if (!CONFIG.APPS_SCRIPT_URL) {
+    // 개발 중: 로컬 스토리지에 임시 저장
+    localFallbackWrite(payload);
+    return;
+  }
+  const res = await fetch(CONFIG.APPS_SCRIPT_URL, {
+    method: 'POST',
+    body: JSON.stringify(payload),
+  });
+  return res.json();
+}
+
+// ── 로컬 폴백 (테스트용) ──
+function localFallbackWrite(payload) {
+  const key = 'local_' + payload.sheet;
+  let data = JSON.parse(localStorage.getItem(key) || '[]');
+  if (payload.action === 'append') data.push(payload.values);
+  else if (payload.action === 'update') data[payload.row] = payload.values;
+  else if (payload.action === 'delete') data.splice(payload.row, 1);
+  localStorage.setItem(key, JSON.stringify(data));
+}
+
+// ══════════════════════════════════════════════════════
+//  초기화 & 로그인
+// ══════════════════════════════════════════════════════
+async function init() {
+  document.getElementById('appTitle').textContent = '📋 ' + CONFIG.APP_NAME;
+  document.getElementById('loginTitle').textContent = CONFIG.APP_NAME;
+
+  // 저장된 로그인 확인
+  const saved = sessionStorage.getItem('currentUser');
+  if (saved) {
+    state.currentUser = JSON.parse(saved);
+    showApp();
+    return;
+  }
+  await loadMembersForLogin();
+}
+
+async function loadMembersForLogin() {
+  try {
+    // 구글 시트에서 팀원 읽기 시도
+    state.members = await readSheet(SHEETS.MEMBERS);
+  } catch(e) {
+    // 폴백: 로컬 스토리지 또는 기본 데이터
+    state.members = getLocalMembers();
+  }
+  renderMemberList();
+}
+
+function getLocalMembers() {
+  const saved = localStorage.getItem('local_팀원');
+  if (saved) {
+    const rows = JSON.parse(saved);
+    return rows.map(r => ({ 이름: r[0], 역할: r[1], PIN: r[2], 이메일: r[3], 활성: r[5] || 'Y' }));
+  }
+  // 기본 데이터 (최초 실행)
+  return [
+    { 이름: '실장', 역할: 'manager', PIN: '1234', 이메일: '', 활성: 'Y' },
+    { 이름: '팀장', 역할: 'manager', PIN: '5678', 이메일: '', 활성: 'Y' },
+    { 이름: '팀원1', 역할: 'member', PIN: '', 이메일: '', 활성: 'Y' },
+    { 이름: '팀원2', 역할: 'member', PIN: '', 이메일: '', 활성: 'Y' },
+  ];
+}
+
+function renderMemberList() {
+  const list = document.getElementById('memberList');
+  const active = state.members.filter(m => m['활성'] !== 'N');
+  list.innerHTML = active.map(m => `
+    <button class="member-btn" onclick="selectMember('${m['이름']}')">
+      <div class="avatar" style="background:${memberColor(m['이름'])}">${m['이름'][0]}</div>
+      <div>
+        <div class="member-btn-name">${m['이름']}</div>
+        <div class="member-btn-role">${m['역할'] === 'manager' ? '실장/팀장' : '팀원'}</div>
+      </div>
+    </button>
+  `).join('');
+}
+
+let selectedMember = null;
+function selectMember(name) {
+  const member = state.members.find(m => m['이름'] === name);
+  selectedMember = member;
+  if (member['역할'] === 'manager') {
+    // PIN 입력
+    document.getElementById('pinLabel').textContent = `${name}님의 PIN 번호`;
+    document.getElementById('pinField').value = '';
+    document.getElementById('memberList').style.display = 'none';
+    document.querySelector('.login-sub').style.display = 'none';
+    document.getElementById('pinInput').style.display = 'block';
+    document.getElementById('pinField').focus();
+  } else {
+    loginAs(member);
+  }
+}
+
+function showMemberList() {
+  document.getElementById('memberList').style.display = 'flex';
+  document.querySelector('.login-sub').style.display = 'block';
+  document.getElementById('pinInput').style.display = 'none';
+  document.getElementById('memberList').style.flexDirection = 'column';
+}
+
+function submitPin() {
+  const pin = document.getElementById('pinField').value;
+  if (pin === selectedMember['PIN']) {
+    loginAs(selectedMember);
+  } else {
+    showToast('PIN이 틀렸습니다');
+    document.getElementById('pinField').value = '';
+    document.getElementById('pinField').focus();
+  }
+}
+
+function loginAs(member) {
+  state.currentUser = { name: member['이름'], role: member['역할'] };
+  sessionStorage.setItem('currentUser', JSON.stringify(state.currentUser));
+  showApp();
+}
+
+function logout() {
+  if (!confirm('로그아웃 하시겠습니까?')) return;
+  sessionStorage.removeItem('currentUser');
+  state.currentUser = null;
+  document.getElementById('appScreen').style.display = 'none';
+  document.getElementById('loginScreen').style.display = 'flex';
+  showMemberList();
+}
+
+// ══════════════════════════════════════════════════════
+//  앱 진입
+// ══════════════════════════════════════════════════════
+async function showApp() {
+  document.getElementById('loginScreen').style.display = 'none';
+  document.getElementById('appScreen').style.display = 'block';
+
+  // 헤더 사용자 표시
+  const u = state.currentUser;
+  document.getElementById('userName').textContent = u.name;
+  document.getElementById('userAvatar').textContent = u.name[0];
+  document.getElementById('userAvatar').style.background = memberColor(u.name);
+
+  // 관리자 메뉴
+  if (u.role === 'manager') {
+    document.querySelectorAll('.manager-only').forEach(el => el.style.display = 'block');
+  }
+
+  await loadAllData();
+  renderDashboard();
+}
+
+async function loadAllData() {
+  try {
+    state.members = await readSheet(SHEETS.MEMBERS);
+    state.tasks = await readSheet(SHEETS.TASKS);
+    if (state.currentUser.role === 'manager') {
+      state.messages = await readSheet(SHEETS.MESSAGES);
+    }
+  } catch(e) {
+    // 폴백
+    state.members = getLocalMembers();
+    state.tasks = getLocalTasks();
+    if (state.currentUser.role === 'manager') state.messages = getLocalMessages();
+  }
+}
+
+function getLocalTasks() {
+  const saved = localStorage.getItem('local_업무');
+  if (!saved) return [];
+  return JSON.parse(saved).map(r => ({
+    업무ID: r[0], 업무명: r[1], 담당자: r[2], 지시자: r[3], 등록방법: r[4],
+    우선순위: r[5], 상태: r[6], 진척률: r[7], 시작일: r[8], 마감일: r[9], 등록일: r[10], 수정일: r[11], 사진: r[12] || ''
+  }));
+}
+
+function getLocalMessages() {
+  const saved = localStorage.getItem('local_비밀메시지');
+  if (!saved) return [];
+  return JSON.parse(saved).map(r => ({
+    메시지ID: r[0], 보낸사람: r[1], 받는사람: r[2], 내용: r[3], 시간: r[4]
+  }));
+}
+
+// ══════════════════════════════════════════════════════
+//  현황판
+// ══════════════════════════════════════════════════════
+function renderDashboard() {
+  const members = state.members.filter(m => m['활성'] !== 'N');
+  const container = document.getElementById('memberCards');
+
+  if (members.length === 0) {
+    container.innerHTML = '<div class="empty"><div class="empty-icon">👥</div>팀원이 없습니다</div>';
+    return;
+  }
+
+  container.innerHTML = members.map(m => {
+    const myTasks = state.tasks.filter(t => t['담당자'] === m['이름']);
+    const delayed = myTasks.filter(t => isDelayed(t));
+    const hasDelay = delayed.length > 0;
+    const allDone = myTasks.length > 0 && myTasks.every(t => t['상태'] === 'done');
+
+    return `
+      <div class="member-card ${hasDelay ? 'has-delay' : (allDone ? 'all-good' : '')}">
+        <div class="member-header">
+          <div class="avatar" style="background:${memberColor(m['이름'])}">${m['이름'][0]}</div>
+          <div class="member-name">${m['이름']}</div>
+          ${m['역할'] === 'manager' ? '<span class="member-role">실장/팀장</span>' : ''}
+          <div class="member-stats">${myTasks.length}개 업무${hasDelay ? ` · 🔴지연 ${delayed.length}` : ''}</div>
+        </div>
+        ${myTasks.length === 0
+          ? '<div style="font-size:13px;color:var(--gray);">등록된 업무 없음</div>'
+          : myTasks.map(t => taskItemHTML(t)).join('')
+        }
+      </div>
+    `;
+  }).join('');
+}
+
+function taskItemHTML(t) {
+  const delayed = isDelayed(t);
+  const statusMap = {
+    done: ['dot-done', '완료'],
+    in_progress: ['dot-progress', '진행중'],
+    waiting: ['dot-waiting', '대기'],
+    delayed: ['dot-delay', '지연'],
+  };
+  const dotClass = delayed ? 'dot-delay' : (statusMap[t['상태']]?.[0] || 'dot-waiting');
+  const priorityLabel = { high: '🔴높음', mid: '🟡중간', low: '🟢낮음' }[t['우선순위']] || '';
+  const typeLabel = t['등록방법'] === 'assigned' ? '📌지시' : '✍️본인';
+  const canEdit = state.currentUser.role === 'manager' || state.currentUser.name === t['담당자'];
+  const photos = t['사진'] ? t['사진'].split('||').filter(Boolean) : [];
+
+  return `
+    <div class="task-item" onclick="${canEdit ? `openEditTask('${t['업무ID']}')` : 'void(0)'}">
+      <div class="task-status-dot ${dotClass}"></div>
+      <div class="task-info">
+        <div class="task-name">${t['업무명']}</div>
+        <div class="task-meta">
+          <span class="task-badge ${t['등록방법'] === 'assigned' ? 'badge-assigned' : 'badge-self'}">${typeLabel}</span>
+          <span class="task-badge badge-${t['우선순위']}">${priorityLabel}</span>
+          ${t['시작일'] ? `<span>🗓️${t['시작일']}</span>` : ''}
+          ${t['마감일'] ? `<span>📅${t['마감일']}</span>` : ''}
+        </div>
+        ${photos.length > 0 ? `<div style="margin-top:6px;display:flex;gap:4px;">${photos.map(p=>`<img src="${p}" class="task-photo" onclick="event.stopPropagation();viewPhoto('${p}')">`).join('')}</div>` : ''}
+      </div>
+      <div class="task-progress">${t['진척률'] || 0}%</div>
+    </div>
+  `;
+}
+
+function viewPhoto(src) {
+  const overlay = document.createElement('div');
+  overlay.style.cssText = 'position:fixed;inset:0;background:rgba(0,0,0,0.9);z-index:9999;display:flex;align-items:center;justify-content:center;cursor:pointer;';
+  overlay.innerHTML = `<img src="${src}" style="max-width:95vw;max-height:95vh;border-radius:8px;">`;
+  overlay.onclick = () => document.body.removeChild(overlay);
+  document.body.appendChild(overlay);
+}
+
+function isDelayed(task) {
+  if (task['상태'] === 'done') return false;
+  if (!task['마감일']) return false;
+  return new Date(task['마감일']) < new Date();
+}
+
+// ══════════════════════════════════════════════════════
+//  분석
+// ══════════════════════════════════════════════════════
+function renderAnalysis() {
+  const tasks = state.tasks;
+  const delayed = tasks.filter(t => isDelayed(t));
+  const inProgress = tasks.filter(t => t['상태'] === 'in_progress' && !isDelayed(t));
+  const done = tasks.filter(t => t['상태'] === 'done');
+
+  document.getElementById('stat-delay').textContent = delayed.length;
+  document.getElementById('stat-progress').textContent = inProgress.length;
+  document.getElementById('stat-done').textContent = done.length;
+
+  // 지연 목록
+  const delayList = document.getElementById('delayList');
+  delayList.innerHTML = delayed.length === 0
+    ? '<div class="card" style="color:var(--success);text-align:center;">✅ 지연 업무 없음</div>'
+    : delayed.map(t => `
+        <div class="card">
+          <div style="font-weight:600;">${t['업무명']}</div>
+          <div style="font-size:13px;color:var(--gray);margin-top:4px;">담당: ${t['담당자']} · 마감: ${t['마감일']} · ${t['진척률'] || 0}%</div>
+        </div>
+      `).join('');
+
+  // 업무 몰림
+  const members = state.members.filter(m => m['활성'] !== 'N');
+  const workloadList = document.getElementById('workloadList');
+  workloadList.innerHTML = members.map(m => {
+    const cnt = tasks.filter(t => t['담당자'] === m['이름'] && t['상태'] !== 'done').length;
+    const pct = Math.min(cnt * 20, 100);
+    return `
+      <div class="card">
+        <div style="display:flex;justify-content:space-between;margin-bottom:6px;">
+          <span style="font-weight:600;">${m['이름']}</span>
+          <span style="font-size:13px;color:var(--gray);">진행중 ${cnt}개</span>
+        </div>
+        <div style="height:8px;background:var(--border);border-radius:4px;">
+          <div style="height:8px;background:${cnt >= 5 ? 'var(--danger)' : cnt >= 3 ? 'var(--warning)' : 'var(--success)'};border-radius:4px;width:${pct}%;transition:width 0.5s;"></div>
+        </div>
+      </div>
+    `;
+  }).join('');
+}
+
+// ══════════════════════════════════════════════════════
+//  비밀 메시지
+// ══════════════════════════════════════════════════════
+function renderMessages() {
+  const list = document.getElementById('messageList');
+  const msgs = state.messages;
+  if (msgs.length === 0) {
+    list.innerHTML = '<div class="empty"><div class="empty-icon">💬</div>메시지 없음</div>';
+    return;
+  }
+  list.innerHTML = msgs.map(m => {
+    const isMine = m['보낸사람'] === state.currentUser.name;
+    return `
+      <div class="msg-item ${isMine ? 'msg-sent' : 'msg-received'}">
+        <div class="msg-sender">${m['보낸사람']}</div>
+        <div class="msg-text">${m['내용']}</div>
+        <div class="msg-time">${formatTime(m['시간'])}</div>
+      </div>
+    `;
+  }).join('');
+  list.scrollTop = list.scrollHeight;
+}
+
+async function sendMessage() {
+  const input = document.getElementById('msgInput');
+  const text = input.value.trim();
+  if (!text) return;
+
+  const now = new Date().toISOString();
+  const id = Date.now().toString();
+  const managers = state.members.filter(m => m['역할'] === 'manager' && m['이름'] !== state.currentUser.name);
+  const to = managers[0]?.['이름'] || '';
+
+  const msg = { 메시지ID: id, 보낸사람: state.currentUser.name, 받는사람: to, 내용: text, 시간: now };
+  state.messages.push(msg);
+
+  await appendRow(SHEETS.MESSAGES, [id, state.currentUser.name, to, text, now]);
+
+  input.value = '';
+  renderMessages();
+}
+
+// ══════════════════════════════════════════════════════
+//  설정
+// ══════════════════════════════════════════════════════
+function renderSettings() {
+  const list = document.getElementById('memberSettingList');
+  list.innerHTML = state.members.map((m, i) => `
+    <div class="settings-item">
+      <div>
+        <div style="font-weight:600;">${m['이름']}</div>
+        <div style="font-size:12px;color:var(--gray);">${m['역할'] === 'manager' ? '실장/팀장' : '팀원'}</div>
+      </div>
+      <button class="btn btn-outline btn-sm" onclick="toggleMember(${i})" style="color:${m['활성']==='N'?'var(--success)':'var(--danger)'}">
+        ${m['활성'] === 'N' ? '활성화' : '비활성'}
+      </button>
+    </div>
+  `).join('');
+}
+
+function toggleMember(i) {
+  state.members[i]['활성'] = state.members[i]['활성'] === 'N' ? 'Y' : 'N';
+  renderSettings();
+}
+
+function saveSettings() {
+  showToast('설정이 저장되었습니다');
+}
+
+function openAddMember() {
+  document.getElementById('newMemberName').value = '';
+  document.getElementById('newMemberRole').value = 'member';
+  document.getElementById('newMemberPin').value = '';
+  document.getElementById('newMemberEmail').value = '';
+  document.getElementById('newPinGroup').style.display = 'none';
+  document.getElementById('newMemberRole').onchange = function() {
+    document.getElementById('newPinGroup').style.display = this.value === 'manager' ? 'block' : 'none';
+  };
+  openModal('memberModal');
+}
+
+async function addMember() {
+  const name = document.getElementById('newMemberName').value.trim();
+  const role = document.getElementById('newMemberRole').value;
+  const pin = document.getElementById('newMemberPin').value;
+  const email = document.getElementById('newMemberEmail').value;
+  if (!name) { showToast('이름을 입력하세요'); return; }
+
+  const member = { 이름: name, 역할: role, PIN: pin, 이메일: email, 등록일: new Date().toISOString(), 활성: 'Y' };
+  state.members.push(member);
+  await appendRow(SHEETS.MEMBERS, [name, role, pin, email, new Date().toISOString(), 'Y']);
+
+  closeModal('memberModal');
+  renderSettings();
+  showToast(`${name}님이 추가되었습니다`);
+}
+
+// ══════════════════════════════════════════════════════
+//  업무 추가/수정
+// ══════════════════════════════════════════════════════
+function resetTaskModal() {
+  uploadedPhotos = [];
+  document.getElementById('photoPreview').innerHTML = '';
+  document.getElementById('photoInput').value = '';
+}
+
+function openAddTask() {
+  resetTaskModal();
+  document.getElementById('taskModalTitle').textContent = '업무 추가';
+  document.getElementById('editTaskId').value = '';
+  document.getElementById('taskName').value = '';
+  document.getElementById('taskStatus').value = 'in_progress';
+  document.getElementById('taskProgress').value = 0;
+  document.getElementById('taskPriority').value = 'mid';
+  document.getElementById('taskStartDate').value = new Date().toISOString().slice(0,10);
+  document.getElementById('taskDueDate').value = '';
+  document.getElementById('deleteTaskBtn').style.display = 'none';
+
+  const assignee = document.getElementById('taskAssignee');
+  const members = state.currentUser.role === 'manager'
+    ? state.members.filter(m => m['활성'] !== 'N')
+    : [state.members.find(m => m['이름'] === state.currentUser.name)].filter(Boolean);
+
+  assignee.innerHTML = members.map(m => `<option value="${m['이름']}">${m['이름']}</option>`).join('');
+  assignee.disabled = state.currentUser.role !== 'manager';
+
+  openModal('taskModal');
+}
+
+function openEditTask(id) {
+  const task = state.tasks.find(t => t['업무ID'] === id);
+  if (!task) return;
+
+  resetTaskModal();
+  // 기존 사진 로드
+  if (task['사진']) {
+    uploadedPhotos = task['사진'].split('||').filter(Boolean);
+    renderPhotoPreview();
+  }
+
+  document.getElementById('taskModalTitle').textContent = '업무 수정';
+  document.getElementById('editTaskId').value = id;
+  document.getElementById('taskName').value = task['업무명'];
+  document.getElementById('taskStatus').value = task['상태'];
+  document.getElementById('taskProgress').value = task['진척률'] || 0;
+  document.getElementById('taskPriority').value = task['우선순위'] || 'mid';
+  document.getElementById('taskStartDate').value = task['시작일'] || '';
+  document.getElementById('taskDueDate').value = task['마감일'] || '';
+
+  // 삭제 버튼: 관리자만 표시
+  document.getElementById('deleteTaskBtn').style.display =
+    state.currentUser.role === 'manager' ? 'inline-block' : 'none';
+
+  const assignee = document.getElementById('taskAssignee');
+  const members = state.members.filter(m => m['활성'] !== 'N');
+  assignee.innerHTML = members.map(m => `<option value="${m['이름']}" ${m['이름']===task['담당자']?'selected':''}>${m['이름']}</option>`).join('');
+  assignee.disabled = state.currentUser.role !== 'manager';
+
+  openModal('taskModal');
+}
+
+// ── 사진 업로드 & 압축 ──
+function handlePhotoUpload(event) {
+  const files = Array.from(event.target.files);
+  files.forEach(file => {
+    compressImage(file, 800, 0.75, (compressed) => {
+      uploadedPhotos.push(compressed);
+      renderPhotoPreview();
+    });
+  });
+}
+
+function compressImage(file, maxSize, quality, callback) {
+  const reader = new FileReader();
+  reader.onload = (e) => {
+    const img = new Image();
+    img.onload = () => {
+      const canvas = document.createElement('canvas');
+      let w = img.width, h = img.height;
+      if (w > maxSize || h > maxSize) {
+        if (w > h) { h = Math.round(h * maxSize / w); w = maxSize; }
+        else { w = Math.round(w * maxSize / h); h = maxSize; }
+      }
+      canvas.width = w; canvas.height = h;
+      canvas.getContext('2d').drawImage(img, 0, 0, w, h);
+      callback(canvas.toDataURL('image/jpeg', quality));
+    };
+    img.src = e.target.result;
+  };
+  reader.readAsDataURL(file);
+}
+
+function renderPhotoPreview() {
+  const preview = document.getElementById('photoPreview');
+  preview.innerHTML = uploadedPhotos.map((p, i) => `
+    <div class="photo-thumb-wrap">
+      <img src="${p}" class="photo-thumb">
+      <button class="photo-remove" onclick="removePhoto(${i})">✕</button>
+    </div>
+  `).join('');
+}
+
+function removePhoto(i) {
+  uploadedPhotos.splice(i, 1);
+  renderPhotoPreview();
+}
+
+async function saveTask() {
+  const name = document.getElementById('taskName').value.trim();
+  if (!name) { showToast('업무명을 입력하세요'); return; }
+
+  const editId = document.getElementById('editTaskId').value;
+  const now = new Date().toISOString();
+  const assignee = document.getElementById('taskAssignee').value;
+  const isManager = state.currentUser.role === 'manager';
+
+  const photoStr = uploadedPhotos.join('||');
+
+  if (editId) {
+    const idx = state.tasks.findIndex(t => t['업무ID'] === editId);
+    if (idx > -1) {
+      state.tasks[idx] = {
+        ...state.tasks[idx],
+        업무명: name,
+        담당자: assignee,
+        우선순위: document.getElementById('taskPriority').value,
+        상태: document.getElementById('taskStatus').value,
+        진척률: document.getElementById('taskProgress').value,
+        시작일: document.getElementById('taskStartDate').value,
+        마감일: document.getElementById('taskDueDate').value,
+        수정일: now,
+        사진: photoStr,
+      };
+      await updateRow(SHEETS.TASKS, idx + 1, Object.values(state.tasks[idx]));
+    }
+  } else {
+    const id = Date.now().toString();
+    const task = {
+      업무ID: id,
+      업무명: name,
+      담당자: assignee,
+      지시자: state.currentUser.name,
+      등록방법: isManager && assignee !== state.currentUser.name ? 'assigned' : 'self',
+      우선순위: document.getElementById('taskPriority').value,
+      상태: document.getElementById('taskStatus').value,
+      진척률: document.getElementById('taskProgress').value,
+      시작일: document.getElementById('taskStartDate').value,
+      마감일: document.getElementById('taskDueDate').value,
+      등록일: now,
+      수정일: now,
+      사진: photoStr,
+    };
+    state.tasks.push(task);
+    await appendRow(SHEETS.TASKS, Object.values(task));
+  }
+
+  closeModal('taskModal');
+  renderDashboard();
+  if (document.getElementById('screen-analysis').classList.contains('active')) renderAnalysis();
+  showToast('저장되었습니다');
+}
+
+async function deleteTask() {
+  if (!confirm('이 업무를 삭제하시겠습니까?')) return;
+  const editId = document.getElementById('editTaskId').value;
+  const idx = state.tasks.findIndex(t => t['업무ID'] === editId);
+  if (idx > -1) {
+    state.tasks.splice(idx, 1);
+    await deleteRow(SHEETS.TASKS, idx + 1);
+  }
+  closeModal('taskModal');
+  renderDashboard();
+  showToast('삭제되었습니다');
+}
+
+// ══════════════════════════════════════════════════════
+//  달력
+// ══════════════════════════════════════════════════════
+function initCalendar() {
+  const now = new Date();
+  calYear = now.getFullYear();
+  calMonth = now.getMonth();
+  renderCalendar();
+}
+
+function calMove(dir) {
+  calMonth += dir;
+  if (calMonth > 11) { calMonth = 0; calYear++; }
+  if (calMonth < 0) { calMonth = 11; calYear--; }
+  renderCalendar();
+}
+
+function renderCalendar() {
+  document.getElementById('calTitle').textContent = `${calYear}년 ${calMonth+1}월`;
+  const grid = document.getElementById('calGrid');
+  const today = new Date();
+  const firstDay = new Date(calYear, calMonth, 1).getDay();
+  const daysInMonth = new Date(calYear, calMonth+1, 0).getDate();
+  const daysInPrev = new Date(calYear, calMonth, 0).getDate();
+
+  let cells = '';
+  // 이전달 날짜
+  for (let i = firstDay - 1; i >= 0; i--) {
+    cells += `<div class="cal-cell other-month"><div class="cal-date">${daysInPrev - i}</div></div>`;
+  }
+  // 현재달
+  for (let d = 1; d <= daysInMonth; d++) {
+    const dateStr = `${calYear}-${String(calMonth+1).padStart(2,'0')}-${String(d).padStart(2,'0')}`;
+    const isToday = today.getFullYear()===calYear && today.getMonth()===calMonth && today.getDate()===d;
+    const startTasks = state.tasks.filter(t => t['시작일'] === dateStr);
+    const dueTasks = state.tasks.filter(t => t['마감일'] === dateStr);
+    const progressTasks = state.tasks.filter(t => t['시작일'] <= dateStr && t['마감일'] >= dateStr && t['상태'] === 'in_progress');
+
+    const dots = [
+      ...startTasks.map(() => `<span class="cal-dot cal-dot-start"></span>`),
+      ...dueTasks.map(() => `<span class="cal-dot cal-dot-due"></span>`),
+      ...progressTasks.slice(0,2).map(() => `<span class="cal-dot cal-dot-progress"></span>`),
+    ].slice(0,4).join('');
+
+    cells += `<div class="cal-cell${isToday?' today':''}" onclick="showCalDay('${dateStr}')">
+      <div class="cal-date">${d}</div>
+      <div>${dots}</div>
+    </div>`;
+  }
+  // 다음달 채우기
+  const remaining = 42 - (firstDay + daysInMonth);
+  for (let d = 1; d <= remaining; d++) {
+    cells += `<div class="cal-cell other-month"><div class="cal-date">${d}</div></div>`;
+  }
+  grid.innerHTML = cells;
+  document.getElementById('calDayDetail').innerHTML = '';
+}
+
+function showCalDay(dateStr) {
+  const startTasks = state.tasks.filter(t => t['시작일'] === dateStr);
+  const dueTasks = state.tasks.filter(t => t['마감일'] === dateStr && t['시작일'] !== dateStr);
+  const detail = document.getElementById('calDayDetail');
+
+  if (startTasks.length === 0 && dueTasks.length === 0) {
+    detail.innerHTML = `<div class="card" style="text-align:center;color:var(--gray);">${dateStr}<br>업무 없음</div>`;
+    return;
+  }
+
+  let html = `<div class="section-title">${dateStr}</div>`;
+  if (startTasks.length > 0) {
+    html += `<div style="font-size:12px;color:var(--primary);font-weight:600;margin-bottom:6px;">🗓️ 시작</div>`;
+    html += startTasks.map(t => `<div class="card" style="margin-bottom:8px;">
+      <div style="font-weight:600;">${t['업무명']}</div>
+      <div style="font-size:12px;color:var(--gray);">담당: ${t['담당자']} · ${t['진척률']||0}%</div>
+    </div>`).join('');
+  }
+  if (dueTasks.length > 0) {
+    html += `<div style="font-size:12px;color:var(--danger);font-weight:600;margin:8px 0 6px;">📅 마감</div>`;
+    html += dueTasks.map(t => `<div class="card" style="margin-bottom:8px;border-left:3px solid var(--danger);">
+      <div style="font-weight:600;">${t['업무명']}</div>
+      <div style="font-size:12px;color:var(--gray);">담당: ${t['담당자']} · ${t['진척률']||0}%</div>
+    </div>`).join('');
+  }
+  detail.innerHTML = html;
+}
+
+// ══════════════════════════════════════════════════════
+//  탭 전환
+// ══════════════════════════════════════════════════════
+function showTab(tab) {
+  document.querySelectorAll('.tab').forEach(t => t.classList.remove('active'));
+  document.querySelectorAll('.screen').forEach(s => s.classList.remove('active'));
+
+  const tabEls = document.querySelectorAll('.tab');
+  const tabIndex = { dashboard: 0, calendar: 1, analysis: 2, messages: 3, settings: 4 };
+  tabEls[tabIndex[tab]]?.classList.add('active');
+  document.getElementById('screen-' + tab)?.classList.add('active');
+
+  if (tab === 'calendar') { if (!calYear) initCalendar(); else renderCalendar(); }
+  if (tab === 'analysis') renderAnalysis();
+  if (tab === 'messages') renderMessages();
+  if (tab === 'settings') renderSettings();
+
+  document.querySelector('.fab').style.display = tab === 'dashboard' ? 'flex' : 'none';
+}
+
+// ══════════════════════════════════════════════════════
+//  유틸
+// ══════════════════════════════════════════════════════
+function openModal(id) { document.getElementById(id).classList.add('open'); }
+function closeModal(id) { document.getElementById(id).classList.remove('open'); }
+
+function showToast(msg) {
+  const t = document.getElementById('toast');
+  t.textContent = msg;
+  t.classList.add('show');
+  setTimeout(() => t.classList.remove('show'), 2500);
+}
+
+function memberColor(name) {
+  const colors = ['#2563eb','#7c3aed','#db2777','#dc2626','#d97706','#16a34a','#0891b2','#4f46e5'];
+  let hash = 0;
+  for (let c of name) hash = (hash * 31 + c.charCodeAt(0)) % colors.length;
+  return colors[Math.abs(hash)];
+}
+
+function formatTime(iso) {
+  if (!iso) return '';
+  const d = new Date(iso);
+  return `${d.getMonth()+1}/${d.getDate()} ${String(d.getHours()).padStart(2,'0')}:${String(d.getMinutes()).padStart(2,'0')}`;
+}
+
+// 오버레이 클릭으로 모달 닫기
+document.querySelectorAll('.modal-overlay').forEach(overlay => {
+  overlay.addEventListener('click', function(e) {
+    if (e.target === this) this.classList.remove('open');
+  });
+});
+
+// PIN 엔터키
+document.getElementById('pinField')?.addEventListener('keyup', e => {
+  if (e.key === 'Enter') submitPin();
+});
+
+// 앱 시작
+init();
+</script>
+</body>
+</html>
