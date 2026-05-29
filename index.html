@@ -65,6 +65,14 @@
   .dot-progress { background: var(--warning); }
   .dot-delay { background: var(--danger); }
   .dot-waiting { background: var(--gray); }
+  .dot-confirm { background: #7c3aed; }
+
+  /* ── 확인 대기 배너 ── */
+  .confirm-card { background: #faf5ff; border: 1px solid #d8b4fe; border-radius: var(--radius); padding: 14px 16px; margin-bottom: 10px; }
+  .confirm-card-title { font-size: 14px; font-weight: 600; margin-bottom: 4px; }
+  .confirm-card-meta { font-size: 12px; color: var(--gray); margin-bottom: 10px; }
+  .btn-confirm { background: #7c3aed; color: white; border: none; border-radius: 8px; padding: 10px 20px; font-size: 14px; font-weight: 600; cursor: pointer; width: 100%; }
+  .btn-confirm:active { background: #6d28d9; }
   .task-info { flex: 1; min-width: 0; }
   .task-name { font-size: 14px; font-weight: 500; white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
   .task-meta { font-size: 12px; color: var(--gray); margin-top: 2px; display: flex; gap: 8px; flex-wrap: wrap; }
@@ -191,6 +199,20 @@
   .cal-date { font-size: 12px; font-weight: 500; margin-bottom: 2px; }
   .cal-dot { width: 6px; height: 6px; border-radius: 50%; display: inline-block; margin: 1px; }
   .cal-dot-start { background: var(--primary); }
+
+  /* ── 인쇄 ── */
+  @media print {
+    .header, .tabs, .fab, .user-menu, .modal-overlay, .toast { display: none !important; }
+    body { background: white; }
+    .content { padding: 0; max-width: 100%; }
+    .screen { display: block !important; }
+    #screen-mytasks, #screen-calendar, #screen-analysis, #screen-messages, #screen-settings { display: none !important; }
+    .member-card { break-inside: avoid; border: 1px solid #ddd; margin-bottom: 8px; }
+    .print-header { display: block !important; }
+  }
+  .print-header { display: none; text-align: center; margin-bottom: 16px; }
+  .print-header h2 { font-size: 18px; font-weight: 700; }
+  .print-header p { font-size: 13px; color: var(--gray); margin-top: 4px; }
   .cal-dot-due { background: var(--danger); }
   .cal-dot-progress { background: var(--warning); }
 </style>
@@ -264,6 +286,13 @@ const CONFIG = {
   <!-- 현황판 -->
   <div class="content">
     <div class="screen active" id="screen-dashboard">
+      <div class="print-header">
+        <h2 id="printTitle"></h2>
+        <p id="printDate"></p>
+      </div>
+      <div style="text-align:right;margin-bottom:8px;">
+        <button class="btn btn-outline btn-sm manager-only" style="display:none;" onclick="printDashboard()">📄 PDF 저장</button>
+      </div>
       <div id="memberCards">
         <div class="empty"><div class="empty-icon">📭</div>데이터 로딩 중...</div>
       </div>
@@ -378,6 +407,7 @@ const CONFIG = {
       <div class="form-group">
         <label class="form-label">상태</label>
         <select class="form-control" id="taskStatus">
+          <option value="pending_confirm">📬 확인대기</option>
           <option value="waiting">대기</option>
           <option value="in_progress" selected>진행중</option>
           <option value="done">완료</option>
@@ -599,7 +629,7 @@ function renderMemberList() {
       <div class="avatar" style="background:${memberColor(m['이름'])}">${m['이름'][0]}</div>
       <div>
         <div class="member-btn-name">${m['이름']}</div>
-        <div class="member-btn-role">${m['역할'] === 'manager' ? '실장/팀장' : '팀원'}</div>
+        <div class="member-btn-role">${m['역할'] === 'manager' ? m['이름'] : '팀원'}</div>
       </div>
     </button>
   `).join('');
@@ -751,6 +781,7 @@ function taskItemHTML(t) {
     in_progress: ['dot-progress', '진행중'],
     waiting: ['dot-waiting', '대기'],
     delayed: ['dot-delay', '지연'],
+    pending_confirm: ['dot-confirm', '확인대기'],
   };
   const dotClass = delayed ? 'dot-delay' : (statusMap[t['상태']]?.[0] || 'dot-waiting');
   const priorityLabel = { high: '🔴높음', mid: '🟡중간', low: '🟢낮음' }[t['우선순위']] || '';
@@ -885,7 +916,7 @@ function renderSettings() {
     <div class="settings-item">
       <div>
         <div style="font-weight:600;">${m['이름']}</div>
-        <div style="font-size:12px;color:var(--gray);">${m['역할'] === 'manager' ? '실장/팀장' : '팀원'}</div>
+        <div style="font-size:12px;color:var(--gray);">${m['역할'] === 'manager' ? m['이름'] : '팀원'}</div>
       </div>
       <button class="btn btn-outline btn-sm" onclick="toggleMember(${i})" style="color:${m['활성']==='N'?'var(--success)':'var(--danger)'}">
         ${m['활성'] === 'N' ? '활성화' : '비활성'}
@@ -955,6 +986,21 @@ function openAddTask() {
 
   assignee.innerHTML = members.map(m => `<option value="${m['이름']}">${m['이름']}</option>`).join('');
   assignee.disabled = state.currentUser.role !== 'manager';
+
+  // 관리자가 다른 팀원에게 지시할 때 확인대기로 자동 설정
+  if (state.currentUser.role === 'manager') {
+    assignee.onchange = function() {
+      if (this.value !== state.currentUser.name) {
+        document.getElementById('taskStatus').value = 'pending_confirm';
+      } else {
+        document.getElementById('taskStatus').value = 'in_progress';
+      }
+    };
+    // 첫 선택값이 본인이 아니면 확인대기
+    if (assignee.value !== state.currentUser.name) {
+      document.getElementById('taskStatus').value = 'pending_confirm';
+    }
+  }
 
   openModal('taskModal');
 }
@@ -1219,7 +1265,8 @@ function showTab(tab) {
 function renderMyTasks() {
   const me = state.currentUser.name;
   const myTasks = state.tasks.filter(t => t['담당자'] === me);
-  const active = myTasks.filter(t => t['상태'] !== 'done');
+  const pending = myTasks.filter(t => t['상태'] === 'pending_confirm');
+  const active = myTasks.filter(t => t['상태'] !== 'done' && t['상태'] !== 'pending_confirm');
   const done = myTasks.filter(t => t['상태'] === 'done');
 
   document.getElementById('myTasksTitle').textContent = `${me}님의 업무`;
@@ -1228,11 +1275,28 @@ function renderMyTasks() {
   const container = document.getElementById('myTaskCards');
 
   if (myTasks.length === 0) {
-    container.innerHTML = '<div class="empty"><div class="empty-icon">📝</div>등록된 업무가 없습니다<br><small style="font-size:12px;margin-top:8px;display:block;">+ 버튼으로 업무를 추가하세요</small></div>';
+    container.innerHTML = '<div class="empty"><div class="empty-icon">📝</div>등록된 업무가 없습니다</div>';
     return;
   }
 
   let html = '';
+
+  // 확인 대기
+  if (pending.length > 0) {
+    html += `<div class="section-title">📬 확인 필요 (${pending.length})</div>`;
+    html += pending.map(t => `
+      <div class="confirm-card">
+        <div class="confirm-card-title">${t['업무명']}</div>
+        <div class="confirm-card-meta">
+          지시자: ${t['지시자'] || '-'} &nbsp;·&nbsp;
+          우선순위: ${{ high:'🔴높음', mid:'🟡중간', low:'🟢낮음' }[t['우선순위']] || '-'}
+          ${t['마감일'] ? ` &nbsp;·&nbsp; 마감: ${t['마감일']}` : ''}
+        </div>
+        <button class="btn-confirm" onclick="confirmTask('${t['업무ID']}')">✅ 네, 알겠습니다</button>
+      </div>
+    `).join('');
+  }
+
   if (active.length > 0) {
     html += `<div class="section-title">진행 업무 (${active.length})</div>`;
     html += `<div class="card">` + active.map(t => taskItemHTML(t)).join('') + `</div>`;
@@ -1242,6 +1306,18 @@ function renderMyTasks() {
     html += `<div class="card" style="opacity:0.7;">` + done.map(t => taskItemHTML(t)).join('') + `</div>`;
   }
   container.innerHTML = html;
+}
+
+async function confirmTask(id) {
+  const idx = state.tasks.findIndex(t => t['업무ID'] === id);
+  if (idx === -1) return;
+  const task = state.tasks[idx];
+  task['상태'] = 'in_progress';
+  task['수정일'] = new Date().toISOString();
+  await updateRow(SHEETS.TASKS, idx + 1, Object.values(task));
+  renderMyTasks();
+  renderDashboard();
+  showToast('업무를 확인했습니다');
 }
 
 // ══════════════════════════════════════════════════════
@@ -1309,6 +1385,15 @@ function formatTime(iso) {
   if (!iso) return '';
   const d = new Date(iso);
   return `${d.getMonth()+1}/${d.getDate()} ${String(d.getHours()).padStart(2,'0')}:${String(d.getMinutes()).padStart(2,'0')}`;
+}
+
+// ── PDF 저장 ──
+function printDashboard() {
+  const now = new Date();
+  const dateStr = `${now.getFullYear()}년 ${now.getMonth()+1}월 ${now.getDate()}일 기준`;
+  document.getElementById('printTitle').textContent = CONFIG.APP_NAME + ' 업무 현황';
+  document.getElementById('printDate').textContent = dateStr;
+  window.print();
 }
 
 // 오버레이 클릭으로 모달 닫기
