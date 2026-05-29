@@ -5,7 +5,7 @@
 <meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0">
 <meta name="apple-mobile-web-app-capable" content="yes">
 <meta name="apple-mobile-web-app-status-bar-style" content="default">
-<title>팀 업무 현황 v2</title>
+<title>팀 업무 현황 v3</title>
 <style>
   :root {
     --primary: #2563eb;
@@ -146,6 +146,14 @@
   .msg-input-area { display: flex; gap: 8px; margin-top: 12px; }
   .msg-input-area .form-control { flex: 1; }
 
+  /* ── 유저 드롭다운 ── */
+  .user-menu { position: relative; }
+  .user-dropdown { display: none; position: absolute; right: 0; top: 40px; background: white; border: 1px solid var(--border); border-radius: 10px; box-shadow: 0 4px 16px rgba(0,0,0,0.12); min-width: 140px; z-index: 200; overflow: hidden; }
+  .user-dropdown.open { display: block; }
+  .user-dropdown-item { padding: 12px 16px; font-size: 14px; cursor: pointer; display: flex; align-items: center; gap: 8px; }
+  .user-dropdown-item:hover { background: var(--gray-light); }
+  .user-dropdown-item.danger { color: var(--danger); }
+
   /* ── 설정 ── */
   .settings-item { display: flex; align-items: center; justify-content: space-between; padding: 14px 0; border-top: 1px solid var(--border); }
   .settings-item:first-child { border-top: none; }
@@ -230,19 +238,27 @@ const CONFIG = {
   <!-- 헤더 -->
   <div class="header">
     <div class="header-title" id="appTitle">📋 팀 업무 현황</div>
-    <div class="header-user" onclick="logout()">
-      <div class="avatar" id="userAvatar">?</div>
-      <span id="userName">-</span>
+    <div class="user-menu" id="userMenu">
+      <div class="header-user" onclick="toggleUserMenu()">
+        <div class="avatar" id="userAvatar">?</div>
+        <span id="userName">-</span>
+        <span style="font-size:10px;color:var(--gray);">▾</span>
+      </div>
+      <div class="user-dropdown" id="userDropdown">
+        <div class="user-dropdown-item" onclick="openChangePin()">🔑 PIN 변경</div>
+        <div class="user-dropdown-item danger" onclick="logout()">🚪 로그아웃</div>
+      </div>
     </div>
   </div>
 
   <!-- 탭 -->
   <div class="tabs" id="tabBar">
-    <div class="tab active" onclick="showTab('dashboard')">현황판</div>
-    <div class="tab" onclick="showTab('calendar')">달력</div>
-    <div class="tab" onclick="showTab('analysis')">분석</div>
-    <div class="tab manager-only" onclick="showTab('messages')" style="display:none;">비밀메시지</div>
-    <div class="tab manager-only" onclick="showTab('settings')" style="display:none;">설정</div>
+    <div class="tab manager-only" data-tab="dashboard" onclick="showTab('dashboard')" style="display:none;">현황판</div>
+    <div class="tab" data-tab="mytasks" onclick="showTab('mytasks')">내 업무</div>
+    <div class="tab" data-tab="calendar" onclick="showTab('calendar')">달력</div>
+    <div class="tab" data-tab="analysis" onclick="showTab('analysis')">분석</div>
+    <div class="tab manager-only" data-tab="messages" onclick="showTab('messages')" style="display:none;">비밀메시지</div>
+    <div class="tab manager-only" data-tab="settings" onclick="showTab('settings')" style="display:none;">설정</div>
   </div>
 
   <!-- 현황판 -->
@@ -251,6 +267,15 @@ const CONFIG = {
       <div id="memberCards">
         <div class="empty"><div class="empty-icon">📭</div>데이터 로딩 중...</div>
       </div>
+    </div>
+
+    <!-- 내 업무 -->
+    <div class="screen" id="screen-mytasks">
+      <div id="myTasksHeader" style="display:flex;align-items:center;justify-content:space-between;margin-bottom:12px;">
+        <div style="font-size:16px;font-weight:700;" id="myTasksTitle">내 업무</div>
+        <div style="font-size:13px;color:var(--gray);" id="myTasksCount"></div>
+      </div>
+      <div id="myTaskCards"></div>
     </div>
 
     <!-- 달력 -->
@@ -390,6 +415,30 @@ const CONFIG = {
   </div>
 </div>
 
+<!-- ═══ PIN 변경 모달 ═══ -->
+<div class="modal-overlay" id="pinChangeModal">
+  <div class="modal">
+    <div class="modal-handle"></div>
+    <div class="modal-title">🔑 PIN 변경</div>
+    <div class="form-group">
+      <label class="form-label">현재 PIN</label>
+      <input type="password" class="form-control" id="currentPin" placeholder="현재 PIN 입력" maxlength="6" inputmode="numeric">
+    </div>
+    <div class="form-group">
+      <label class="form-label">새 PIN</label>
+      <input type="password" class="form-control" id="newPin" placeholder="새 PIN (4~6자리)" maxlength="6" inputmode="numeric">
+    </div>
+    <div class="form-group">
+      <label class="form-label">새 PIN 확인</label>
+      <input type="password" class="form-control" id="newPinConfirm" placeholder="새 PIN 다시 입력" maxlength="6" inputmode="numeric">
+    </div>
+    <div class="btn-group">
+      <button class="btn btn-primary" onclick="savePin()">변경</button>
+      <button class="btn btn-outline" onclick="closeModal('pinChangeModal')">취소</button>
+    </div>
+  </div>
+</div>
+
 <!-- ═══ 팀원 추가 모달 ═══ -->
 <div class="modal-overlay" id="memberModal">
   <div class="modal">
@@ -406,8 +455,8 @@ const CONFIG = {
         <option value="manager">실장/팀장</option>
       </select>
     </div>
-    <div class="form-group" id="newPinGroup" style="display:none;">
-      <label class="form-label">PIN 번호 (숫자 4~6자리)</label>
+    <div class="form-group" id="newPinGroup">
+      <label class="form-label">PIN 번호 (숫자 4~6자리) *</label>
       <input type="password" class="form-control" id="newMemberPin" placeholder="PIN" maxlength="6" inputmode="numeric">
     </div>
     <div class="form-group">
@@ -560,17 +609,13 @@ let selectedMember = null;
 function selectMember(name) {
   const member = state.members.find(m => m['이름'] === name);
   selectedMember = member;
-  if (member['역할'] === 'manager') {
-    // PIN 입력
-    document.getElementById('pinLabel').textContent = `${name}님의 PIN 번호`;
-    document.getElementById('pinField').value = '';
-    document.getElementById('memberList').style.display = 'none';
-    document.querySelector('.login-sub').style.display = 'none';
-    document.getElementById('pinInput').style.display = 'block';
-    document.getElementById('pinField').focus();
-  } else {
-    loginAs(member);
-  }
+  // 모든 팀원 PIN 필요
+  document.getElementById('pinLabel').textContent = `${name}님의 PIN 번호`;
+  document.getElementById('pinField').value = '';
+  document.getElementById('memberList').style.display = 'none';
+  document.querySelector('.login-sub').style.display = 'none';
+  document.getElementById('pinInput').style.display = 'block';
+  document.getElementById('pinField').focus();
 }
 
 function showMemberList() {
@@ -619,13 +664,17 @@ async function showApp() {
   document.getElementById('userAvatar').textContent = u.name[0];
   document.getElementById('userAvatar').style.background = memberColor(u.name);
 
-  // 관리자 메뉴
+  // 관리자/팀원 메뉴
   if (u.role === 'manager') {
-    document.querySelectorAll('.manager-only').forEach(el => el.style.display = 'block');
+    document.querySelectorAll('.manager-only').forEach(el => el.style.removeProperty('display'));
   }
 
   await loadAllData();
-  renderDashboard();
+  if (u.role === 'manager') {
+    showTab('dashboard');
+  } else {
+    showTab('mytasks');
+  }
 }
 
 async function loadAllData() {
@@ -859,10 +908,6 @@ function openAddMember() {
   document.getElementById('newMemberRole').value = 'member';
   document.getElementById('newMemberPin').value = '';
   document.getElementById('newMemberEmail').value = '';
-  document.getElementById('newPinGroup').style.display = 'none';
-  document.getElementById('newMemberRole').onchange = function() {
-    document.getElementById('newPinGroup').style.display = this.value === 'manager' ? 'block' : 'none';
-  };
   openModal('memberModal');
 }
 
@@ -1043,6 +1088,7 @@ async function saveTask() {
 
   closeModal('taskModal');
   renderDashboard();
+  if (document.getElementById('screen-mytasks').classList.contains('active')) renderMyTasks();
   if (document.getElementById('screen-analysis').classList.contains('active')) renderAnalysis();
   showToast('저장되었습니다');
 }
@@ -1057,6 +1103,7 @@ async function deleteTask() {
   }
   closeModal('taskModal');
   renderDashboard();
+  if (document.getElementById('screen-mytasks').classList.contains('active')) renderMyTasks();
   showToast('삭제되었습니다');
 }
 
@@ -1153,17 +1200,48 @@ function showTab(tab) {
   document.querySelectorAll('.tab').forEach(t => t.classList.remove('active'));
   document.querySelectorAll('.screen').forEach(s => s.classList.remove('active'));
 
-  const tabEls = document.querySelectorAll('.tab');
-  const tabIndex = { dashboard: 0, calendar: 1, analysis: 2, messages: 3, settings: 4 };
-  tabEls[tabIndex[tab]]?.classList.add('active');
+  document.querySelector(`.tab[data-tab="${tab}"]`)?.classList.add('active');
   document.getElementById('screen-' + tab)?.classList.add('active');
 
+  if (tab === 'dashboard') renderDashboard();
+  if (tab === 'mytasks') renderMyTasks();
   if (tab === 'calendar') { if (!calYear) initCalendar(); else renderCalendar(); }
   if (tab === 'analysis') renderAnalysis();
   if (tab === 'messages') renderMessages();
   if (tab === 'settings') renderSettings();
 
-  document.querySelector('.fab').style.display = tab === 'dashboard' ? 'flex' : 'none';
+  document.querySelector('.fab').style.display = (tab === 'dashboard' || tab === 'mytasks') ? 'flex' : 'none';
+}
+
+// ══════════════════════════════════════════════════════
+//  내 업무
+// ══════════════════════════════════════════════════════
+function renderMyTasks() {
+  const me = state.currentUser.name;
+  const myTasks = state.tasks.filter(t => t['담당자'] === me);
+  const active = myTasks.filter(t => t['상태'] !== 'done');
+  const done = myTasks.filter(t => t['상태'] === 'done');
+
+  document.getElementById('myTasksTitle').textContent = `${me}님의 업무`;
+  document.getElementById('myTasksCount').textContent = `전체 ${myTasks.length}개 · 완료 ${done.length}개`;
+
+  const container = document.getElementById('myTaskCards');
+
+  if (myTasks.length === 0) {
+    container.innerHTML = '<div class="empty"><div class="empty-icon">📝</div>등록된 업무가 없습니다<br><small style="font-size:12px;margin-top:8px;display:block;">+ 버튼으로 업무를 추가하세요</small></div>';
+    return;
+  }
+
+  let html = '';
+  if (active.length > 0) {
+    html += `<div class="section-title">진행 업무 (${active.length})</div>`;
+    html += `<div class="card">` + active.map(t => taskItemHTML(t)).join('') + `</div>`;
+  }
+  if (done.length > 0) {
+    html += `<div class="section-title">완료 업무 (${done.length})</div>`;
+    html += `<div class="card" style="opacity:0.7;">` + done.map(t => taskItemHTML(t)).join('') + `</div>`;
+  }
+  container.innerHTML = html;
 }
 
 // ══════════════════════════════════════════════════════
@@ -1171,6 +1249,47 @@ function showTab(tab) {
 // ══════════════════════════════════════════════════════
 function openModal(id) { document.getElementById(id).classList.add('open'); }
 function closeModal(id) { document.getElementById(id).classList.remove('open'); }
+
+// ── 유저 드롭다운 ──
+function toggleUserMenu() {
+  document.getElementById('userDropdown').classList.toggle('open');
+}
+document.addEventListener('click', function(e) {
+  if (!document.getElementById('userMenu').contains(e.target)) {
+    document.getElementById('userDropdown').classList.remove('open');
+  }
+});
+
+// ── PIN 변경 ──
+function openChangePin() {
+  document.getElementById('userDropdown').classList.remove('open');
+  document.getElementById('currentPin').value = '';
+  document.getElementById('newPin').value = '';
+  document.getElementById('newPinConfirm').value = '';
+  openModal('pinChangeModal');
+}
+
+async function savePin() {
+  const current = document.getElementById('currentPin').value;
+  const newP = document.getElementById('newPin').value;
+  const confirm = document.getElementById('newPinConfirm').value;
+
+  const me = state.members.find(m => m['이름'] === state.currentUser.name);
+  if (!me) return;
+
+  if (current !== me['PIN']) { showToast('현재 PIN이 틀렸습니다'); return; }
+  if (newP.length < 4) { showToast('새 PIN은 4자리 이상이어야 합니다'); return; }
+  if (newP !== confirm) { showToast('새 PIN이 일치하지 않습니다'); return; }
+
+  // 시트에서 해당 팀원의 행 인덱스 찾기
+  const idx = state.members.findIndex(m => m['이름'] === state.currentUser.name);
+  me['PIN'] = newP;
+  const row = [me['이름'], me['역할'], newP, me['이메일'] || '', me['등록일'] || '', me['활성'] || 'Y'];
+  await updateRow(SHEETS.MEMBERS, idx + 1, row);
+
+  closeModal('pinChangeModal');
+  showToast('PIN이 변경되었습니다');
+}
 
 function showToast(msg) {
   const t = document.getElementById('toast');
