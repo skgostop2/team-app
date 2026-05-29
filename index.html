@@ -429,6 +429,10 @@ const CONFIG = {
       </div>
     </div>
     <div class="form-group">
+      <label class="form-label">상세 내용</label>
+      <textarea class="form-control" id="taskDetail" placeholder="업무 상세 내용을 입력하세요" rows="4" style="resize:vertical;"></textarea>
+    </div>
+    <div class="form-group">
       <label class="form-label">사진 첨부 (선택)</label>
       <div class="photo-upload-area" onclick="document.getElementById('photoInput').click()">
         <div style="font-size:24px;">📷</div>
@@ -727,7 +731,7 @@ function getLocalTasks() {
   if (!saved) return [];
   return JSON.parse(saved).map(r => ({
     업무ID: r[0], 업무명: r[1], 담당자: r[2], 지시자: r[3], 등록방법: r[4],
-    우선순위: r[5], 상태: r[6], 진척률: r[7], 시작일: r[8], 마감일: r[9], 등록일: r[10], 수정일: r[11], 사진: r[12] || ''
+    우선순위: r[5], 상태: r[6], 진척률: r[7], 시작일: r[8], 마감일: r[9], 등록일: r[10], 수정일: r[11], 사진: r[12] || '', 상세내용: r[13] || ''
   }));
 }
 
@@ -977,6 +981,7 @@ function openAddTask() {
   document.getElementById('taskPriority').value = 'mid';
   document.getElementById('taskStartDate').value = new Date().toISOString().slice(0,10);
   document.getElementById('taskDueDate').value = '';
+  document.getElementById('taskDetail').value = '';
   document.getElementById('deleteTaskBtn').style.display = 'none';
 
   const assignee = document.getElementById('taskAssignee');
@@ -1024,6 +1029,7 @@ function openEditTask(id) {
   document.getElementById('taskPriority').value = task['우선순위'] || 'mid';
   document.getElementById('taskStartDate').value = task['시작일'] || '';
   document.getElementById('taskDueDate').value = task['마감일'] || '';
+  document.getElementById('taskDetail').value = task['상세내용'] || '';
 
   // 삭제 버튼: 관리자만 표시
   document.getElementById('deleteTaskBtn').style.display =
@@ -1093,6 +1099,7 @@ async function saveTask() {
   const isManager = state.currentUser.role === 'manager';
 
   const photoStr = uploadedPhotos.join('||');
+  const detail = document.getElementById('taskDetail').value.trim();
 
   if (editId) {
     const idx = state.tasks.findIndex(t => t['업무ID'] === editId);
@@ -1108,6 +1115,7 @@ async function saveTask() {
         마감일: document.getElementById('taskDueDate').value,
         수정일: now,
         사진: photoStr,
+        상세내용: detail,
       };
       await updateRow(SHEETS.TASKS, idx + 1, Object.values(state.tasks[idx]));
     }
@@ -1127,6 +1135,7 @@ async function saveTask() {
       등록일: now,
       수정일: now,
       사진: photoStr,
+      상세내용: detail,
     };
     state.tasks.push(task);
     await appendRow(SHEETS.TASKS, Object.values(task));
@@ -1292,6 +1301,7 @@ function renderMyTasks() {
           우선순위: ${{ high:'🔴높음', mid:'🟡중간', low:'🟢낮음' }[t['우선순위']] || '-'}
           ${t['마감일'] ? ` &nbsp;·&nbsp; 마감: ${t['마감일']}` : ''}
         </div>
+        ${t['상세내용'] ? `<div style="font-size:13px;background:white;border-radius:6px;padding:10px;margin-bottom:10px;white-space:pre-wrap;line-height:1.6;">${t['상세내용']}</div>` : ''}
         <button class="btn-confirm" onclick="confirmTask('${t['업무ID']}')">✅ 네, 알겠습니다</button>
       </div>
     `).join('');
