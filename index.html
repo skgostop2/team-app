@@ -486,7 +486,8 @@ const CONFIG = {
       <label class="form-label">역할</label>
       <select class="form-control" id="newMemberRole">
         <option value="member">팀원</option>
-        <option value="manager">실장/팀장</option>
+        <option value="실장">실장</option>
+        <option value="팀장">팀장</option>
       </select>
     </div>
     <div class="form-group" id="newPinGroup">
@@ -633,7 +634,7 @@ function renderMemberList() {
       <div class="avatar" style="background:${memberColor(m['이름'])}">${m['이름'][0]}</div>
       <div>
         <div class="member-btn-name">${m['이름']}</div>
-        <div class="member-btn-role">${m['역할'] === 'manager' ? m['이름'] : '팀원'}</div>
+        <div class="member-btn-role">${isManager(m['역할']) ? m['역할'] : '팀원'}</div>
       </div>
     </button>
   `).join('');
@@ -699,12 +700,12 @@ async function showApp() {
   document.getElementById('userAvatar').style.background = memberColor(u.name);
 
   // 관리자/팀원 메뉴
-  if (u.role === 'manager') {
+  if (isManager(u.role)) {
     document.querySelectorAll('.manager-only').forEach(el => el.style.removeProperty('display'));
   }
 
   await loadAllData();
-  if (u.role === 'manager') {
+  if (isManager(u.role)) {
     showTab('dashboard');
   } else {
     showTab('mytasks');
@@ -715,14 +716,14 @@ async function loadAllData() {
   try {
     state.members = await readSheet(SHEETS.MEMBERS);
     state.tasks = await readSheet(SHEETS.TASKS);
-    if (state.currentUser.role === 'manager') {
+    if (isManager(state.currentUser.role)) {
       state.messages = await readSheet(SHEETS.MESSAGES);
     }
   } catch(e) {
     // 폴백
     state.members = getLocalMembers();
     state.tasks = getLocalTasks();
-    if (state.currentUser.role === 'manager') state.messages = getLocalMessages();
+    if (isManager(state.currentUser.role)) state.messages = getLocalMessages();
   }
 }
 
@@ -766,7 +767,7 @@ function renderDashboard() {
         <div class="member-header">
           <div class="avatar" style="background:${memberColor(m['이름'])}">${m['이름'][0]}</div>
           <div class="member-name">${m['이름']}</div>
-          ${m['역할'] === 'manager' ? '<span class="member-role">실장/팀장</span>' : ''}
+          ${isManager(m['역할']) ? '<span class="member-role">실장/팀장</span>' : ''}
           <div class="member-stats">${myTasks.length}개 업무${hasDelay ? ` · 🔴지연 ${delayed.length}` : ''}</div>
         </div>
         ${myTasks.length === 0
@@ -790,7 +791,7 @@ function taskItemHTML(t) {
   const dotClass = delayed ? 'dot-delay' : (statusMap[t['상태']]?.[0] || 'dot-waiting');
   const priorityLabel = { high: '🔴높음', mid: '🟡중간', low: '🟢낮음' }[t['우선순위']] || '';
   const typeLabel = t['등록방법'] === 'assigned' ? '📌지시' : '✍️본인';
-  const canEdit = state.currentUser.role === 'manager' || state.currentUser.name === t['담당자'];
+  const canEdit = isManager(state.currentUser.role) || state.currentUser.name === t['담당자'];
   const photos = t['사진'] ? t['사진'].split('||').filter(Boolean) : [];
 
   return `
@@ -899,7 +900,7 @@ async function sendMessage() {
 
   const now = new Date().toISOString();
   const id = Date.now().toString();
-  const managers = state.members.filter(m => m['역할'] === 'manager' && m['이름'] !== state.currentUser.name);
+  const managers = state.members.filter(m => isManager(m['역할']) && m['이름'] !== state.currentUser.name);
   const to = managers[0]?.['이름'] || '';
 
   const msg = { 메시지ID: id, 보낸사람: state.currentUser.name, 받는사람: to, 내용: text, 시간: now };
@@ -920,7 +921,7 @@ function renderSettings() {
     <div class="settings-item">
       <div>
         <div style="font-weight:600;">${m['이름']}</div>
-        <div style="font-size:12px;color:var(--gray);">${m['역할'] === 'manager' ? m['이름'] : '팀원'}</div>
+        <div style="font-size:12px;color:var(--gray);">${isManager(m['역할']) ? m['역할'] : '팀원'}</div>
       </div>
       <button class="btn btn-outline btn-sm" onclick="toggleMember(${i})" style="color:${m['활성']==='N'?'var(--success)':'var(--danger)'}">
         ${m['활성'] === 'N' ? '활성화' : '비활성'}
@@ -985,7 +986,7 @@ function openAddTask() {
   document.getElementById('deleteTaskBtn').style.display = 'none';
 
   const assignee = document.getElementById('taskAssignee');
-  const members = state.currentUser.role === 'manager'
+  const members = isManager(state.currentUser.role)
     ? state.members.filter(m => m['활성'] !== 'N')
     : [state.members.find(m => m['이름'] === state.currentUser.name)].filter(Boolean);
 
@@ -993,7 +994,7 @@ function openAddTask() {
   assignee.disabled = state.currentUser.role !== 'manager';
 
   // 관리자가 다른 팀원에게 지시할 때 확인대기로 자동 설정
-  if (state.currentUser.role === 'manager') {
+  if (isManager(state.currentUser.role)) {
     assignee.onchange = function() {
       if (this.value !== state.currentUser.name) {
         document.getElementById('taskStatus').value = 'pending_confirm';
@@ -1033,7 +1034,7 @@ function openEditTask(id) {
 
   // 삭제 버튼: 관리자만 표시
   document.getElementById('deleteTaskBtn').style.display =
-    state.currentUser.role === 'manager' ? 'inline-block' : 'none';
+    isManager(state.currentUser.role) ? 'inline-block' : 'none';
 
   const assignee = document.getElementById('taskAssignee');
   const members = state.members.filter(m => m['활성'] !== 'N');
@@ -1096,7 +1097,7 @@ async function saveTask() {
   const editId = document.getElementById('editTaskId').value;
   const now = new Date().toISOString();
   const assignee = document.getElementById('taskAssignee').value;
-  const isManager = state.currentUser.role === 'manager';
+  const isManager = isManager(state.currentUser.role);
 
   const photoStr = uploadedPhotos.join('||');
   const detail = document.getElementById('taskDetail').value.trim();
@@ -1382,6 +1383,10 @@ function showToast(msg) {
   t.textContent = msg;
   t.classList.add('show');
   setTimeout(() => t.classList.remove('show'), 2500);
+}
+
+function isManager(role) {
+  return role === 'manager' || role === '실장' || role === '팀장';
 }
 
 function memberColor(name) {
