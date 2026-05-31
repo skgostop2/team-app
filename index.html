@@ -277,6 +277,7 @@ const CONFIG = {
   <div class="tabs" id="tabBar">
     <div class="tab manager-only" data-tab="dashboard" onclick="showTab('dashboard')" style="display:none;">현황판</div>
     <div class="tab" data-tab="mytasks" onclick="showTab('mytasks')">내 업무</div>
+    <div class="tab manager-only" data-tab="tasklist" onclick="showTab('tasklist')" style="display:none;">업무목록</div>
     <div class="tab" data-tab="calendar" onclick="showTab('calendar')">달력</div>
     <div class="tab" data-tab="analysis" onclick="showTab('analysis')">분석</div>
     <div class="tab manager-only" data-tab="messages" onclick="showTab('messages')" style="display:none;">비밀메시지</div>
@@ -296,6 +297,23 @@ const CONFIG = {
       <div id="memberCards">
         <div class="empty"><div class="empty-icon">📭</div>데이터 로딩 중...</div>
       </div>
+    </div>
+
+    <!-- 업무목록 -->
+    <div class="screen" id="screen-tasklist">
+      <div style="display:flex;gap:8px;margin-bottom:12px;flex-wrap:wrap;">
+        <select class="form-control" id="filterAssignee" onchange="renderTaskList()" style="flex:1;min-width:100px;">
+          <option value="">전체 담당자</option>
+        </select>
+        <select class="form-control" id="filterStatus" onchange="renderTaskList()" style="flex:1;min-width:100px;">
+          <option value="">전체 상태</option>
+          <option value="pending_confirm">확인대기</option>
+          <option value="waiting">대기</option>
+          <option value="in_progress">진행중</option>
+          <option value="done">완료</option>
+        </select>
+      </div>
+      <div id="taskListCards"></div>
     </div>
 
     <!-- 내 업무 -->
@@ -1144,9 +1162,13 @@ async function saveTask() {
 
   closeModal('taskModal');
   renderDashboard();
-  if (document.getElementById('screen-mytasks').classList.contains('active')) renderMyTasks();
-  if (document.getElementById('screen-analysis').classList.contains('active')) renderAnalysis();
   showToast('저장되었습니다');
+  // 저장 후 업무목록(관리자) 또는 내 업무(팀원)로 이동
+  if (isManager(state.currentUser.role)) {
+    showTab('tasklist');
+  } else {
+    showTab('mytasks');
+  }
 }
 
 async function deleteTask() {
@@ -1261,12 +1283,13 @@ function showTab(tab) {
 
   if (tab === 'dashboard') renderDashboard();
   if (tab === 'mytasks') renderMyTasks();
+  if (tab === 'tasklist') renderTaskList();
   if (tab === 'calendar') { if (!calYear) initCalendar(); else renderCalendar(); }
   if (tab === 'analysis') renderAnalysis();
   if (tab === 'messages') renderMessages();
   if (tab === 'settings') renderSettings();
 
-  document.querySelector('.fab').style.display = (tab === 'dashboard' || tab === 'mytasks') ? 'flex' : 'none';
+  document.querySelector('.fab').style.display = (tab === 'dashboard' || tab === 'mytasks' || tab === 'tasklist') ? 'flex' : 'none';
 }
 
 // ══════════════════════════════════════════════════════
@@ -1317,6 +1340,55 @@ function renderMyTasks() {
     html += `<div class="card" style="opacity:0.7;">` + done.map(t => taskItemHTML(t)).join('') + `</div>`;
   }
   container.innerHTML = html;
+}
+
+// ══════════════════════════════════════════════════════
+//  업무목록 (관리자용 전체 리스트)
+// ══════════════════════════════════════════════════════
+function renderTaskList() {
+  // 담당자 필터 옵션 채우기
+  const assigneeSelect = document.getElementById('filterAssignee');
+  const currentAssignee = assigneeSelect.value;
+  const members = state.members.filter(m => m['활성'] !== 'N');
+  assigneeSelect.innerHTML = '<option value="">전체 담당자</option>' +
+    members.map(m => `<option value="${m['이름']}" ${m['이름']===currentAssignee?'selected':''}>${m['이름']}</option>`).join('');
+
+  const filterAssignee = document.getElementById('filterAssignee').value;
+  const filterStatus = document.getElementById('filterStatus').value;
+
+  let tasks = [...state.tasks];
+  if (filterAssignee) tasks = tasks.filter(t => t['담당자'] === filterAssignee);
+  if (filterStatus) tasks = tasks.filter(t => t['상태'] === filterStatus);
+
+  // 상태 정렬: 확인대기 → 진행중 → 대기 → 완료
+  const order = { pending_confirm: 0, in_progress: 1, waiting: 2, done: 3 };
+  tasks.sort((a, b) => (order[a['상태']] ?? 9) - (order[b['상태']] ?? 9));
+
+  const container = document.getElementById('taskListCards');
+  if (tasks.length === 0) {
+    container.innerHTML = '<div class="empty"><div class="empty-icon">📋</div>업무가 없습니다</div>';
+    return;
+  }
+
+  const statusLabel = { pending_confirm:'📬확인대기', waiting:'⏸대기', in_progress:'▶진행중', done:'✅완료' };
+  container.innerHTML = `<div class="card">` + tasks.map(t => {
+    const delayed = isDelayed(t);
+    const dotClass = delayed ? 'dot-delay' : ({ pending_confirm:'dot-confirm', done:'dot-done', in_progress:'dot-progress', waiting:'dot-waiting' }[t['상태']] || 'dot-waiting');
+    return `
+      <div class="task-item" onclick="openEditTask('${t['업무ID']}')">
+        <div class="task-status-dot ${dotClass}"></div>
+        <div class="task-info">
+          <div class="task-name">${t['업무명']}</div>
+          <div class="task-meta">
+            <span style="font-weight:600;">${t['담당자']}</span>
+            <span>${statusLabel[t['상태']] || t['상태']}</span>
+            ${t['마감일'] ? `<span>📅${t['마감일']}</span>` : ''}
+          </div>
+        </div>
+        <div class="task-progress">${t['진척률'] || 0}%</div>
+      </div>
+    `;
+  }).join('') + `</div>`;
 }
 
 async function confirmTask(id) {
