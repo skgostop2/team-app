@@ -1116,56 +1116,59 @@ async function saveTask() {
   const editId = document.getElementById('editTaskId').value;
   const now = new Date().toISOString();
   const assignee = document.getElementById('taskAssignee').value;
-  const isManager = isManager(state.currentUser.role);
+  const isMgr = isManager(state.currentUser.role);
 
   const photoStr = uploadedPhotos.join('||');
   const detail = document.getElementById('taskDetail').value.trim();
 
-  if (editId) {
-    const idx = state.tasks.findIndex(t => t['업무ID'] === editId);
-    if (idx > -1) {
-      state.tasks[idx] = {
-        ...state.tasks[idx],
+  try {
+    if (editId) {
+      const idx = state.tasks.findIndex(t => t['업무ID'] === editId);
+      if (idx > -1) {
+        state.tasks[idx] = {
+          ...state.tasks[idx],
+          업무명: name,
+          담당자: assignee,
+          우선순위: document.getElementById('taskPriority').value,
+          상태: document.getElementById('taskStatus').value,
+          진척률: document.getElementById('taskProgress').value,
+          시작일: document.getElementById('taskStartDate').value,
+          마감일: document.getElementById('taskDueDate').value,
+          수정일: now,
+          사진: photoStr,
+          상세내용: detail,
+        };
+        await updateRow(SHEETS.TASKS, idx + 1, Object.values(state.tasks[idx]));
+      }
+    } else {
+      const id = Date.now().toString();
+      const task = {
+        업무ID: id,
         업무명: name,
         담당자: assignee,
+        지시자: state.currentUser.name,
+        등록방법: isMgr && assignee !== state.currentUser.name ? 'assigned' : 'self',
         우선순위: document.getElementById('taskPriority').value,
         상태: document.getElementById('taskStatus').value,
         진척률: document.getElementById('taskProgress').value,
         시작일: document.getElementById('taskStartDate').value,
         마감일: document.getElementById('taskDueDate').value,
+        등록일: now,
         수정일: now,
         사진: photoStr,
         상세내용: detail,
       };
-      await updateRow(SHEETS.TASKS, idx + 1, Object.values(state.tasks[idx]));
+      state.tasks.push(task);
+      await appendRow(SHEETS.TASKS, Object.values(task));
     }
-  } else {
-    const id = Date.now().toString();
-    const task = {
-      업무ID: id,
-      업무명: name,
-      담당자: assignee,
-      지시자: state.currentUser.name,
-      등록방법: isManager && assignee !== state.currentUser.name ? 'assigned' : 'self',
-      우선순위: document.getElementById('taskPriority').value,
-      상태: document.getElementById('taskStatus').value,
-      진척률: document.getElementById('taskProgress').value,
-      시작일: document.getElementById('taskStartDate').value,
-      마감일: document.getElementById('taskDueDate').value,
-      등록일: now,
-      수정일: now,
-      사진: photoStr,
-      상세내용: detail,
-    };
-    state.tasks.push(task);
-    await appendRow(SHEETS.TASKS, Object.values(task));
+    showToast('저장되었습니다');
+  } catch(e) {
+    showToast('저장 중 오류가 발생했습니다');
   }
 
   closeModal('taskModal');
   renderDashboard();
-  showToast('저장되었습니다');
-  // 저장 후 업무목록(관리자) 또는 내 업무(팀원)로 이동
-  if (isManager(state.currentUser.role)) {
+  if (isMgr) {
     showTab('tasklist');
   } else {
     showTab('mytasks');
