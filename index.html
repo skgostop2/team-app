@@ -1010,7 +1010,7 @@ function openAddTask() {
     : [state.members.find(m => m['이름'] === state.currentUser.name)].filter(Boolean);
 
   assignee.innerHTML = members.map(m => `<option value="${m['이름']}">${m['이름']}</option>`).join('');
-  assignee.disabled = state.currentUser.role !== 'manager';
+  assignee.disabled = !isManager(state.currentUser.role);
 
   // 관리자가 다른 팀원에게 지시할 때 확인대기로 자동 설정
   if (isManager(state.currentUser.role)) {
@@ -1058,7 +1058,7 @@ function openEditTask(id) {
   const assignee = document.getElementById('taskAssignee');
   const members = state.members.filter(m => m['활성'] !== 'N');
   assignee.innerHTML = members.map(m => `<option value="${m['이름']}" ${m['이름']===task['담당자']?'selected':''}>${m['이름']}</option>`).join('');
-  assignee.disabled = state.currentUser.role !== 'manager';
+  assignee.disabled = !isManager(state.currentUser.role);
 
   openModal('taskModal');
 }
