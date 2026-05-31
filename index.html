@@ -461,6 +461,7 @@ const CONFIG = {
     </div>
     <div class="btn-group">
       <button class="btn btn-primary" onclick="saveTask()">저장</button>
+      <button class="btn btn-outline" onclick="goToTaskList()">목록</button>
       <button class="btn btn-outline" onclick="closeModal('taskModal')">취소</button>
       <button class="btn btn-danger btn-sm" id="deleteTaskBtn" style="display:none;margin-left:auto;" onclick="deleteTask()">삭제</button>
     </div>
@@ -1455,6 +1456,15 @@ function showToast(msg) {
   t.textContent = msg;
   t.classList.add('show');
   setTimeout(() => t.classList.remove('show'), 2500);
+}
+
+function goToTaskList() {
+  closeModal('taskModal');
+  if (isManager(state.currentUser.role)) {
+    showTab('tasklist');
+  } else {
+    showTab('mytasks');
+  }
 }
 
 function isManager(role) {
