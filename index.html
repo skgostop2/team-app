@@ -154,6 +154,15 @@
   .msg-input-area { display: flex; gap: 8px; margin-top: 12px; }
   .msg-input-area .form-control { flex: 1; }
 
+  /* ── 토글 스위치 ── */
+  .toggle-wrap { display: flex; align-items: center; gap: 8px; margin-bottom: 12px; }
+  .toggle-label { font-size: 13px; font-weight: 600; color: var(--gray); cursor: pointer; }
+  .toggle-label.active { color: var(--primary); }
+  .toggle-btn { position: relative; width: 48px; height: 26px; background: var(--border); border-radius: 13px; border: none; cursor: pointer; transition: background 0.2s; flex-shrink: 0; }
+  .toggle-btn.on { background: var(--primary); }
+  .toggle-btn::after { content: ''; position: absolute; top: 3px; left: 3px; width: 20px; height: 20px; background: white; border-radius: 50%; transition: left 0.2s; box-shadow: 0 1px 3px rgba(0,0,0,0.2); }
+  .toggle-btn.on::after { left: 25px; }
+
   /* ── 유저 드롭다운 ── */
   .user-menu { position: relative; }
   .user-dropdown { display: none; position: absolute; right: 0; top: 40px; background: white; border: 1px solid var(--border); border-radius: 10px; box-shadow: 0 4px 16px rgba(0,0,0,0.12); min-width: 140px; z-index: 200; overflow: hidden; }
@@ -321,7 +330,12 @@ let CONFIG = { SHEET_ID: '', API_KEY: '', APP_NAME: '', APPS_SCRIPT_URL: '' };
         <h2 id="printTitle"></h2>
         <p id="printDate"></p>
       </div>
-      <div style="text-align:right;margin-bottom:8px;">
+      <div style="display:flex;align-items:center;justify-content:space-between;margin-bottom:8px;">
+        <div class="toggle-wrap" style="margin-bottom:0;">
+          <span class="toggle-label active" id="toggleLabelMine" onclick="setDashboardView(false)">내 업무</span>
+          <button class="toggle-btn" id="dashToggle" onclick="toggleDashboardView()"></button>
+          <span class="toggle-label" id="toggleLabelAll" onclick="setDashboardView(true)">전체</span>
+        </div>
         <button class="btn btn-outline btn-sm manager-only" style="display:none;" onclick="printDashboard()">📄 PDF 저장</button>
       </div>
       <div id="memberCards">
@@ -936,8 +950,12 @@ async function showApp() {
 
   await loadAllData();
   if (isManager(u.role)) {
+    dashboardShowAll = true;
+    updateToggleUI();
     showTab('dashboard');
   } else {
+    dashboardShowAll = false;
+    updateToggleUI();
     showTab('mytasks');
   }
 }
@@ -977,8 +995,35 @@ function getLocalMessages() {
 // ══════════════════════════════════════════════════════
 //  현황판
 // ══════════════════════════════════════════════════════
+let dashboardShowAll = false;
+
+function toggleDashboardView() {
+  dashboardShowAll = !dashboardShowAll;
+  updateToggleUI();
+  renderDashboard();
+}
+
+function setDashboardView(showAll) {
+  dashboardShowAll = showAll;
+  updateToggleUI();
+  renderDashboard();
+}
+
+function updateToggleUI() {
+  const btn = document.getElementById('dashToggle');
+  const labelMine = document.getElementById('toggleLabelMine');
+  const labelAll = document.getElementById('toggleLabelAll');
+  if (!btn) return;
+  btn.classList.toggle('on', dashboardShowAll);
+  labelMine.classList.toggle('active', !dashboardShowAll);
+  labelAll.classList.toggle('active', dashboardShowAll);
+}
+
 function renderDashboard() {
-  const members = state.members.filter(m => m['활성'] !== 'N');
+  const allMembers = state.members.filter(m => m['활성'] !== 'N');
+  const members = dashboardShowAll
+    ? allMembers
+    : allMembers.filter(m => m['이름'] === state.currentUser?.name);
   const container = document.getElementById('memberCards');
 
   if (members.length === 0) {
