@@ -247,17 +247,18 @@
 const TEAMS = [
   {
     name: '소재생기팀',
-    teamPin: '0000',  // 팀 입장 비밀번호 (팀별로 다르게 설정)
+    teamPin: '0000',       // 팀 입장 비밀번호
+    scriptSecret: 'sojae2024!',  // ← Apps Script 비밀키 (Apps Script와 동일하게 설정)
     sheetId: '1ktVWlvQsSD-nhueOeK0tJDQhyguHCdHXFuc0Em08P8s',
     apiKey:  'AIzaSyAbxFX5vCTC7-y2ZLbRERFv8bUOC3cb3uo',
     scriptUrl: 'https://script.google.com/macros/s/AKfycbyGj1JYdCS-5qujp-2tojx8N8cYe2tLmm1m8nH4uUv4UBPHrEqzihqE-pD3DSXcyiKj/exec',
   },
   // 팀 추가 예시:
-  // { name: '설비팀', teamPin: '1111', sheetId: '...', apiKey: '...', scriptUrl: '...' },
+  // { name: '설비팀', teamPin: '1111', scriptSecret: '비밀키', sheetId: '...', apiKey: '...', scriptUrl: '...' },
 ];
 
 // 현재 선택된 팀 CONFIG (런타임에 설정됨)
-let CONFIG = { SHEET_ID: '', API_KEY: '', APP_NAME: '', APPS_SCRIPT_URL: '' };
+let CONFIG = { SHEET_ID: '', API_KEY: '', APP_NAME: '', APPS_SCRIPT_URL: '', SCRIPT_SECRET: '' };
 </script>
 
 <!-- 토스트 -->
@@ -823,13 +824,14 @@ async function deleteRow(sheetName, rowIndex) {
 // Apps Script Web App으로 쓰기 요청 프록시
 async function proxyWrite(payload) {
   if (!CONFIG.APPS_SCRIPT_URL) {
-    // 개발 중: 로컬 스토리지에 임시 저장
     localFallbackWrite(payload);
     return;
   }
+  // 비밀키 포함 (Apps Script에서 검증)
+  const securePayload = { ...payload, secret: CONFIG.SCRIPT_SECRET };
   const res = await fetch(CONFIG.APPS_SCRIPT_URL, {
     method: 'POST',
-    body: JSON.stringify(payload),
+    body: JSON.stringify(securePayload),
   });
   return res.json();
 }
@@ -922,6 +924,7 @@ function loadTeam(team) {
   CONFIG.API_KEY = team.apiKey;
   CONFIG.APP_NAME = team.name + ' 업무 현황';
   CONFIG.APPS_SCRIPT_URL = team.scriptUrl;
+  CONFIG.SCRIPT_SECRET = team.scriptSecret || '';
   selectedTeam = team;
 
   document.getElementById('teamScreen').style.display = 'none';
@@ -1015,6 +1018,7 @@ async function init() {
       CONFIG.API_KEY = team.apiKey;
       CONFIG.APP_NAME = team.name + ' 업무 현황';
       CONFIG.APPS_SCRIPT_URL = team.scriptUrl;
+      CONFIG.SCRIPT_SECRET = team.scriptSecret || '';
     }
     state.currentUser = JSON.parse(savedUser);
     showApp();
@@ -1060,12 +1064,27 @@ function getLocalMembers() {
 
 function renderMemberList() {
   const list = document.getElementById('memberList');
-  const active = state.members.filter(m => m['활성'] !== 'N');
+  // 비활성(N) 제외 + 이름 중복 제거 (첫 번째 행 우선)
+  const seen = new Set();
+  const active = state.members.filter(m => {
+    const name = (m['이름'] || '').trim();
+    if (!name) return false;
+    if ((m['활성'] || 'Y').trim().toUpperCase() === 'N') return false;
+    if (seen.has(name)) return false;
+    seen.add(name);
+    return true;
+  });
+
+  if (active.length === 0) {
+    list.innerHTML = '<div style="text-align:center;color:var(--gray);padding:20px;">팀원 정보를 불러오지 못했습니다<br><small>Google Sheets 연결을 확인하세요</small></div>';
+    return;
+  }
+
   list.innerHTML = active.map(m => `
-    <button class="member-btn" onclick="selectMember('${m['이름']}')">
-      <div class="avatar" style="background:${memberColor(m['이름'])}">${m['이름'][0]}</div>
+    <button class="member-btn" onclick="selectMember('${m['이름'].trim()}')">
+      <div class="avatar" style="background:${memberColor(m['이름'].trim())}">${m['이름'].trim()[0]}</div>
       <div>
-        <div class="member-btn-name">${m['이름']}</div>
+        <div class="member-btn-name">${m['이름'].trim()}</div>
         <div class="member-btn-role">${isManager(m['역할']) ? m['역할'] : '팀원'}</div>
       </div>
     </button>
@@ -1093,8 +1112,9 @@ function showMemberList() {
 }
 
 function submitPin() {
-  const pin = document.getElementById('pinField').value;
-  if (pin === selectedMember['PIN']) {
+  const pin = document.getElementById('pinField').value.trim();
+  const storedPin = (selectedMember['PIN'] || '').toString().trim();
+  if (pin === storedPin) {
     loginAs(selectedMember);
   } else {
     showToast('PIN이 틀렸습니다');
@@ -1241,7 +1261,7 @@ function renderDashboard() {
         <div class="member-header">
           <div class="avatar" style="background:${memberColor(m['이름'])}">${m['이름'][0]}</div>
           <div class="member-name">${m['이름']}</div>
-          ${isManager(m['역할']) ? '<span class="member-role">실장/팀장</span>' : ''}
+          ${isManager(m['역할']) ? `<span class="member-role">${m['역할']}</span>` : ''}
           <div class="member-stats">${myTasks.length}개 업무${hasDelay ? ` · 🔴지연 ${delayed.length}` : ''}</div>
         </div>
         ${myTasks.length === 0
@@ -1888,19 +1908,21 @@ function openChangePin() {
 }
 
 async function savePin() {
-  const current = document.getElementById('currentPin').value;
-  const newP = document.getElementById('newPin').value;
-  const confirm = document.getElementById('newPinConfirm').value;
+  const current = document.getElementById('currentPin').value.trim();
+  const newP = document.getElementById('newPin').value.trim();
+  const newPConfirm = document.getElementById('newPinConfirm').value.trim();
 
-  const me = state.members.find(m => m['이름'] === state.currentUser.name);
-  if (!me) return;
-
-  if (current !== me['PIN']) { showToast('현재 PIN이 틀렸습니다'); return; }
-  if (newP.length < 4) { showToast('새 PIN은 4자리 이상이어야 합니다'); return; }
-  if (newP !== confirm) { showToast('새 PIN이 일치하지 않습니다'); return; }
-
-  // 시트에서 해당 팀원의 행 인덱스 찾기
+  // 중복 이름이 있어도 현재 로그인한 사람의 정확한 인덱스를 찾음
   const idx = state.members.findIndex(m => m['이름'] === state.currentUser.name);
+  const me = idx > -1 ? state.members[idx] : null;
+  if (!me) { showToast('사용자 정보를 찾을 수 없습니다'); return; }
+
+  const storedPin = (me['PIN'] || '').toString().trim();
+
+  if (current !== storedPin) { showToast('현재 PIN이 틀렸습니다'); return; }
+  if (newP.length < 4) { showToast('새 PIN은 4자리 이상이어야 합니다'); return; }
+  if (newP !== newPConfirm) { showToast('새 PIN이 일치하지 않습니다'); return; }
+
   me['PIN'] = newP;
   const row = [me['이름'], me['역할'], newP, me['이메일'] || '', me['등록일'] || '', me['활성'] || 'Y'];
   await updateRow(SHEETS.MEMBERS, idx + 1, row);
