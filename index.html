@@ -604,8 +604,12 @@ let CONFIG = { SHEET_ID: '', API_KEY: '', APP_NAME: '', APPS_SCRIPT_URL: '' };
       </div>
     </div>
     <div class="form-group">
-      <label class="form-label">상세 내용</label>
-      <textarea class="form-control" id="taskDetail" placeholder="업무 상세 내용을 입력하세요" rows="4" style="resize:vertical;"></textarea>
+      <div style="display:flex;align-items:center;justify-content:space-between;margin-bottom:6px;">
+        <label class="form-label" style="margin-bottom:0;">상세 내용</label>
+        <button type="button" onclick="aiAutoDetail()" id="aiDetailBtn" style="background:linear-gradient(135deg,#7c3aed,#2563eb);color:white;border:none;border-radius:16px;padding:4px 12px;font-size:12px;font-weight:600;cursor:pointer;display:flex;align-items:center;gap:4px;">🤖 AI 자동 작성</button>
+      </div>
+      <div id="aiDetailLoading" style="display:none;text-align:center;padding:10px;font-size:13px;color:var(--gray);">⏳ AI 작성 중...</div>
+      <textarea class="form-control" id="taskDetail" placeholder="업무 상세 내용을 입력하거나 AI 자동 작성을 이용하세요" rows="4" style="resize:vertical;"></textarea>
     </div>
     <div class="form-group">
       <label class="form-label">사진 첨부 (선택)</label>
@@ -2178,6 +2182,46 @@ async function runAITaskDetail() {
 function copyAIResult() {
   const text = document.getElementById('aiResultText').textContent;
   navigator.clipboard.writeText(text).then(() => showToast('복사되었습니다'));
+}
+
+// ── 업무 모달 내 AI 자동 작성 ──
+async function aiAutoDetail() {
+  const taskName = document.getElementById('taskName').value.trim();
+  if (!taskName) { showToast('먼저 업무명을 입력하세요'); return; }
+
+  const key = getAIKey();
+  if (!key) {
+    if (confirm('AI 기능을 사용하려면 API 키를 등록해야 합니다.\n지금 등록하시겠습니까?')) {
+      closeModal('taskModal');
+      openAI();
+    }
+    return;
+  }
+
+  const assignee = document.getElementById('taskAssignee').value;
+  const priority = document.getElementById('taskPriority').value;
+  const priorityText = { high: '높음(긴급)', mid: '중간', low: '낮음' }[priority] || '';
+  const dueDate = document.getElementById('taskDueDate').value;
+
+  const btn = document.getElementById('aiDetailBtn');
+  const loading = document.getElementById('aiDetailLoading');
+  btn.disabled = true;
+  btn.style.opacity = '0.5';
+  loading.style.display = 'block';
+
+  const result = await callGPT(
+    '당신은 팀 업무 관리 전문가입니다. 실무에서 바로 쓸 수 있는 간결하고 구체적인 한국어로 작성하세요.',
+    `업무명: "${taskName}"\n담당자: ${assignee || '미정'}\n우선순위: ${priorityText}${dueDate ? `\n마감일: ${dueDate}` : ''}\n\n이 업무의 상세 내용을 작성해주세요.\n포함 내용: ① 업무 목적 ② 주요 작업 항목 ③ 완료 기준\n250자 이내로 실무적으로 작성.`
+  );
+
+  loading.style.display = 'none';
+  btn.disabled = false;
+  btn.style.opacity = '1';
+
+  if (result) {
+    document.getElementById('taskDetail').value = result;
+    showToast('AI가 내용을 작성했습니다');
+  }
 }
 
 function copyAITaskDetail() {
