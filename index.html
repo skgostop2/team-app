@@ -309,7 +309,8 @@ let CONFIG = { SHEET_ID: '', API_KEY: '', APP_NAME: '', APPS_SCRIPT_URL: '' };
       </div>
       <div class="user-dropdown" id="userDropdown">
         <div class="user-dropdown-item" onclick="openChangePin()">🔑 PIN 변경</div>
-        <div class="user-dropdown-item" onclick="changeTeam()">🏢 팀 변경</div>
+        <div class="user-dropdown-item manager-only" style="display:none;" onclick="openChangeTeamPin()">🔐 팀 비밀번호 변경</div>
+        <div class="user-dropdown-item" onclick="changeTeam()">🏢 팀 선택</div>
         <div class="user-dropdown-item danger" onclick="logout()">🚪 로그아웃</div>
       </div>
     </div>
@@ -522,26 +523,42 @@ let CONFIG = { SHEET_ID: '', API_KEY: '', APP_NAME: '', APPS_SCRIPT_URL: '' };
     <div class="modal-handle"></div>
     <div class="modal-title">📖 사용 가이드</div>
 
-    <div style="font-size:14px;font-weight:700;margin-bottom:8px;">🏢 팀 선택 / 새 팀 등록</div>
+    <div style="font-size:14px;font-weight:700;margin-bottom:8px;">🏢 팀 선택</div>
     <div style="font-size:13px;color:var(--gray);line-height:1.8;margin-bottom:16px;">
       • 앱 첫 실행 시 팀 선택 화면이 나옵니다<br>
-      • 소속 팀 선택 → 팀 비밀번호 입력<br>
-      • 새 팀은 "새 팀 등록" 버튼으로 추가<br>
-      • 팀 변경: 오른쪽 상단 이름 → 팀 변경
+      • 소속 팀 선택 → 팀 비밀번호 입력 → 이후 자동 기억<br>
+      • 팀 선택: 오른쪽 상단 이름 클릭 → <b>🏢 팀 선택</b><br>
+      • 새 팀은 팀 선택 화면 → <b>새 팀 등록</b> 버튼으로 추가
+    </div>
+
+    <div style="font-size:14px;font-weight:700;margin-bottom:8px;">🔐 비밀번호 관리</div>
+    <div style="font-size:13px;color:var(--gray);line-height:1.8;margin-bottom:16px;">
+      • <b>팀 비밀번호 변경</b> (실장/팀장만): 오른쪽 상단 이름 → 🔐 팀 비밀번호 변경<br>
+      • <b>내 PIN 변경</b>: 오른쪽 상단 이름 → 🔑 PIN 변경<br>
+      • PIN 분실 시 Google Sheets → 팀원 시트 C열에서 직접 수정
     </div>
 
     <div style="font-size:14px;font-weight:700;margin-bottom:8px;">👤 로그인</div>
     <div style="font-size:13px;color:var(--gray);line-height:1.8;margin-bottom:16px;">
       • 이름 선택 → PIN 번호 입력<br>
-      • PIN 변경: 오른쪽 상단 이름 → PIN 변경<br>
-      • PIN 분실 시 Google Sheets > 팀원 시트 C열에서 수정
+      • 실장/팀장: 현황판(전체/내 업무 토글), 업무목록, 비밀메시지, 설정 탭 사용 가능<br>
+      • 팀원: 내 업무, 달력, 분석 탭 사용 가능
     </div>
 
-    <div style="font-size:14px;font-weight:700;margin-bottom:8px;">📋 업무 등록</div>
+    <div style="font-size:14px;font-weight:700;margin-bottom:8px;">📋 업무 등록 / 지시</div>
     <div style="font-size:13px;color:var(--gray);line-height:1.8;margin-bottom:16px;">
       • 오른쪽 하단 <b>+</b> 버튼으로 업무 추가<br>
-      • 실장/팀장이 팀원에게 지시하면 → 팀원에게 확인 요청<br>
-      • 팀원이 "✅ 네, 알겠습니다" 누르면 진행중으로 전환
+      • 실장/팀장이 팀원에게 지시 → 자동으로 "확인대기" 상태로 등록<br>
+      • 팀원 내 업무 탭에 <b>📬 확인 필요</b> 섹션 표시<br>
+      • 팀원이 <b>"✅ 네, 알겠습니다"</b> 누르면 진행중으로 자동 전환<br>
+      • 업무 저장 후 자동으로 업무목록(관리자) 또는 내 업무(팀원)로 이동
+    </div>
+
+    <div style="font-size:14px;font-weight:700;margin-bottom:8px;">📄 PDF 저장 / 공유</div>
+    <div style="font-size:13px;color:var(--gray);line-height:1.8;margin-bottom:16px;">
+      • 현황판 상단 <b>📄 PDF 저장</b> 버튼 (실장/팀장만)<br>
+      • PC: 인쇄 → PDF로 저장 → 카톡 전송<br>
+      • 안드로이드: 인쇄 → PDF 저장 → 공유 → 카카오톡
     </div>
 
     <div style="font-size:14px;font-weight:700;margin-bottom:8px;">🆕 새 팀 구글 시트 설정</div>
@@ -550,10 +567,34 @@ let CONFIG = { SHEET_ID: '', API_KEY: '', APP_NAME: '', APPS_SCRIPT_URL: '' };
       2. 확장프로그램 → Apps Script → sheets_setup.js 붙여넣기 → 실행<br>
       3. 같은 곳에 weekly_report.js 붙여넣기 → 배포 → 웹앱 URL 복사<br>
       4. <a href="https://console.cloud.google.com/apis/credentials" target="_blank" style="color:var(--primary);">Google Cloud Console</a> → API 키 발급 → Sheets API 활성화<br>
-      5. 앱 팀 선택 화면 → 새 팀 등록 → 정보 입력
+      5. 앱 팀 선택 화면 → <b>새 팀 등록</b> → 정보 입력 → 완료
     </div>
 
     <button class="btn btn-primary btn-block" onclick="closeModal('manualModal')">확인</button>
+  </div>
+</div>
+
+<!-- ═══ 팀 비밀번호 변경 모달 ═══ -->
+<div class="modal-overlay" id="teamPinChangeModal">
+  <div class="modal">
+    <div class="modal-handle"></div>
+    <div class="modal-title">🔐 팀 비밀번호 변경</div>
+    <div class="form-group">
+      <label class="form-label">현재 팀 비밀번호</label>
+      <input type="password" class="form-control" id="currentTeamPin" placeholder="현재 비밀번호" maxlength="8" inputmode="numeric">
+    </div>
+    <div class="form-group">
+      <label class="form-label">새 비밀번호</label>
+      <input type="password" class="form-control" id="newTeamPin" placeholder="새 비밀번호 (4자리 이상)" maxlength="8" inputmode="numeric">
+    </div>
+    <div class="form-group">
+      <label class="form-label">새 비밀번호 확인</label>
+      <input type="password" class="form-control" id="newTeamPinConfirm" placeholder="새 비밀번호 다시 입력" maxlength="8" inputmode="numeric">
+    </div>
+    <div class="btn-group">
+      <button class="btn btn-primary" onclick="saveTeamPin()">변경</button>
+      <button class="btn btn-outline" onclick="closeModal('teamPinChangeModal')">취소</button>
+    </div>
   </div>
 </div>
 
@@ -967,7 +1008,7 @@ function logout() {
 }
 
 function changeTeam() {
-  if (!confirm('팀을 변경하시겠습니까?')) return;
+  if (!confirm('팀 선택 화면으로 이동하시겠습니까?')) return;
   sessionStorage.removeItem('currentUser');
   localStorage.removeItem('saved_team');
   state.currentUser = null;
@@ -1761,6 +1802,46 @@ function showToast(msg) {
   t.textContent = msg;
   t.classList.add('show');
   setTimeout(() => t.classList.remove('show'), 2500);
+}
+
+function openChangeTeamPin() {
+  document.getElementById('userDropdown').classList.remove('open');
+  document.getElementById('currentTeamPin').value = '';
+  document.getElementById('newTeamPin').value = '';
+  document.getElementById('newTeamPinConfirm').value = '';
+  openModal('teamPinChangeModal');
+}
+
+function saveTeamPin() {
+  const current = document.getElementById('currentTeamPin').value;
+  const newP = document.getElementById('newTeamPin').value;
+  const confirm = document.getElementById('newTeamPinConfirm').value;
+
+  const savedTeam = JSON.parse(localStorage.getItem('saved_team') || '{}');
+  const currentPin = selectedTeam?.teamPin || savedTeam.teamPin || '';
+
+  if (current !== currentPin) { showToast('현재 비밀번호가 틀렸습니다'); return; }
+  if (newP.length < 4) { showToast('4자리 이상 입력하세요'); return; }
+  if (newP !== confirm) { showToast('새 비밀번호가 일치하지 않습니다'); return; }
+
+  // TEAMS 배열에 있는 팀이면 extra_teams에 덮어쓰기
+  const extra = JSON.parse(localStorage.getItem('extra_teams') || '[]');
+  const teamName = savedTeam.name;
+
+  // saved_team 업데이트
+  savedTeam.teamPin = newP;
+  localStorage.setItem('saved_team', JSON.stringify(savedTeam));
+  if (selectedTeam) selectedTeam.teamPin = newP;
+
+  // extra_teams에 있으면 거기도 업데이트
+  const idx = extra.findIndex(t => t.name === teamName);
+  if (idx > -1) {
+    extra[idx].teamPin = newP;
+    localStorage.setItem('extra_teams', JSON.stringify(extra));
+  }
+
+  closeModal('teamPinChangeModal');
+  showToast('팀 비밀번호가 변경되었습니다');
 }
 
 function openManual() {
