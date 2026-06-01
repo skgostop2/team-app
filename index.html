@@ -255,6 +255,7 @@ let CONFIG = { SHEET_ID: '', API_KEY: '', APP_NAME: '', APPS_SCRIPT_URL: '' };
 <!-- ═══ 팀 선택 화면 ═══ -->
 <div id="teamScreen" class="login-screen" style="display:none;">
   <div class="login-box">
+    <div style="text-align:right;"><button onclick="openManual()" style="background:none;border:1px solid var(--border);border-radius:50%;width:30px;height:30px;font-size:15px;cursor:pointer;color:var(--gray);">?</button></div>
     <div class="login-logo">🏢</div>
     <div class="login-title">팀 업무 현황</div>
     <div class="login-sub" id="teamScreenSub">소속 팀을 선택하세요</div>
@@ -277,7 +278,7 @@ let CONFIG = { SHEET_ID: '', API_KEY: '', APP_NAME: '', APPS_SCRIPT_URL: '' };
   <div class="login-box">
     <div class="login-logo">📋</div>
     <div class="login-title" id="loginTitle">팀 업무 현황</div>
-    <div class="login-sub">이름을 선택하세요</div>
+    <div class="login-sub" id="loginSub">이름을 선택하세요</div>
     <div class="member-list" id="memberList">
       <div style="text-align:center;color:var(--gray);padding:20px;">로딩 중...</div>
     </div>
@@ -298,6 +299,8 @@ let CONFIG = { SHEET_ID: '', API_KEY: '', APP_NAME: '', APPS_SCRIPT_URL: '' };
   <!-- 헤더 -->
   <div class="header">
     <div class="header-title" id="appTitle">📋 팀 업무 현황</div>
+    <div style="display:flex;align-items:center;gap:8px;">
+    <button onclick="openManual()" style="background:none;border:1px solid var(--border);border-radius:50%;width:30px;height:30px;font-size:15px;cursor:pointer;color:var(--gray);">?</button>
     <div class="user-menu" id="userMenu">
       <div class="header-user" onclick="toggleUserMenu()">
         <div class="avatar" id="userAvatar">?</div>
@@ -309,6 +312,7 @@ let CONFIG = { SHEET_ID: '', API_KEY: '', APP_NAME: '', APPS_SCRIPT_URL: '' };
         <div class="user-dropdown-item" onclick="changeTeam()">🏢 팀 변경</div>
         <div class="user-dropdown-item danger" onclick="logout()">🚪 로그아웃</div>
       </div>
+    </div>
     </div>
   </div>
 
@@ -509,6 +513,47 @@ let CONFIG = { SHEET_ID: '', API_KEY: '', APP_NAME: '', APPS_SCRIPT_URL: '' };
       <button class="btn btn-outline" onclick="closeModal('taskModal')">취소</button>
       <button class="btn btn-danger btn-sm" id="deleteTaskBtn" style="display:none;margin-left:auto;" onclick="deleteTask()">삭제</button>
     </div>
+  </div>
+</div>
+
+<!-- ═══ 매뉴얼 모달 ═══ -->
+<div class="modal-overlay" id="manualModal">
+  <div class="modal">
+    <div class="modal-handle"></div>
+    <div class="modal-title">📖 사용 가이드</div>
+
+    <div style="font-size:14px;font-weight:700;margin-bottom:8px;">🏢 팀 선택 / 새 팀 등록</div>
+    <div style="font-size:13px;color:var(--gray);line-height:1.8;margin-bottom:16px;">
+      • 앱 첫 실행 시 팀 선택 화면이 나옵니다<br>
+      • 소속 팀 선택 → 팀 비밀번호 입력<br>
+      • 새 팀은 "새 팀 등록" 버튼으로 추가<br>
+      • 팀 변경: 오른쪽 상단 이름 → 팀 변경
+    </div>
+
+    <div style="font-size:14px;font-weight:700;margin-bottom:8px;">👤 로그인</div>
+    <div style="font-size:13px;color:var(--gray);line-height:1.8;margin-bottom:16px;">
+      • 이름 선택 → PIN 번호 입력<br>
+      • PIN 변경: 오른쪽 상단 이름 → PIN 변경<br>
+      • PIN 분실 시 Google Sheets > 팀원 시트 C열에서 수정
+    </div>
+
+    <div style="font-size:14px;font-weight:700;margin-bottom:8px;">📋 업무 등록</div>
+    <div style="font-size:13px;color:var(--gray);line-height:1.8;margin-bottom:16px;">
+      • 오른쪽 하단 <b>+</b> 버튼으로 업무 추가<br>
+      • 실장/팀장이 팀원에게 지시하면 → 팀원에게 확인 요청<br>
+      • 팀원이 "✅ 네, 알겠습니다" 누르면 진행중으로 전환
+    </div>
+
+    <div style="font-size:14px;font-weight:700;margin-bottom:8px;">🆕 새 팀 구글 시트 설정</div>
+    <div style="font-size:13px;color:var(--gray);line-height:1.8;margin-bottom:16px;">
+      1. <a href="https://sheets.google.com" target="_blank" style="color:var(--primary);">Google Sheets</a> 에서 새 스프레드시트 생성<br>
+      2. 확장프로그램 → Apps Script → sheets_setup.js 붙여넣기 → 실행<br>
+      3. 같은 곳에 weekly_report.js 붙여넣기 → 배포 → 웹앱 URL 복사<br>
+      4. <a href="https://console.cloud.google.com/apis/credentials" target="_blank" style="color:var(--primary);">Google Cloud Console</a> → API 키 발급 → Sheets API 활성화<br>
+      5. 앱 팀 선택 화면 → 새 팀 등록 → 정보 입력
+    </div>
+
+    <button class="btn btn-primary btn-block" onclick="closeModal('manualModal')">확인</button>
   </div>
 </div>
 
@@ -882,14 +927,14 @@ function selectMember(name) {
   document.getElementById('pinLabel').textContent = `${name}님의 PIN 번호`;
   document.getElementById('pinField').value = '';
   document.getElementById('memberList').style.display = 'none';
-  document.querySelector('.login-sub').style.display = 'none';
+  document.getElementById('loginSub').style.display = 'none';
   document.getElementById('pinInput').style.display = 'block';
   document.getElementById('pinField').focus();
 }
 
 function showMemberList() {
   document.getElementById('memberList').style.display = 'flex';
-  document.querySelector('.login-sub').style.display = 'block';
+  document.getElementById('loginSub').style.display = 'block';
   document.getElementById('pinInput').style.display = 'none';
   document.getElementById('memberList').style.flexDirection = 'column';
 }
@@ -916,6 +961,7 @@ function logout() {
   sessionStorage.removeItem('currentUser');
   state.currentUser = null;
   document.getElementById('appScreen').style.display = 'none';
+  document.getElementById('teamScreen').style.display = 'none';
   document.getElementById('loginScreen').style.display = 'flex';
   showMemberList();
 }
@@ -1715,6 +1761,11 @@ function showToast(msg) {
   t.textContent = msg;
   t.classList.add('show');
   setTimeout(() => t.classList.remove('show'), 2500);
+}
+
+function openManual() {
+  document.getElementById('userDropdown')?.classList.remove('open');
+  openModal('manualModal');
 }
 
 function goToTaskList() {
