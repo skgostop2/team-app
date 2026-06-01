@@ -223,19 +223,48 @@
      설정: 여기에 Google Sheets 정보 입력
 ═══════════════════════════════════════════ -->
 <script>
-const CONFIG = {
-  SHEET_ID: '1ktVWlvQsSD-nhueOeK0tJDQhyguHCdHXFuc0Em08P8s',
-  API_KEY:  'AIzaSyAbxFX5vCTC7-y2ZLbRERFv8bUOC3cb3uo',
-  APP_NAME: '소재생기팀 업무 현황',
-  APPS_SCRIPT_URL: 'https://script.google.com/macros/s/AKfycbyGj1JYdCS-5qujp-2tojx8N8cYe2tLmm1m8nH4uUv4UBPHrEqzihqE-pD3DSXcyiKj/exec',
-};
+// ── 팀 목록 (팀 추가 시 여기에 입력) ──
+const TEAMS = [
+  {
+    name: '소재생기팀',
+    teamPin: '0000',  // 팀 입장 비밀번호 (팀별로 다르게 설정)
+    sheetId: '1ktVWlvQsSD-nhueOeK0tJDQhyguHCdHXFuc0Em08P8s',
+    apiKey:  'AIzaSyAbxFX5vCTC7-y2ZLbRERFv8bUOC3cb3uo',
+    scriptUrl: 'https://script.google.com/macros/s/AKfycbyGj1JYdCS-5qujp-2tojx8N8cYe2tLmm1m8nH4uUv4UBPHrEqzihqE-pD3DSXcyiKj/exec',
+  },
+  // 팀 추가 예시:
+  // { name: '설비팀', teamPin: '1111', sheetId: '...', apiKey: '...', scriptUrl: '...' },
+];
+
+// 현재 선택된 팀 CONFIG (런타임에 설정됨)
+let CONFIG = { SHEET_ID: '', API_KEY: '', APP_NAME: '', APPS_SCRIPT_URL: '' };
 </script>
 
 <!-- 토스트 -->
 <div class="toast" id="toast"></div>
 
+<!-- ═══ 팀 선택 화면 ═══ -->
+<div id="teamScreen" class="login-screen" style="display:none;">
+  <div class="login-box">
+    <div class="login-logo">🏢</div>
+    <div class="login-title">팀 업무 현황</div>
+    <div class="login-sub" id="teamScreenSub">소속 팀을 선택하세요</div>
+    <!-- 팀 목록 -->
+    <div class="member-list" id="teamList"></div>
+    <!-- 팀 PIN 입력 -->
+    <div class="pin-input" id="teamPinInput" style="display:none;">
+      <button class="pin-back" onclick="showTeamList()">← 뒤로</button>
+      <div class="form-group">
+        <label class="form-label" id="teamPinLabel">팀 비밀번호</label>
+        <input type="password" class="form-control" id="teamPinField" placeholder="팀 비밀번호 입력" maxlength="8" inputmode="numeric">
+      </div>
+      <button class="btn btn-primary btn-block" onclick="submitTeamPin()">확인</button>
+    </div>
+  </div>
+</div>
+
 <!-- ═══ 로그인 화면 ═══ -->
-<div id="loginScreen" class="login-screen">
+<div id="loginScreen" class="login-screen" style="display:none;">
   <div class="login-box">
     <div class="login-logo">📋</div>
     <div class="login-title" id="loginTitle">팀 업무 현황</div>
@@ -268,6 +297,7 @@ const CONFIG = {
       </div>
       <div class="user-dropdown" id="userDropdown">
         <div class="user-dropdown-item" onclick="openChangePin()">🔑 PIN 변경</div>
+        <div class="user-dropdown-item" onclick="changeTeam()">🏢 팀 변경</div>
         <div class="user-dropdown-item danger" onclick="logout()">🚪 로그아웃</div>
       </div>
     </div>
@@ -603,20 +633,191 @@ function localFallbackWrite(payload) {
 }
 
 // ══════════════════════════════════════════════════════
+//  팀 선택
+// ══════════════════════════════════════════════════════
+let selectedTeam = null;
+
+function getAllTeams() {
+  // TEAMS 배열 + 로컬 스토리지에 저장된 추가 팀
+  const local = JSON.parse(localStorage.getItem('extra_teams') || '[]');
+  return [...TEAMS, ...local];
+}
+
+function showTeamScreen() {
+  document.getElementById('teamScreen').style.display = 'flex';
+  document.getElementById('loginScreen').style.display = 'none';
+  document.getElementById('appScreen').style.display = 'none';
+  renderTeamList();
+}
+
+function renderTeamList() {
+  const list = document.getElementById('teamList');
+  const teams = getAllTeams();
+  list.innerHTML = teams.map((t, i) => `
+    <button class="member-btn" onclick="selectTeam(${i})">
+      <div class="avatar" style="background:${memberColor(t.name)}">${t.name[0]}</div>
+      <div>
+        <div class="member-btn-name">${t.name}</div>
+        <div class="member-btn-role">팀 선택</div>
+      </div>
+    </button>
+  `).join('') + `
+    <button class="member-btn" onclick="showNewTeamForm()" style="border-style:dashed;margin-top:8px;">
+      <div class="avatar" style="background:#6b7280;">+</div>
+      <div>
+        <div class="member-btn-name">새 팀 등록</div>
+        <div class="member-btn-role">처음 사용하는 팀</div>
+      </div>
+    </button>
+  `;
+  document.getElementById('teamPinInput').style.display = 'none';
+  document.getElementById('teamList').style.display = 'flex';
+  document.getElementById('teamScreenSub').textContent = '소속 팀을 선택하세요';
+}
+
+function selectTeam(idx) {
+  selectedTeam = getAllTeams()[idx];
+  document.getElementById('teamPinLabel').textContent = `${selectedTeam.name} 비밀번호`;
+  document.getElementById('teamPinField').value = '';
+  document.getElementById('teamList').style.display = 'none';
+  document.getElementById('teamScreenSub').textContent = selectedTeam.name;
+  document.getElementById('teamPinInput').style.display = 'block';
+  document.getElementById('teamPinField').focus();
+}
+
+function showTeamList() {
+  document.getElementById('teamList').style.display = 'flex';
+  document.getElementById('teamPinInput').style.display = 'none';
+  document.getElementById('newTeamForm') && (document.getElementById('newTeamForm').style.display = 'none');
+  document.getElementById('teamScreenSub').textContent = '소속 팀을 선택하세요';
+}
+
+function submitTeamPin() {
+  const pin = document.getElementById('teamPinField').value;
+  if (pin === selectedTeam.teamPin) {
+    // 팀 기억 (30일)
+    localStorage.setItem('saved_team', JSON.stringify(selectedTeam));
+    loadTeam(selectedTeam);
+  } else {
+    showToast('비밀번호가 틀렸습니다');
+    document.getElementById('teamPinField').value = '';
+    document.getElementById('teamPinField').focus();
+  }
+}
+
+function loadTeam(team) {
+  CONFIG.SHEET_ID = team.sheetId;
+  CONFIG.API_KEY = team.apiKey;
+  CONFIG.APP_NAME = team.name + ' 업무 현황';
+  CONFIG.APPS_SCRIPT_URL = team.scriptUrl;
+  selectedTeam = team;
+
+  document.getElementById('teamScreen').style.display = 'none';
+  document.getElementById('loginScreen').style.display = 'flex';
+  document.getElementById('appTitle').textContent = '📋 ' + CONFIG.APP_NAME;
+  document.getElementById('loginTitle').textContent = team.name;
+  loadMembersForLogin();
+}
+
+// ── 새 팀 등록 폼 ──
+function showNewTeamForm() {
+  document.getElementById('teamList').style.display = 'none';
+  document.getElementById('teamScreenSub').textContent = '새 팀 등록';
+  let form = document.getElementById('newTeamForm');
+  if (!form) {
+    form = document.createElement('div');
+    form.id = 'newTeamForm';
+    form.innerHTML = `
+      <button class="pin-back" onclick="showTeamList()">← 뒤로</button>
+      <div class="form-group">
+        <label class="form-label">팀 이름 *</label>
+        <input type="text" class="form-control" id="nt_name" placeholder="예: 설비팀">
+      </div>
+      <div class="form-group">
+        <label class="form-label">팀 비밀번호 * <span style="font-size:11px;color:var(--gray)">(팀원 공유용)</span></label>
+        <input type="password" class="form-control" id="nt_pin" placeholder="숫자 4자리 이상" inputmode="numeric">
+      </div>
+      <div class="form-group">
+        <label class="form-label">Google Sheet ID *</label>
+        <input type="text" class="form-control" id="nt_sheet" placeholder="시트 URL의 /d/ 뒤 ID">
+        <div style="font-size:11px;color:var(--gray);margin-top:4px;">
+          sheets.google.com/spreadsheets/d/<b>여기</b>/edit
+        </div>
+      </div>
+      <div class="form-group">
+        <label class="form-label">API 키 *</label>
+        <input type="text" class="form-control" id="nt_apikey" placeholder="Google Cloud Console에서 발급">
+      </div>
+      <div class="form-group">
+        <label class="form-label">Apps Script URL *</label>
+        <input type="text" class="form-control" id="nt_script" placeholder="배포 후 생성된 URL">
+      </div>
+      <div style="background:#fffbeb;border:1px solid #fde68a;border-radius:8px;padding:12px;margin-bottom:16px;font-size:12px;line-height:1.7;">
+        <b>📋 준비 방법</b><br>
+        1. Google Sheets에서 새 스프레드시트 생성<br>
+        2. 확장프로그램 → Apps Script → sheets_setup.js 붙여넣기 → 실행<br>
+        3. 같은 곳에 weekly_report.js 붙여넣기 → 배포 → 웹앱 URL 복사<br>
+        4. Google Cloud Console → API키 발급 → Sheets API 활성화
+      </div>
+      <button class="btn btn-primary btn-block" onclick="saveNewTeam()">팀 등록</button>
+    `;
+    document.querySelector('#teamScreen .login-box').appendChild(form);
+  }
+  form.style.display = 'block';
+}
+
+function saveNewTeam() {
+  const name = document.getElementById('nt_name').value.trim();
+  const pin = document.getElementById('nt_pin').value.trim();
+  const sheet = document.getElementById('nt_sheet').value.trim();
+  const apikey = document.getElementById('nt_apikey').value.trim();
+  const script = document.getElementById('nt_script').value.trim();
+
+  if (!name || !pin || !sheet || !apikey || !script) {
+    showToast('모든 항목을 입력하세요'); return;
+  }
+
+  const newTeam = { name, teamPin: pin, sheetId: sheet, apiKey: apikey, scriptUrl: script };
+  const extra = JSON.parse(localStorage.getItem('extra_teams') || '[]');
+  extra.push(newTeam);
+  localStorage.setItem('extra_teams', JSON.stringify(extra));
+
+  showToast(`${name} 등록 완료!`);
+  selectedTeam = newTeam;
+  localStorage.setItem('saved_team', JSON.stringify(newTeam));
+  loadTeam(newTeam);
+}
+
+// ══════════════════════════════════════════════════════
 //  초기화 & 로그인
 // ══════════════════════════════════════════════════════
 async function init() {
-  document.getElementById('appTitle').textContent = '📋 ' + CONFIG.APP_NAME;
-  document.getElementById('loginTitle').textContent = CONFIG.APP_NAME;
-
   // 저장된 로그인 확인
-  const saved = sessionStorage.getItem('currentUser');
-  if (saved) {
-    state.currentUser = JSON.parse(saved);
+  const savedUser = sessionStorage.getItem('currentUser');
+  if (savedUser) {
+    // 팀도 복원
+    const savedTeam = localStorage.getItem('saved_team');
+    if (savedTeam) {
+      const team = JSON.parse(savedTeam);
+      CONFIG.SHEET_ID = team.sheetId;
+      CONFIG.API_KEY = team.apiKey;
+      CONFIG.APP_NAME = team.name + ' 업무 현황';
+      CONFIG.APPS_SCRIPT_URL = team.scriptUrl;
+    }
+    state.currentUser = JSON.parse(savedUser);
     showApp();
     return;
   }
-  await loadMembersForLogin();
+
+  // 저장된 팀 있으면 팀 선택 건너뜀
+  const savedTeam = localStorage.getItem('saved_team');
+  if (savedTeam) {
+    loadTeam(JSON.parse(savedTeam));
+    return;
+  }
+
+  // 팀 선택 화면 표시
+  showTeamScreen();
 }
 
 async function loadMembersForLogin() {
@@ -703,6 +904,16 @@ function logout() {
   document.getElementById('appScreen').style.display = 'none';
   document.getElementById('loginScreen').style.display = 'flex';
   showMemberList();
+}
+
+function changeTeam() {
+  if (!confirm('팀을 변경하시겠습니까?')) return;
+  sessionStorage.removeItem('currentUser');
+  localStorage.removeItem('saved_team');
+  state.currentUser = null;
+  document.getElementById('appScreen').style.display = 'none';
+  document.getElementById('loginScreen').style.display = 'none';
+  showTeamScreen();
 }
 
 // ══════════════════════════════════════════════════════
@@ -1506,6 +1717,9 @@ document.querySelectorAll('.modal-overlay').forEach(overlay => {
 // PIN 엔터키
 document.getElementById('pinField')?.addEventListener('keyup', e => {
   if (e.key === 'Enter') submitPin();
+});
+document.getElementById('teamPinField')?.addEventListener('keyup', e => {
+  if (e.key === 'Enter') submitTeamPin();
 });
 
 // 앱 시작
