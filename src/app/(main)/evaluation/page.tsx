@@ -1,36 +1,35 @@
-"use client";
-
-import { useEffect, useState } from "react";
-import { createClient } from "@/lib/supabase/client";
+import { redirect } from "next/navigation";
+import { createClient } from "@/lib/supabase/server";
 import type { Profile } from "@/lib/types";
 
-export default function EvaluationPage() {
-  const [me, setMe] = useState<Profile | null>(null);
-  const [loading, setLoading] = useState(true);
+export default async function EvaluationPage() {
+  const supabase = await createClient();
 
-  useEffect(() => {
-    const supabase = createClient();
-    supabase.auth.getUser().then(async ({ data: { user } }) => {
-      if (!user) return;
-      const { data } = await supabase.from("profiles").select("*").eq("id", user.id).single();
-      setMe(data as Profile);
-      setLoading(false);
-    });
-  }, []);
+  const {
+    data: { user },
+  } = await supabase.auth.getUser();
 
-  if (loading) return <p className="text-sm text-gray-400">불러오는 중...</p>;
+  if (!user) {
+    redirect("/login");
+  }
 
-  if (me?.role !== "팀장") {
-    return (
-      <div className="max-w-md mx-auto text-center py-20">
-        <p className="text-gray-500">이 화면은 팀장만 접근할 수 있습니다.</p>
-      </div>
-    );
+  const { data: profile } = await supabase
+    .from("profiles")
+    .select("*")
+    .eq("id", user.id)
+    .single();
+
+  const me = profile as Profile | null;
+
+  // 팀장 전용 화면: 팀원이 주소로 직접 접근해도 대시보드로 되돌린다
+  if (!me || me.role !== "팀장" || me.status !== "승인") {
+    redirect("/dashboard");
   }
 
   return (
     <div className="max-w-2xl">
       <h1 className="text-xl font-bold text-gray-900 mb-2">고과평가</h1>
+      <p className="text-sm text-gray-500 mb-4">팀장만 접근할 수 있는 화면입니다.</p>
       <div className="bg-white rounded-xl border border-dashed border-gray-300 p-10 text-center">
         <p className="text-gray-500 font-medium mb-2">2차 개발 예정 기능입니다</p>
         <p className="text-sm text-gray-400 leading-relaxed">

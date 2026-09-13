@@ -1,7 +1,7 @@
 // 데이터베이스 테이블 타입 (수동 정의 - migration.sql 과 동기화 유지)
 
 export type Role = "팀장" | "팀원";
-export type ProfileStatus = "대기" | "승인" | "비활성";
+export type ProfileStatus = "대기" | "승인" | "비활성" | "삭제";
 export type TaskStatus = "대기" | "진행중" | "완료" | "지연";
 
 export interface Profile {

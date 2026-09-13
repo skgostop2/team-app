@@ -35,7 +35,7 @@ export default function AppShell({
       </div>
 
       <MobileNav isLead={profile.role === "팀장"} />
-      <NoticePopup />
+      <NoticePopup userId={profile.id} />
     </div>
   );
 }

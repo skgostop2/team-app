@@ -26,7 +26,8 @@ export default function TasksPage() {
 
     const [{ data: profile }, { data: allProfiles }, { data: allTasks }] = await Promise.all([
       supabase.from("profiles").select("*").eq("id", user.id).single(),
-      supabase.from("profiles").select("*").eq("status", "승인").order("name"),
+      // 삭제된 팀원도 포함 (지난 업무의 담당자 이름 표시용). 담당자 지정 목록은 아래에서 승인된 인원만 추림
+      supabase.from("profiles").select("*").order("name"),
       supabase.from("v_tasks").select("*").order("created_at", { ascending: false }),
     ]);
 
@@ -113,7 +114,10 @@ export default function TasksPage() {
                     <StatusBadge status={t.effective_status} />
                   </div>
                   {showAll && (
-                    <p className="text-xs text-gray-400 mt-1">담당자: {assignee?.name ?? "-"}</p>
+                    <p className="text-xs text-gray-400 mt-1">
+                      담당자: {assignee?.name ?? "-"}
+                      {assignee?.status === "삭제" && " (삭제된 계정)"}
+                    </p>
                   )}
                   {t.description && (
                     <p className="text-sm text-gray-500 mt-1 line-clamp-2">{t.description}</p>
@@ -158,7 +162,7 @@ export default function TasksPage() {
 
       {showNewModal && (
         <NewTaskModal
-          profiles={profiles}
+          profiles={profiles.filter((p) => p.status === "승인")}
           onClose={() => setShowNewModal(false)}
           onCreated={() => {
             setShowNewModal(false);

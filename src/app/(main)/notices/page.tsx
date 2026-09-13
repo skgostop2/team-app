@@ -27,7 +27,13 @@ export default function NoticesPage() {
     const [{ data: profile }, { data: n }, { data: p }, { data: r }] = await Promise.all([
       supabase.from("profiles").select("*").eq("id", user.id).single(),
       supabase.from("notices").select("*").order("created_at", { ascending: false }),
-      supabase.from("profiles").select("*").eq("status", "승인").order("name"),
+      // 공지 확인 대상은 팀원 (공지를 쓰는 팀장은 집계에서 제외)
+      supabase
+        .from("profiles")
+        .select("*")
+        .eq("status", "승인")
+        .eq("role", "팀원")
+        .order("name"),
       supabase.from("notice_reads").select("*"),
     ]);
 

@@ -61,7 +61,7 @@ export default function SignupPage() {
       <div className="w-full max-w-sm">
         <h1 className="text-2xl font-bold text-center text-gray-900 mb-1">팀원 회원가입</h1>
         <p className="text-center text-sm text-gray-500 mb-8">
-          가입 후 팀장 승인이 완료되면 이용할 수 있습니다.
+          가입하면 바로 이용할 수 있습니다.
         </p>
 
         <form onSubmit={handleSubmit} className="space-y-4 bg-white rounded-xl shadow-sm border border-gray-200 p-6">

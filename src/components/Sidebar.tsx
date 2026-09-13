@@ -6,15 +6,16 @@ import type { Profile } from "@/lib/types";
 import { cn } from "@/lib/utils";
 
 const NAV = [
-  { href: "/dashboard", label: "전체 대시보드", leadOnly: false },
-  { href: "/tasks", label: "내 업무", leadOnly: false },
-  { href: "/notices", label: "공지사항", leadOnly: false },
-  { href: "/team", label: "팀원관리", leadOnly: true },
-  { href: "/evaluation", label: "고과평가", leadOnly: true },
+  { href: "/dashboard", leadLabel: "전체 대시보드", memberLabel: "내 현황", leadOnly: false },
+  { href: "/tasks", leadLabel: "업무관리", memberLabel: "내 업무", leadOnly: false },
+  { href: "/notices", leadLabel: "공지사항", memberLabel: "공지사항", leadOnly: false },
+  { href: "/team", leadLabel: "팀원관리", memberLabel: "팀원관리", leadOnly: true },
+  { href: "/evaluation", leadLabel: "고과평가", memberLabel: "고과평가", leadOnly: true },
 ];
 
 export default function Sidebar({ profile }: { profile: Profile }) {
   const pathname = usePathname();
+  const isLead = profile.role === "팀장";
 
   return (
     <aside className="hidden md:flex md:flex-col md:w-60 md:shrink-0 border-r border-gray-200 bg-white h-dvh sticky top-0">
@@ -26,7 +27,7 @@ export default function Sidebar({ profile }: { profile: Profile }) {
       </div>
 
       <nav className="flex-1 py-3 px-2 space-y-0.5">
-        {NAV.filter((n) => !n.leadOnly || profile.role === "팀장").map((item) => {
+        {NAV.filter((n) => !n.leadOnly || isLead).map((item) => {
           const active = pathname === item.href || pathname.startsWith(item.href + "/");
           return (
             <Link
@@ -37,7 +38,7 @@ export default function Sidebar({ profile }: { profile: Profile }) {
                 active ? "bg-blue-50 text-blue-700" : "text-gray-600 hover:bg-gray-50"
               )}
             >
-              {item.label}
+              {isLead ? item.leadLabel : item.memberLabel}
             </Link>
           );
         })}

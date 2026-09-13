@@ -42,7 +42,8 @@ export default function TaskDetail({ taskId }: { taskId: string }) {
 
     const [{ data: profile }, { data: allProfiles }, { data: t }, { data: h }] = await Promise.all([
       supabase.from("profiles").select("*").eq("id", user.id).single(),
-      supabase.from("profiles").select("*").eq("status", "승인").order("name"),
+      // 삭제된 팀원 이름도 이력에 그대로 표시되어야 하므로 전체를 불러온다
+      supabase.from("profiles").select("*").order("name"),
       supabase.from("v_tasks").select("*").eq("id", taskId).single(),
       supabase
         .from("task_history")
@@ -169,11 +170,14 @@ export default function TaskDetail({ taskId }: { taskId: string }) {
                   onChange={(e) => setAssigneeId(e.target.value)}
                   className="w-full rounded-lg border border-gray-300 px-3 py-2 text-base"
                 >
-                  {profiles.map((p) => (
-                    <option key={p.id} value={p.id}>
-                      {p.name}
-                    </option>
-                  ))}
+                  {profiles
+                    .filter((p) => p.status === "승인" || p.id === task.assignee_id)
+                    .map((p) => (
+                      <option key={p.id} value={p.id}>
+                        {p.name}
+                        {p.status === "삭제" ? " (삭제된 계정)" : ""}
+                      </option>
+                    ))}
                 </select>
               </div>
               <div>
