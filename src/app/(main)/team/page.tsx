@@ -5,6 +5,7 @@ import { createClient } from "@/lib/supabase/client";
 import { callEdgeFunction } from "@/lib/edge";
 import { formatElapsed, formatDate, isLongInactive } from "@/lib/utils";
 import type { Profile } from "@/lib/types";
+import { isManager, isTeamLead } from "@/lib/roles";
 
 export default function TeamPage() {
   const [me, setMe] = useState<Profile | null>(null);
@@ -14,6 +15,7 @@ export default function TeamPage() {
   const [pwTarget, setPwTarget] = useState<Profile | null>(null);
   const [deleteTarget, setDeleteTarget] = useState<Profile | null>(null);
   const [message, setMessage] = useState<string | null>(null);
+  const [showDirectorForm, setShowDirectorForm] = useState(false);
 
   async function load() {
     const supabase = createClient();
@@ -38,10 +40,10 @@ export default function TeamPage() {
 
   if (loading) return <p className="text-sm text-gray-400">불러오는 중...</p>;
 
-  if (me?.role !== "팀장") {
+  if (!isManager(me)) {
     return (
       <div className="max-w-md mx-auto text-center py-20">
-        <p className="text-gray-500">이 화면은 팀장만 접근할 수 있습니다.</p>
+        <p className="text-gray-500">이 화면은 팀장·실장만 접근할 수 있습니다.</p>
       </div>
     );
   }
@@ -54,9 +56,11 @@ export default function TeamPage() {
     setBusyId(null);
   }
 
-  const members = profiles.filter((p) => p.role !== "팀장" && p.status !== "삭제");
+  const members = profiles.filter((p) => p.role === "팀원" && p.status !== "삭제");
+  const directors = profiles.filter((p) => p.role === "실장" && p.status !== "삭제");
   const deleted = profiles.filter((p) => p.status === "삭제");
-  const lead = profiles.find((p) => p.role === "팀장");
+  const lead = profiles.find((p) => p.role === "팀장" && p.status !== "삭제");
+  const canRegisterDirector = isTeamLead(me);
 
   return (
     <div className="max-w-3xl space-y-8">
@@ -73,6 +77,58 @@ export default function TeamPage() {
         </div>
       )}
 
+      <section>
+        <div className="flex items-center justify-between mb-3">
+          <h2 className="text-sm font-semibold text-gray-700">실장 ({directors.length})</h2>
+          {canRegisterDirector && (
+            <button
+              onClick={() => setShowDirectorForm((v) => !v)}
+              className="text-xs px-3 py-1.5 rounded-lg bg-gray-900 text-white font-medium hover:bg-black"
+            >
+              {showDirectorForm ? "취소" : "+ 실장 등록"}
+            </button>
+          )}
+        </div>
+
+        {showDirectorForm && (
+          <RegisterDirectorForm
+            onDone={async (name) => {
+              setShowDirectorForm(false);
+              setMessage(`${name}님을 실장으로 등록했습니다.`);
+              await load();
+            }}
+          />
+        )}
+
+        <div className="bg-white rounded-xl border border-gray-200 divide-y divide-gray-100">
+          {directors.map((d) => (
+            <div key={d.id} className="px-4 py-3 flex items-center justify-between gap-2 flex-wrap">
+              <div className="min-w-0">
+                <p className="font-medium text-gray-900">{d.name}</p>
+                <p className="text-xs text-gray-400 truncate">{d.email}</p>
+                <p className="text-xs text-gray-400">
+                  마지막 접속 {formatElapsed(d.last_seen_at)}
+                </p>
+              </div>
+              {canRegisterDirector && d.id !== me?.id && (
+                <button
+                  onClick={() => setDeleteTarget(d)}
+                  className="text-xs px-3 py-1.5 rounded-lg border border-red-200 text-red-600 hover:bg-red-50"
+                >
+                  삭제
+                </button>
+              )}
+            </div>
+          ))}
+          {directors.length === 0 && (
+            <div className="px-4 py-6 text-center text-gray-400 text-sm">
+              등록된 실장이 없습니다.
+              {canRegisterDirector && " 위 버튼으로 등록할 수 있습니다."}
+            </div>
+          )}
+        </div>
+      </section>
+
       {lead && (
         <section>
           <h2 className="text-sm font-semibold text-gray-700 mb-3">팀장</h2>
@@ -81,12 +137,14 @@ export default function TeamPage() {
               <p className="font-medium text-gray-900">{lead.name}</p>
               <p className="text-xs text-gray-400">{lead.email}</p>
             </div>
-            <button
-              onClick={() => setPwTarget(lead)}
-              className="text-xs px-3 py-1.5 rounded-lg border border-gray-300 text-gray-600 hover:bg-gray-50"
-            >
-              비밀번호 변경
-            </button>
+            {lead.id === me?.id && (
+              <button
+                onClick={() => setPwTarget(lead)}
+                className="text-xs px-3 py-1.5 rounded-lg border border-gray-300 text-gray-600 hover:bg-gray-50"
+              >
+                비밀번호 변경
+              </button>
+            )}
           </div>
         </section>
       )}
@@ -149,6 +207,85 @@ export default function TeamPage() {
         />
       )}
     </div>
+  );
+}
+
+function RegisterDirectorForm({ onDone }: { onDone: (name: string) => void }) {
+  const [name, setName] = useState("");
+  const [email, setEmail] = useState("");
+  const [password, setPassword] = useState("");
+  const [error, setError] = useState<string | null>(null);
+  const [saving, setSaving] = useState(false);
+
+  async function handleSubmit(e: React.FormEvent) {
+    e.preventDefault();
+    setError(null);
+
+    if (!name.trim() || !email.trim()) {
+      setError("이름과 이메일을 입력해주세요.");
+      return;
+    }
+    if (password.length < 6) {
+      setError("비밀번호는 6자 이상이어야 합니다.");
+      return;
+    }
+
+    setSaving(true);
+    const { error: fnError } = await callEdgeFunction(
+      "register-director",
+      { name: name.trim(), email: email.trim(), password },
+      { authed: true }
+    );
+
+    if (fnError) {
+      setError(fnError);
+      setSaving(false);
+      return;
+    }
+
+    onDone(name.trim());
+  }
+
+  return (
+    <form
+      onSubmit={handleSubmit}
+      className="bg-white rounded-xl border border-gray-200 p-4 space-y-3 mb-3"
+    >
+      <p className="text-xs text-gray-500">
+        실장 계정을 만듭니다. 여기서 정한 비밀번호를 실장님께 전달하시고, 접속 후 본인이 직접
+        바꾸실 수 있습니다.
+      </p>
+      <div className="grid grid-cols-1 sm:grid-cols-3 gap-2">
+        <input
+          value={name}
+          onChange={(e) => setName(e.target.value)}
+          placeholder="이름"
+          className="rounded-lg border border-gray-300 px-3 py-2 text-base"
+        />
+        <input
+          type="email"
+          value={email}
+          onChange={(e) => setEmail(e.target.value)}
+          placeholder="이메일"
+          className="rounded-lg border border-gray-300 px-3 py-2 text-base"
+        />
+        <input
+          type="password"
+          value={password}
+          onChange={(e) => setPassword(e.target.value)}
+          placeholder="비밀번호 (6자 이상)"
+          className="rounded-lg border border-gray-300 px-3 py-2 text-base"
+        />
+      </div>
+      {error && <p className="text-sm text-red-600">{error}</p>}
+      <button
+        type="submit"
+        disabled={saving}
+        className="text-sm px-4 py-2 rounded-lg bg-gray-900 text-white font-medium hover:bg-black disabled:opacity-50"
+      >
+        {saving ? "등록 중..." : "실장으로 등록"}
+      </button>
+    </form>
   );
 }
 

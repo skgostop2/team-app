@@ -3,6 +3,7 @@
 import { useEffect } from "react";
 import type { Profile } from "@/lib/types";
 import { createClient } from "@/lib/supabase/client";
+import { isManager } from "@/lib/roles";
 import Sidebar from "./Sidebar";
 import MobileNav from "./MobileNav";
 import NoticePopup from "./NoticePopup";
@@ -34,7 +35,7 @@ export default function AppShell({
         <main className="p-4 md:p-8 pb-20 md:pb-8 max-w-[1400px] mx-auto">{children}</main>
       </div>
 
-      <MobileNav isLead={profile.role === "팀장"} />
+      <MobileNav isLead={isManager(profile)} />
       <NoticePopup userId={profile.id} />
     </div>
   );

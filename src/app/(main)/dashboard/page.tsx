@@ -5,13 +5,16 @@ import Link from "next/link";
 import { createClient } from "@/lib/supabase/client";
 import { formatElapsed, isLongInactive, formatDate, cn } from "@/lib/utils";
 import type { Profile, TaskWithEffectiveStatus } from "@/lib/types";
+import { isManager } from "@/lib/roles";
 import StatusBadge from "@/components/StatusBadge";
 
 export default function DashboardPage() {
   const [me, setMe] = useState<Profile | null>(null);
   const [profiles, setProfiles] = useState<Profile[]>([]);
   const [tasks, setTasks] = useState<TaskWithEffectiveStatus[]>([]);
+  const [shared, setShared] = useState(false);
   const [loading, setLoading] = useState(true);
+  const [togglingShare, setTogglingShare] = useState(false);
 
   async function load() {
     const supabase = createClient();
@@ -20,16 +23,22 @@ export default function DashboardPage() {
     } = await supabase.auth.getUser();
     if (!user) return;
 
-    const [{ data: profile }, { data: p }, { data: t }] = await Promise.all([
+    const [{ data: profile }, { data: p }, { data: t }, { data: setting }] = await Promise.all([
       supabase.from("profiles").select("*").eq("id", user.id).single(),
       // 삭제된 팀원도 포함해서 불러온다 (지난 업무의 담당자 이름을 보존해서 표시하기 위함)
       supabase.from("profiles").select("*").order("name"),
       supabase.from("v_tasks").select("*").order("due_date", { ascending: true, nullsFirst: false }),
+      supabase
+        .from("team_settings")
+        .select("value")
+        .eq("key", "share_progress_with_members")
+        .maybeSingle(),
     ]);
 
     setMe(profile as Profile);
     setProfiles((p ?? []) as Profile[]);
     setTasks((t ?? []) as TaskWithEffectiveStatus[]);
+    setShared(Boolean(setting?.value));
     setLoading(false);
   }
 
@@ -37,15 +46,29 @@ export default function DashboardPage() {
     load();
   }, []);
 
-  const isLead = me?.role === "팀장";
+  const isLead = isManager(me);
+  // 팀장이 공개를 켜두면 팀원도 팀 전체 현황을 본다
+  const canSeeTeam = isLead || shared;
 
-  // 팀원은 자기 업무만, 팀장은 전체
-  const scopedTasks = useMemo(
-    () => (isLead ? tasks : tasks.filter((t) => t.assignee_id === me?.id)),
-    [tasks, isLead, me?.id]
+  const myTasks = useMemo(
+    () => tasks.filter((t) => t.assignee_id === me?.id),
+    [tasks, me?.id]
   );
+  const scopedTasks = canSeeTeam ? tasks : myTasks;
 
   const stats = useMemo(() => summarize(scopedTasks), [scopedTasks]);
+  const myStats = useMemo(() => summarize(myTasks), [myTasks]);
+
+  async function toggleShare(next: boolean) {
+    setTogglingShare(true);
+    const supabase = createClient();
+    await supabase
+      .from("team_settings")
+      .update({ value: next, updated_at: new Date().toISOString() })
+      .eq("key", "share_progress_with_members");
+    setShared(next);
+    setTogglingShare(false);
+  }
 
   const byMember = useMemo(() => {
     // 팀원별 카드는 현재 재직 중인(승인) 인원만
@@ -82,33 +105,55 @@ export default function DashboardPage() {
 
   return (
     <div className="space-y-6">
-      <div>
-        <h1 className="text-xl font-bold text-gray-900">
-          {isLead ? "전체 팀 대시보드" : "내 업무 현황"}
-        </h1>
-        <p className="text-sm text-gray-500 mt-0.5">
-          {isLead
-            ? "팀원별 진척율과 달성율을 한눈에 확인합니다."
-            : "내가 맡은 업무의 진행 상황입니다."}
-        </p>
+      <div className="flex items-start justify-between gap-3 flex-wrap">
+        <div>
+          <h1 className="text-xl font-bold text-gray-900">
+            {canSeeTeam ? "전체 팀 대시보드" : "내 업무 현황"}
+          </h1>
+          <p className="text-sm text-gray-500 mt-0.5">
+            {isLead
+              ? "팀원별 진척율과 달성율을 한눈에 확인합니다."
+              : canSeeTeam
+                ? "팀 전체 현황과 내가 맡은 업무를 함께 봅니다."
+                : "내가 맡은 업무의 진행 상황입니다."}
+          </p>
+        </div>
+
+        {isLead && (
+          <label className="flex items-center gap-2 text-xs text-gray-600 bg-white border border-gray-200 rounded-lg px-3 py-2 cursor-pointer">
+            <input
+              type="checkbox"
+              checked={shared}
+              disabled={togglingShare}
+              onChange={(e) => toggleShare(e.target.checked)}
+              className="w-4 h-4"
+            />
+            팀 현황을 팀원에게 공개
+          </label>
+        )}
       </div>
 
       <div className="grid grid-cols-2 md:grid-cols-4 gap-3">
-        <StatCard label={isLead ? "전체 업무" : "내 업무"} value={stats.total} />
+        <StatCard label={canSeeTeam ? "전체 업무" : "내 업무"} value={stats.total} />
         <StatCard label="진행중" value={stats.inProgress} accent="text-blue-600" />
         <StatCard label="지연" value={stats.delayed} accent="text-red-600" />
-        <StatCard label="달성율" value={`${stats.completionRate}%`} accent="text-emerald-600" />
+        <StatCard
+          label={canSeeTeam ? "팀 달성율" : "내 달성율"}
+          value={`${stats.completionRate}%`}
+          accent="text-emerald-600"
+        />
       </div>
 
       {!isLead && (
         <div className="bg-white rounded-xl border border-gray-200 p-4">
           <div className="flex items-center justify-between mb-2">
             <p className="text-sm font-semibold text-gray-700">내 평균 진척율</p>
-            <span className="text-sm font-bold text-gray-900">{stats.avgProgress}%</span>
+            <span className="text-sm font-bold text-gray-900">{myStats.avgProgress}%</span>
           </div>
-          <ProgressBar value={stats.avgProgress} />
+          <ProgressBar value={myStats.avgProgress} />
           <p className="text-xs text-gray-400 mt-2">
-            완료 {stats.done}건 · 진행중 {stats.inProgress}건 · 지연 {stats.delayed}건
+            내 업무 {myStats.total}건 · 완료 {myStats.done}건 · 진행중 {myStats.inProgress}건 · 지연{" "}
+            {myStats.delayed}건 · 내 달성율 {myStats.completionRate}%
           </p>
         </div>
       )}
@@ -205,14 +250,14 @@ export default function DashboardPage() {
 
       <div>
         <h2 className="text-sm font-semibold text-gray-700 mb-3">
-          {isLead ? "전체 업무 목록" : "내 업무 목록"}
+          {canSeeTeam ? "전체 업무 목록" : "내 업무 목록"}
         </h2>
         <div className="bg-white rounded-xl border border-gray-200 overflow-x-auto">
           <table className="w-full text-sm min-w-[640px]">
             <thead>
               <tr className="text-left text-xs text-gray-400 border-b border-gray-100">
                 <th className="px-4 py-3 font-medium">업무</th>
-                {isLead && <th className="px-4 py-3 font-medium">담당자</th>}
+                {canSeeTeam && <th className="px-4 py-3 font-medium">담당자</th>}
                 <th className="px-4 py-3 font-medium">진행률</th>
                 <th className="px-4 py-3 font-medium">상태</th>
                 <th className="px-4 py-3 font-medium">마감일</th>
@@ -234,7 +279,7 @@ export default function DashboardPage() {
                         {t.title}
                       </Link>
                     </td>
-                    {isLead && (
+                    {canSeeTeam && (
                       <td className="px-4 py-3 text-gray-600">
                         {assignee?.name ?? "-"}
                         {assignee?.status === "삭제" && (
@@ -259,8 +304,8 @@ export default function DashboardPage() {
               })}
               {scopedTasks.length === 0 && (
                 <tr>
-                  <td colSpan={isLead ? 5 : 4} className="px-4 py-8 text-center text-gray-400">
-                    {isLead ? "등록된 업무가 없습니다." : "배정된 업무가 없습니다."}
+                  <td colSpan={canSeeTeam ? 5 : 4} className="px-4 py-8 text-center text-gray-400">
+                    {canSeeTeam ? "등록된 업무가 없습니다." : "배정된 업무가 없습니다."}
                   </td>
                 </tr>
               )}

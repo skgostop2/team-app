@@ -6,6 +6,7 @@ import { createClient } from "@/lib/supabase/client";
 import { formatDate, formatDateTime } from "@/lib/utils";
 import type { Profile, TaskHistory, TaskWithEffectiveStatus } from "@/lib/types";
 import StatusBadge from "@/components/StatusBadge";
+import { isManager } from "@/lib/roles";
 
 const HISTORY_LABELS: Record<string, string> = {
   created: "업무 생성",
@@ -70,7 +71,7 @@ export default function TaskDetail({ taskId }: { taskId: string }) {
     load();
   }, [load]);
 
-  const isLead = me?.role === "팀장";
+  const isLead = isManager(me);
   const isAssignee = task?.assignee_id === me?.id;
 
   async function saveLeadEdits() {

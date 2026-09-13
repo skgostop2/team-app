@@ -4,18 +4,21 @@ import Link from "next/link";
 import { usePathname } from "next/navigation";
 import type { Profile } from "@/lib/types";
 import { cn } from "@/lib/utils";
+import { isManager, isTeamLead } from "@/lib/roles";
 
 const NAV = [
-  { href: "/dashboard", leadLabel: "전체 대시보드", memberLabel: "내 현황", leadOnly: false },
-  { href: "/tasks", leadLabel: "업무관리", memberLabel: "내 업무", leadOnly: false },
-  { href: "/notices", leadLabel: "공지사항", memberLabel: "공지사항", leadOnly: false },
-  { href: "/team", leadLabel: "팀원관리", memberLabel: "팀원관리", leadOnly: true },
-  { href: "/evaluation", leadLabel: "고과평가", memberLabel: "고과평가", leadOnly: true },
-];
+  { href: "/dashboard", leadLabel: "전체 대시보드", memberLabel: "내 현황", access: "all" },
+  { href: "/tasks", leadLabel: "업무관리", memberLabel: "내 업무", access: "all" },
+  { href: "/notices", leadLabel: "공지사항", memberLabel: "공지사항", access: "all" },
+  { href: "/team", leadLabel: "팀원관리", memberLabel: "팀원관리", access: "manager" },
+  { href: "/evaluation", leadLabel: "고과평가", memberLabel: "고과평가", access: "teamLead" },
+] as const;
 
 export default function Sidebar({ profile }: { profile: Profile }) {
   const pathname = usePathname();
-  const isLead = profile.role === "팀장";
+  const manager = isManager(profile);
+  const teamLead = isTeamLead(profile);
+  const isLead = manager;
 
   return (
     <aside className="hidden md:flex md:flex-col md:w-60 md:shrink-0 border-r border-gray-200 bg-white h-dvh sticky top-0">
@@ -27,7 +30,11 @@ export default function Sidebar({ profile }: { profile: Profile }) {
       </div>
 
       <nav className="flex-1 py-3 px-2 space-y-0.5">
-        {NAV.filter((n) => !n.leadOnly || isLead).map((item) => {
+        {NAV.filter((n) => {
+          if (n.access === "manager") return manager;
+          if (n.access === "teamLead") return teamLead;
+          return true;
+        }).map((item) => {
           const active = pathname === item.href || pathname.startsWith(item.href + "/");
           return (
             <Link

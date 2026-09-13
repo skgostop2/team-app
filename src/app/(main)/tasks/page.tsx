@@ -5,6 +5,7 @@ import Link from "next/link";
 import { createClient } from "@/lib/supabase/client";
 import { formatDate } from "@/lib/utils";
 import type { Profile, TaskWithEffectiveStatus } from "@/lib/types";
+import { isManager } from "@/lib/roles";
 import StatusBadge from "@/components/StatusBadge";
 import NewTaskModal from "@/components/NewTaskModal";
 
@@ -41,7 +42,7 @@ export default function TasksPage() {
     load();
   }, []);
 
-  const isLead = me?.role === "팀장";
+  const isLead = isManager(me);
   const visibleTasks = isLead && showAll ? tasks : tasks.filter((t) => t.assignee_id === me?.id);
 
   async function confirmNew(taskId: string) {

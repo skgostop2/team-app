@@ -4,6 +4,7 @@ import { useEffect, useState } from "react";
 import { createClient } from "@/lib/supabase/client";
 import { formatDateTime } from "@/lib/utils";
 import type { Notice, NoticeRead, Profile } from "@/lib/types";
+import { isManager } from "@/lib/roles";
 
 export default function NoticesPage() {
   const [me, setMe] = useState<Profile | null>(null);
@@ -48,7 +49,7 @@ export default function NoticesPage() {
     load();
   }, []);
 
-  const isLead = me?.role === "팀장";
+  const isLead = isManager(me);
 
   async function handleCreate(e: React.FormEvent) {
     e.preventDefault();

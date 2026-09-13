@@ -5,6 +5,7 @@ import { usePathname } from "next/navigation";
 import { cn } from "@/lib/utils";
 
 export default function MobileNav({ isLead }: { isLead: boolean }) {
+  // isLead: 실장·팀장 (운영 권한 보유자)
   const pathname = usePathname();
 
   const items = [
