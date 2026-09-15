@@ -34,14 +34,14 @@ export default function TaskLedger({
       </div>
 
       <div className="overflow-x-auto">
-        <table className="w-full text-sm border-collapse min-w-[900px]">
+        <table className="w-full text-sm border-collapse min-w-[1020px] table-fixed">
           <thead>
             <tr className="bg-blue-50 text-gray-700 text-xs">
-              <Th className="w-12 text-center">NO.</Th>
+              <Th className="w-14 text-center">NO.</Th>
               <Th className="w-28">작성일</Th>
-              <Th>업무내용</Th>
-              <Th className="w-20 text-center">진행일정</Th>
-              <Th className="w-20 text-center">완료일</Th>
+              <Th className="w-auto min-w-[300px]">업무내용</Th>
+              <Th className="w-24 text-center">진행일정</Th>
+              <Th className="w-24 text-center">완료일</Th>
               {showAssignee && <Th className="w-24">담당자</Th>}
               <Th className="w-24">지시자</Th>
               <Th className="w-28 text-center">진행률</Th>
@@ -57,10 +57,10 @@ export default function TaskLedger({
                 <tr key={t.id} className="border-b border-gray-200 last:border-0 hover:bg-gray-50">
                   <Td className="text-center text-gray-500">{i + 1}</Td>
                   <Td className="text-gray-600 whitespace-nowrap">{formatIsoDate(t.created_at)}</Td>
-                  <Td>
+                  <Td className="min-w-[300px]">
                     <Link
                       href={`/tasks/${t.id}`}
-                      className="font-medium text-gray-900 hover:text-blue-600"
+                      className="font-medium text-gray-900 hover:text-blue-600 break-keep"
                     >
                       {t.is_new && (
                         <span className="inline-block w-1.5 h-1.5 rounded-full bg-blue-500 mr-1.5 align-middle" />
@@ -68,7 +68,7 @@ export default function TaskLedger({
                       {t.title}
                     </Link>
                     {t.description && (
-                      <span className="block text-xs text-gray-400 mt-0.5 line-clamp-1">
+                      <span className="block text-xs text-gray-400 mt-0.5 line-clamp-1 break-keep">
                         {t.description}
                       </span>
                     )}
