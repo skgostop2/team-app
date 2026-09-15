@@ -89,7 +89,7 @@ export default function NewTaskModal({
             >
               {profiles.map((p) => (
                 <option key={p.id} value={p.id}>
-                  {p.name} ({p.role})
+                  {p.name} ({p.role}){p.status === "가입대기" ? " · 가입대기" : ""}
                 </option>
               ))}
             </select>

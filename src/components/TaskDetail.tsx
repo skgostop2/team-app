@@ -6,7 +6,7 @@ import { createClient } from "@/lib/supabase/client";
 import { formatDate, formatDateTime } from "@/lib/utils";
 import type { Profile, TaskHistory, TaskWithEffectiveStatus } from "@/lib/types";
 import StatusBadge from "@/components/StatusBadge";
-import { isManager } from "@/lib/roles";
+import { isManager, isAssignable } from "@/lib/roles";
 
 const HISTORY_LABELS: Record<string, string> = {
   created: "업무 생성",
@@ -172,11 +172,12 @@ export default function TaskDetail({ taskId }: { taskId: string }) {
                   className="w-full rounded-lg border border-gray-300 px-3 py-2 text-base"
                 >
                   {profiles
-                    .filter((p) => p.status === "승인" || p.id === task.assignee_id)
+                    .filter((p) => isAssignable(p) || p.id === task.assignee_id)
                     .map((p) => (
                       <option key={p.id} value={p.id}>
                         {p.name}
                         {p.status === "삭제" ? " (삭제된 계정)" : ""}
+                        {p.status === "가입대기" ? " (가입대기)" : ""}
                       </option>
                     ))}
                 </select>

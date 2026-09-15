@@ -16,6 +16,7 @@ export default function TeamPage() {
   const [deleteTarget, setDeleteTarget] = useState<Profile | null>(null);
   const [message, setMessage] = useState<string | null>(null);
   const [showDirectorForm, setShowDirectorForm] = useState(false);
+  const [showPreForm, setShowPreForm] = useState(false);
 
   async function load() {
     const supabase = createClient();
@@ -56,7 +57,8 @@ export default function TeamPage() {
     setBusyId(null);
   }
 
-  const members = profiles.filter((p) => p.role === "팀원" && p.status !== "삭제");
+  const members = profiles.filter((p) => p.role === "팀원" && p.status === "승인");
+  const pending = profiles.filter((p) => p.role === "팀원" && p.status === "가입대기");
   const directors = profiles.filter((p) => p.role === "실장" && p.status !== "삭제");
   const deleted = profiles.filter((p) => p.status === "삭제");
   const lead = profiles.find((p) => p.role === "팀장" && p.status !== "삭제");
@@ -67,7 +69,8 @@ export default function TeamPage() {
       <div>
         <h1 className="text-xl font-bold text-gray-900">팀원관리</h1>
         <p className="text-sm text-gray-500 mt-0.5">
-          가입한 팀원은 바로 이용할 수 있습니다. 우리 팀원이 아닌 계정은 삭제하세요.
+          가입한 팀원은 바로 이용할 수 있습니다. 아직 가입 전인 사람도 미리 등록해 두면 업무를
+          배정할 수 있습니다. 우리 팀원이 아닌 계정은 삭제하세요.
         </p>
       </div>
 
@@ -150,6 +153,68 @@ export default function TeamPage() {
       )}
 
       <section>
+        <div className="flex items-center justify-between mb-3">
+          <h2 className="text-sm font-semibold text-gray-700">
+            가입 전 미리 등록 ({pending.length})
+          </h2>
+          <button
+            onClick={() => setShowPreForm((v) => !v)}
+            className="text-xs px-3 py-1.5 rounded-lg bg-gray-900 text-white font-medium hover:bg-black"
+          >
+            {showPreForm ? "취소" : "+ 팀원 미리 등록"}
+          </button>
+        </div>
+
+        {showPreForm && (
+          <PreRegisterForm
+            onDone={async (name) => {
+              setShowPreForm(false);
+              setMessage(
+                `${name}님을 미리 등록했습니다. 지금부터 업무를 배정할 수 있고, 본인이 같은 이메일로 회원가입하면 그대로 연결됩니다.`
+              );
+              await load();
+            }}
+          />
+        )}
+
+        {pending.length > 0 ? (
+          <div className="bg-white rounded-xl border border-gray-200 divide-y divide-gray-100">
+            {pending.map((p) => (
+              <div
+                key={p.id}
+                className="px-4 py-3 flex items-center justify-between gap-2 flex-wrap"
+              >
+                <div className="min-w-0">
+                  <p className="font-medium text-gray-900">
+                    {p.name}
+                    <span className="ml-2 text-xs px-2 py-0.5 rounded-full bg-amber-50 text-amber-700 font-normal align-middle">
+                      가입대기
+                    </span>
+                  </p>
+                  <p className="text-xs text-gray-400 truncate">{p.email}</p>
+                  <p className="text-xs text-gray-400">
+                    등록일 {formatDate(p.created_at)} · 이 이메일로 회원가입하면 자동 연결됩니다
+                  </p>
+                </div>
+                <button
+                  onClick={() => setDeleteTarget(p)}
+                  className="text-xs px-3 py-1.5 rounded-lg border border-red-200 text-red-600 hover:bg-red-50"
+                >
+                  삭제
+                </button>
+              </div>
+            ))}
+          </div>
+        ) : (
+          !showPreForm && (
+            <div className="bg-white rounded-xl border border-gray-200 px-4 py-6 text-center text-gray-400 text-sm">
+              아직 가입 전인 사람을 미리 등록해 두면, 가입 전에도 업무를 배정해 둘 수 있습니다.
+            </div>
+          )
+        )}
+      </section>
+
+      <section>
         <h2 className="text-sm font-semibold text-gray-700 mb-3">팀원 목록 ({members.length})</h2>
         <div className="bg-white rounded-xl border border-gray-200 divide-y divide-gray-100">
           {members.map((p) => (
@@ -207,6 +272,74 @@ export default function TeamPage() {
         />
       )}
     </div>
+  );
+}
+
+function PreRegisterForm({ onDone }: { onDone: (name: string) => void }) {
+  const [name, setName] = useState("");
+  const [email, setEmail] = useState("");
+  const [error, setError] = useState<string | null>(null);
+  const [saving, setSaving] = useState(false);
+
+  async function handleSubmit(e: React.FormEvent) {
+    e.preventDefault();
+    setError(null);
+
+    if (!name.trim() || !email.trim()) {
+      setError("이름과 이메일을 모두 입력해주세요.");
+      return;
+    }
+
+    setSaving(true);
+    const { error: fnError } = await callEdgeFunction(
+      "pre-register-member",
+      { name: name.trim(), email: email.trim() },
+      { authed: true }
+    );
+
+    if (fnError) {
+      setError(fnError);
+      setSaving(false);
+      return;
+    }
+
+    onDone(name.trim());
+  }
+
+  return (
+    <form
+      onSubmit={handleSubmit}
+      className="bg-white rounded-xl border border-gray-200 p-4 space-y-3 mb-3"
+    >
+      <p className="text-xs text-gray-500">
+        아직 가입하지 않은 사람을 이름과 이메일로 미리 등록합니다. 비밀번호는 정하지 않습니다 —
+        본인이 나중에 <span className="font-medium text-gray-700">같은 이메일</span>로 회원가입할 때
+        직접 정하고, 그 순간 미리 배정해 둔 업무가 그대로 연결됩니다.
+      </p>
+      <div className="grid grid-cols-1 sm:grid-cols-2 gap-2">
+        <input
+          value={name}
+          onChange={(e) => setName(e.target.value)}
+          placeholder="이름"
+          className="rounded-lg border border-gray-300 px-3 py-2 text-base"
+        />
+        <input
+          type="email"
+          value={email}
+          onChange={(e) => setEmail(e.target.value)}
+          placeholder="이메일 (가입할 때 쓸 주소)"
+          className="rounded-lg border border-gray-300 px-3 py-2 text-base"
+        />
+      </div>
+      {error && <p className="text-sm text-red-600">{error}</p>}
+      <button
+        type="submit"
+        disabled={saving}
+        className="text-sm px-4 py-2 rounded-lg bg-gray-900 text-white font-medium hover:bg-black disabled:opacity-50"
+      >
+        {saving ? "등록 중..." : "미리 등록"}
+      </button>
+    </form>
   );
 }
 
@@ -411,9 +544,14 @@ function DeleteMemberModal({
   return (
     <div className="fixed inset-0 z-40 bg-black/40 flex items-center justify-center p-4">
       <div className="bg-white w-full max-w-sm rounded-2xl p-6">
-        <h2 className="text-lg font-bold text-gray-900 mb-1">{profile.name}님 삭제</h2>
+        <h2 className="text-lg font-bold text-gray-900 mb-1">
+          {profile.name}님 {profile.status === "가입대기" ? "사전등록 취소" : "삭제"}
+        </h2>
         <p className="text-sm text-gray-500 mb-3">
-          로그인 계정이 삭제되어 더 이상 접속할 수 없습니다. 되돌릴 수 없습니다.
+          {profile.status === "가입대기"
+            ? "미리 등록해 둔 자리를 없앱니다. 이후 같은 이메일로 회원가입해도 연결되지 않습니다."
+            : "로그인 계정이 삭제되어 더 이상 접속할 수 없습니다."}{" "}
+          되돌릴 수 없습니다.
         </p>
 
         {taskCount === null ? (

@@ -5,7 +5,7 @@ import Link from "next/link";
 import { createClient } from "@/lib/supabase/client";
 import { formatDate } from "@/lib/utils";
 import type { Profile, TaskWithEffectiveStatus } from "@/lib/types";
-import { isManager } from "@/lib/roles";
+import { isManager, isAssignable } from "@/lib/roles";
 import StatusBadge from "@/components/StatusBadge";
 import NewTaskModal from "@/components/NewTaskModal";
 
@@ -163,7 +163,7 @@ export default function TasksPage() {
 
       {showNewModal && (
         <NewTaskModal
-          profiles={profiles.filter((p) => p.status === "승인")}
+          profiles={profiles.filter(isAssignable)}
           onClose={() => setShowNewModal(false)}
           onCreated={() => {
             setShowNewModal(false);

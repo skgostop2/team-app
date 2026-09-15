@@ -5,7 +5,7 @@ import Link from "next/link";
 import { createClient } from "@/lib/supabase/client";
 import { formatElapsed, isLongInactive, formatDate, cn } from "@/lib/utils";
 import type { Profile, TaskWithEffectiveStatus } from "@/lib/types";
-import { isManager } from "@/lib/roles";
+import { isManager, isAssignable } from "@/lib/roles";
 import StatusBadge from "@/components/StatusBadge";
 
 export default function DashboardPage() {
@@ -71,9 +71,9 @@ export default function DashboardPage() {
   }
 
   const byMember = useMemo(() => {
-    // 팀원별 카드는 현재 재직 중인(승인) 인원만
+    // 팀원별 카드는 현재 재직 중인 인원 + 가입 전 미리 등록해 둔 인원 (미리 배정한 업무를 보기 위해)
     return profiles
-      .filter((p) => p.status === "승인")
+      .filter(isAssignable)
       .map((p) => {
         const mine = tasks.filter((t) => t.assignee_id === p.id);
         const s = summarize(mine);
@@ -170,12 +170,16 @@ export default function DashboardPage() {
                       {m.profile.name}
                       <span className="text-xs text-gray-400 font-normal"> {m.profile.role}</span>
                     </p>
-                    <p className="text-xs text-gray-400">
-                      마지막 접속 {formatElapsed(m.profile.last_seen_at)}
-                      {isLongInactive(m.profile.last_seen_at) && (
-                        <span className="text-red-500 font-medium"> · 장기 미접속</span>
-                      )}
-                    </p>
+                    {m.profile.status === "가입대기" ? (
+                      <p className="text-xs text-amber-600">아직 회원가입 전 · 업무는 미리 배정됨</p>
+                    ) : (
+                      <p className="text-xs text-gray-400">
+                        마지막 접속 {formatElapsed(m.profile.last_seen_at)}
+                        {isLongInactive(m.profile.last_seen_at) && (
+                          <span className="text-red-500 font-medium"> · 장기 미접속</span>
+                        )}
+                      </p>
+                    )}
                   </div>
                   <span className="text-xs px-2 py-1 rounded-full bg-gray-100 text-gray-600 shrink-0">
                     총 {m.total}건

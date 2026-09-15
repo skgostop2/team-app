@@ -62,6 +62,10 @@ export default function SignupPage() {
         <h1 className="text-2xl font-bold text-center text-gray-900 mb-1">팀원 회원가입</h1>
         <p className="text-center text-sm text-gray-500 mb-8">
           가입하면 바로 이용할 수 있습니다.
+          <br />
+          팀장이 미리 등록해 둔 분은{" "}
+          <span className="font-medium text-gray-700">등록된 이메일 그대로</span> 가입하시면 맡은
+          업무가 그대로 따라옵니다.
         </p>
 
         <form onSubmit={handleSubmit} className="space-y-4 bg-white rounded-xl shadow-sm border border-gray-200 p-6">
