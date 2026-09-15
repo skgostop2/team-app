@@ -6,7 +6,7 @@ import { createClient } from "@/lib/supabase/client";
 import { formatElapsed, isLongInactive, formatDate, cn } from "@/lib/utils";
 import type { Profile, TaskWithEffectiveStatus } from "@/lib/types";
 import { isManager, isAssignable } from "@/lib/roles";
-import StatusBadge from "@/components/StatusBadge";
+import TaskLedger from "@/components/TaskLedger";
 
 export default function DashboardPage() {
   const [me, setMe] = useState<Profile | null>(null);
@@ -27,7 +27,7 @@ export default function DashboardPage() {
       supabase.from("profiles").select("*").eq("id", user.id).single(),
       // 삭제된 팀원도 포함해서 불러온다 (지난 업무의 담당자 이름을 보존해서 표시하기 위함)
       supabase.from("profiles").select("*").order("name"),
-      supabase.from("v_tasks").select("*").order("due_date", { ascending: true, nullsFirst: false }),
+      supabase.from("v_tasks").select("*").order("created_at", { ascending: true }),
       supabase
         .from("team_settings")
         .select("value")
@@ -252,71 +252,13 @@ export default function DashboardPage() {
         </div>
       )}
 
-      <div>
-        <h2 className="text-sm font-semibold text-gray-700 mb-3">
-          {canSeeTeam ? "전체 업무 목록" : "내 업무 목록"}
-        </h2>
-        <div className="bg-white rounded-xl border border-gray-200 overflow-x-auto">
-          <table className="w-full text-sm min-w-[640px]">
-            <thead>
-              <tr className="text-left text-xs text-gray-400 border-b border-gray-100">
-                <th className="px-4 py-3 font-medium">업무</th>
-                {canSeeTeam && <th className="px-4 py-3 font-medium">담당자</th>}
-                <th className="px-4 py-3 font-medium">진행률</th>
-                <th className="px-4 py-3 font-medium">상태</th>
-                <th className="px-4 py-3 font-medium">마감일</th>
-              </tr>
-            </thead>
-            <tbody>
-              {scopedTasks.map((t) => {
-                const assignee = profiles.find((p) => p.id === t.assignee_id);
-                return (
-                  <tr key={t.id} className="border-b border-gray-50 last:border-0 hover:bg-gray-50">
-                    <td className="px-4 py-3">
-                      <Link
-                        href={`/tasks/${t.id}`}
-                        className="font-medium text-gray-900 hover:text-blue-600"
-                      >
-                        {t.is_new && (
-                          <span className="inline-block w-1.5 h-1.5 rounded-full bg-blue-500 mr-1.5 align-middle" />
-                        )}
-                        {t.title}
-                      </Link>
-                    </td>
-                    {canSeeTeam && (
-                      <td className="px-4 py-3 text-gray-600">
-                        {assignee?.name ?? "-"}
-                        {assignee?.status === "삭제" && (
-                          <span className="text-xs text-gray-400"> (삭제된 계정)</span>
-                        )}
-                      </td>
-                    )}
-                    <td className="px-4 py-3 text-gray-600 w-32">
-                      <div className="flex items-center gap-2">
-                        <div className="flex-1 h-1.5 rounded-full bg-gray-100 overflow-hidden">
-                          <div className="h-full bg-blue-500" style={{ width: `${t.progress}%` }} />
-                        </div>
-                        <span className="text-xs w-8">{t.progress}%</span>
-                      </div>
-                    </td>
-                    <td className="px-4 py-3">
-                      <StatusBadge status={t.effective_status} />
-                    </td>
-                    <td className="px-4 py-3 text-gray-500">{formatDate(t.due_date)}</td>
-                  </tr>
-                );
-              })}
-              {scopedTasks.length === 0 && (
-                <tr>
-                  <td colSpan={canSeeTeam ? 5 : 4} className="px-4 py-8 text-center text-gray-400">
-                    {canSeeTeam ? "등록된 업무가 없습니다." : "배정된 업무가 없습니다."}
-                  </td>
-                </tr>
-              )}
-            </tbody>
-          </table>
-        </div>
-      </div>
+      <TaskLedger
+        tasks={scopedTasks}
+        profiles={profiles}
+        title={canSeeTeam ? "업무 진행 현황 (팀 전체)" : "업무 진행 현황 (내 업무)"}
+        showAssignee={canSeeTeam}
+        emptyText={canSeeTeam ? "등록된 업무가 없습니다." : "배정된 업무가 없습니다."}
+      />
     </div>
   );
 }

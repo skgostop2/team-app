@@ -22,6 +22,10 @@ export interface Task {
   description: string | null;
   assignee_id: string | null;
   created_by: string | null;
+  /** 지시자 — 공장장·대표처럼 시스템에 계정이 없는 분도 적을 수 있어 자유 입력 */
+  instructor: string | null;
+  /** 비고 */
+  note: string | null;
   start_date: string | null;
   due_date: string | null;
   progress: number;

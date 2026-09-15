@@ -3,22 +3,42 @@
 import { useState } from "react";
 import { createClient } from "@/lib/supabase/client";
 import type { Profile } from "@/lib/types";
+import { confirmDiscard, useUnsavedChanges } from "@/lib/useUnsavedChanges";
 
 export default function NewTaskModal({
   profiles,
+  defaultInstructor = "",
   onClose,
   onCreated,
 }: {
   profiles: Profile[];
+  defaultInstructor?: string;
   onClose: () => void;
   onCreated: () => void;
 }) {
   const [title, setTitle] = useState("");
   const [description, setDescription] = useState("");
   const [assigneeId, setAssigneeId] = useState(profiles[0]?.id ?? "");
+  const [instructor, setInstructor] = useState(defaultInstructor);
+  const [note, setNote] = useState("");
   const [dueDate, setDueDate] = useState("");
   const [error, setError] = useState<string | null>(null);
   const [saving, setSaving] = useState(false);
+
+  // 쓰던 내용이 있는데 창을 닫으려 하면 되묻는다
+  const dirty =
+    !saving &&
+    (title.trim() !== "" ||
+      description.trim() !== "" ||
+      note.trim() !== "" ||
+      dueDate !== "" ||
+      instructor.trim() !== defaultInstructor.trim());
+
+  useUnsavedChanges(dirty);
+
+  function handleClose() {
+    if (confirmDiscard(dirty)) onClose();
+  }
 
   async function handleSubmit(e: React.FormEvent) {
     e.preventDefault();
@@ -44,6 +64,8 @@ export default function NewTaskModal({
       description: description.trim() || null,
       assignee_id: assigneeId,
       created_by: user?.id,
+      instructor: instructor.trim() || null,
+      note: note.trim() || null,
       due_date: dueDate || null,
       start_date: new Date().toISOString().slice(0, 10),
     });
@@ -95,11 +117,32 @@ export default function NewTaskModal({
             </select>
           </div>
           <div>
-            <label className="block text-sm font-medium text-gray-700 mb-1">마감일</label>
+            <label className="block text-sm font-medium text-gray-700 mb-1">지시자</label>
+            <input
+              value={instructor}
+              onChange={(e) => setInstructor(e.target.value)}
+              className="w-full rounded-lg border border-gray-300 px-3 py-2.5 text-base focus:outline-none focus:ring-2 focus:ring-blue-500"
+              placeholder="예: 공장장, 대표, 본인 이름"
+            />
+            <p className="text-xs text-gray-400 mt-1">
+              시스템에 계정이 없는 분도 그대로 적으시면 됩니다.
+            </p>
+          </div>
+          <div>
+            <label className="block text-sm font-medium text-gray-700 mb-1">진행일정 (마감일)</label>
             <input
               type="date"
               value={dueDate}
               onChange={(e) => setDueDate(e.target.value)}
+              className="w-full rounded-lg border border-gray-300 px-3 py-2.5 text-base focus:outline-none focus:ring-2 focus:ring-blue-500"
+            />
+          </div>
+          <div>
+            <label className="block text-sm font-medium text-gray-700 mb-1">비고</label>
+            <textarea
+              value={note}
+              onChange={(e) => setNote(e.target.value)}
+              rows={2}
               className="w-full rounded-lg border border-gray-300 px-3 py-2.5 text-base focus:outline-none focus:ring-2 focus:ring-blue-500"
             />
           </div>
@@ -109,7 +152,7 @@ export default function NewTaskModal({
           <div className="flex gap-2 pt-2">
             <button
               type="button"
-              onClick={onClose}
+              onClick={handleClose}
               className="flex-1 rounded-lg border border-gray-300 py-2.5 font-medium text-gray-600 hover:bg-gray-50"
             >
               취소

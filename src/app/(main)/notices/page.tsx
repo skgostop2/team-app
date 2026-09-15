@@ -1,6 +1,7 @@
 "use client";
 
 import { useEffect, useState } from "react";
+import { useUnsavedChanges } from "@/lib/useUnsavedChanges";
 import { createClient } from "@/lib/supabase/client";
 import { formatDateTime } from "@/lib/utils";
 import type { Notice, NoticeRead, Profile } from "@/lib/types";
@@ -67,6 +68,9 @@ export default function NoticesPage() {
     load();
   }
 
+  // 공지를 쓰다가 다른 화면으로 넘어가려 하면 되묻는다
+  useUnsavedChanges(title.trim() !== "" || content.trim() !== "");
+
   if (loading) return <p className="text-sm text-gray-400">불러오는 중...</p>;
 
   return (
@@ -78,7 +82,7 @@ export default function NoticesPage() {
             onClick={() => setShowForm((v) => !v)}
             className="text-xs px-3 py-2 rounded-lg bg-blue-600 text-white font-medium hover:bg-blue-700"
           >
-            {showForm ? "취소" : "+ 공지 등록"}
+            {showForm ? "접기" : "+ 공지 등록"}
           </button>
         )}
       </div>
@@ -98,6 +102,11 @@ export default function NoticesPage() {
             rows={4}
             className="w-full rounded-lg border border-gray-300 px-3 py-2 text-base"
           />
+          {(title.trim() !== "" || content.trim() !== "") && (
+            <p className="text-xs text-amber-600">
+              작성 중입니다. &quot;접기&quot;를 눌러도 쓰던 내용은 그대로 남아 있습니다.
+            </p>
+          )}
           <button
             type="submit"
             disabled={saving}

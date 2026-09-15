@@ -44,6 +44,22 @@ export function formatDateTime(dateString: string | null | undefined): string {
   ).padStart(2, "0")}`;
 }
 
+// 표에서 쓰는 짧은 날짜 (메모 양식처럼 6/10 형태)
+export function formatShortDate(dateString: string | null | undefined): string {
+  if (!dateString) return "";
+  const d = new Date(dateString);
+  return `${d.getMonth() + 1}/${d.getDate()}`;
+}
+
+// 작성일 칼럼용 (2026-06-04 형태)
+export function formatIsoDate(dateString: string | null | undefined): string {
+  if (!dateString) return "";
+  const d = new Date(dateString);
+  return `${d.getFullYear()}-${String(d.getMonth() + 1).padStart(2, "0")}-${String(
+    d.getDate()
+  ).padStart(2, "0")}`;
+}
+
 export function cn(...classes: (string | false | null | undefined)[]) {
   return classes.filter(Boolean).join(" ");
 }

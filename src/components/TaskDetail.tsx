@@ -1,18 +1,21 @@
 "use client";
 
-import { useEffect, useState, useCallback } from "react";
+import { useEffect, useState, useCallback, useRef } from "react";
 import { useRouter } from "next/navigation";
 import { createClient } from "@/lib/supabase/client";
 import { formatDate, formatDateTime } from "@/lib/utils";
 import type { Profile, TaskHistory, TaskWithEffectiveStatus } from "@/lib/types";
 import StatusBadge from "@/components/StatusBadge";
 import { isManager, isAssignable } from "@/lib/roles";
+import { useUnsavedChanges } from "@/lib/useUnsavedChanges";
 
 const HISTORY_LABELS: Record<string, string> = {
   created: "업무 생성",
   title: "제목 변경",
   description: "상세내용 변경",
   assignee_id: "담당자 변경",
+  instructor: "지시자 변경",
+  note: "비고 변경",
   due_date: "마감일 변경",
   progress: "진행률 변경",
   status: "상태 변경",
@@ -33,6 +36,24 @@ export default function TaskDetail({ taskId }: { taskId: string }) {
   const [description, setDescription] = useState("");
   const [assigneeId, setAssigneeId] = useState("");
   const [dueDate, setDueDate] = useState("");
+  const [instructor, setInstructor] = useState("");
+  const [note, setNote] = useState("");
+
+  // 작성 중인 내용이 있으면 화면을 다시 불러와도 덮어쓰지 않는다
+  const dirtyRef = useRef(false);
+  const [dirty, setDirty] = useState(false);
+
+  function markDirty() {
+    dirtyRef.current = true;
+    setDirty(true);
+  }
+
+  function clearDirty() {
+    dirtyRef.current = false;
+    setDirty(false);
+  }
+
+  useUnsavedChanges(dirty);
 
   const load = useCallback(async () => {
     const supabase = createClient();
@@ -58,10 +79,15 @@ export default function TaskDetail({ taskId }: { taskId: string }) {
     if (t) {
       const tt = t as TaskWithEffectiveStatus;
       setTask(tt);
-      setTitle(tt.title);
-      setDescription(tt.description ?? "");
-      setAssigneeId(tt.assignee_id ?? "");
-      setDueDate(tt.due_date ?? "");
+      // 진행률 변경 등으로 화면을 다시 불러올 때, 작성 중이던 글은 그대로 둔다
+      if (!dirtyRef.current) {
+        setTitle(tt.title);
+        setDescription(tt.description ?? "");
+        setAssigneeId(tt.assignee_id ?? "");
+        setDueDate(tt.due_date ?? "");
+        setInstructor(tt.instructor ?? "");
+        setNote(tt.note ?? "");
+      }
     }
     setHistory((h ?? []) as TaskHistory[]);
     setLoading(false);
@@ -85,9 +111,36 @@ export default function TaskDetail({ taskId }: { taskId: string }) {
         description: description || null,
         assignee_id: assigneeId,
         due_date: dueDate || null,
+        instructor: instructor.trim() || null,
+        note: note.trim() || null,
       })
       .eq("id", taskId);
-    if (error) setError(error.message);
+    if (error) {
+      // 저장에 실패하면 쓰던 내용을 절대 날리지 않는다
+      setError(error.message);
+      setSaving(false);
+      return;
+    }
+    clearDirty();
+    await load();
+    setSaving(false);
+  }
+
+  // 담당자가 비고만 저장하는 경우
+  async function saveNoteOnly() {
+    setSaving(true);
+    setError(null);
+    const supabase = createClient();
+    const { error } = await supabase
+      .from("tasks")
+      .update({ note: note.trim() || null })
+      .eq("id", taskId);
+    if (error) {
+      setError(error.message);
+      setSaving(false);
+      return;
+    }
+    clearDirty();
     await load();
     setSaving(false);
   }
@@ -150,7 +203,7 @@ export default function TaskDetail({ taskId }: { taskId: string }) {
               <label className="block text-xs font-medium text-gray-500 mb-1">제목</label>
               <input
                 value={title}
-                onChange={(e) => setTitle(e.target.value)}
+                onChange={(e) => { setTitle(e.target.value); markDirty(); }}
                 className="w-full rounded-lg border border-gray-300 px-3 py-2 text-base"
               />
             </div>
@@ -158,7 +211,7 @@ export default function TaskDetail({ taskId }: { taskId: string }) {
               <label className="block text-xs font-medium text-gray-500 mb-1">상세내용</label>
               <textarea
                 value={description}
-                onChange={(e) => setDescription(e.target.value)}
+                onChange={(e) => { setDescription(e.target.value); markDirty(); }}
                 rows={3}
                 className="w-full rounded-lg border border-gray-300 px-3 py-2 text-base"
               />
@@ -168,7 +221,7 @@ export default function TaskDetail({ taskId }: { taskId: string }) {
                 <label className="block text-xs font-medium text-gray-500 mb-1">담당자</label>
                 <select
                   value={assigneeId}
-                  onChange={(e) => setAssigneeId(e.target.value)}
+                  onChange={(e) => { setAssigneeId(e.target.value); markDirty(); }}
                   className="w-full rounded-lg border border-gray-300 px-3 py-2 text-base"
                 >
                   {profiles
@@ -187,24 +240,81 @@ export default function TaskDetail({ taskId }: { taskId: string }) {
                 <input
                   type="date"
                   value={dueDate}
-                  onChange={(e) => setDueDate(e.target.value)}
+                  onChange={(e) => { setDueDate(e.target.value); markDirty(); }}
                   className="w-full rounded-lg border border-gray-300 px-3 py-2 text-base"
                 />
               </div>
             </div>
-            <button
-              onClick={saveLeadEdits}
-              disabled={saving}
-              className="text-sm px-4 py-2 rounded-lg bg-gray-900 text-white font-medium hover:bg-black disabled:opacity-50"
-            >
-              저장
-            </button>
+            <div className="grid grid-cols-1 sm:grid-cols-2 gap-3">
+              <div>
+                <label className="block text-xs font-medium text-gray-500 mb-1">지시자</label>
+                <input
+                  value={instructor}
+                  onChange={(e) => { setInstructor(e.target.value); markDirty(); }}
+                  placeholder="예: 공장장, 대표"
+                  className="w-full rounded-lg border border-gray-300 px-3 py-2 text-base"
+                />
+              </div>
+              <div>
+                <label className="block text-xs font-medium text-gray-500 mb-1">비고</label>
+                <input
+                  value={note}
+                  onChange={(e) => { setNote(e.target.value); markDirty(); }}
+                  className="w-full rounded-lg border border-gray-300 px-3 py-2 text-base"
+                />
+              </div>
+            </div>
+
+            <div className="flex items-center gap-3 flex-wrap">
+              <button
+                onClick={saveLeadEdits}
+                disabled={saving}
+                className="text-sm px-4 py-2 rounded-lg bg-gray-900 text-white font-medium hover:bg-black disabled:opacity-50"
+              >
+                {saving ? "저장 중..." : "저장"}
+              </button>
+              {dirty && (
+                <span className="text-xs text-amber-600 font-medium">
+                  저장하지 않은 변경이 있습니다
+                </span>
+              )}
+            </div>
           </div>
         ) : (
-          <div>
-            <h1 className="text-lg font-bold text-gray-900">{task.title}</h1>
-            {task.description && <p className="text-sm text-gray-600 mt-1 whitespace-pre-wrap">{task.description}</p>}
-            <p className="text-xs text-gray-400 mt-2">마감일: {formatDate(task.due_date)}</p>
+          <div className="space-y-3">
+            <div>
+              <h1 className="text-lg font-bold text-gray-900">{task.title}</h1>
+              {task.description && (
+                <p className="text-sm text-gray-600 mt-1 whitespace-pre-wrap">{task.description}</p>
+              )}
+              <p className="text-xs text-gray-400 mt-2">
+                진행일정(마감일): {formatDate(task.due_date)}
+                {task.instructor && <> · 지시자: {task.instructor}</>}
+              </p>
+            </div>
+            <div>
+              <label className="block text-xs font-medium text-gray-500 mb-1">비고</label>
+              <input
+                value={note}
+                onChange={(e) => { setNote(e.target.value); markDirty(); }}
+                placeholder="진행하면서 남길 메모"
+                className="w-full rounded-lg border border-gray-300 px-3 py-2 text-base"
+              />
+              <div className="flex items-center gap-3 mt-2 flex-wrap">
+                <button
+                  onClick={saveNoteOnly}
+                  disabled={saving || !dirty}
+                  className="text-sm px-4 py-2 rounded-lg bg-gray-900 text-white font-medium hover:bg-black disabled:opacity-50"
+                >
+                  {saving ? "저장 중..." : "비고 저장"}
+                </button>
+                {dirty && (
+                  <span className="text-xs text-amber-600 font-medium">
+                    저장하지 않은 변경이 있습니다
+                  </span>
+                )}
+              </div>
+            </div>
           </div>
         )}
 
@@ -267,7 +377,7 @@ export default function TaskDetail({ taskId }: { taskId: string }) {
         </div>
 
         {task.completed_at && (
-          <p className="text-xs text-gray-400">완료일시: {formatDateTime(task.completed_at)}</p>
+          <p className="text-xs text-gray-400">완료일: {formatDateTime(task.completed_at)}</p>
         )}
       </div>
 
