@@ -43,6 +43,14 @@ export interface Task {
 export interface TaskWithEffectiveStatus extends Task {
   effective_status: TaskStatus;
   is_new: boolean;
+  /** 지시일(작성일)부터 걸린 일수. 완료건은 실제 소요일수, 진행중이면 오늘까지 경과일수 */
+  elapsed_days: number;
+  /** 완료계획일 대비 일수. 양수=초과, 음수=앞당김, null=계획일 없음 */
+  schedule_diff_days: number | null;
+  /** 계획일을 넘긴 일수 (안 넘겼으면 0) */
+  overdue_days: number;
+  /** 기한 내 완료 여부. 완료 전이거나 계획일이 없으면 null */
+  on_time: boolean | null;
 }
 
 export interface TaskHistory {

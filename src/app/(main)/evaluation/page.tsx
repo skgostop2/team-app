@@ -1,6 +1,8 @@
 import { redirect } from "next/navigation";
 import { createClient } from "@/lib/supabase/server";
-import type { Profile } from "@/lib/types";
+import type { Profile, TaskWithEffectiveStatus } from "@/lib/types";
+import { isAssignable, byDisplayOrder } from "@/lib/roles";
+import EvaluationReport from "@/components/EvaluationReport";
 
 export default async function EvaluationPage() {
   const supabase = await createClient();
@@ -21,21 +23,38 @@ export default async function EvaluationPage() {
 
   const me = profile as Profile | null;
 
-  // 팀장 전용 화면: 팀원이 주소로 직접 접근해도 대시보드로 되돌린다
+  // 팀장 전용 화면: 팀원·실장이 주소로 직접 접근해도 대시보드로 되돌린다
   if (!me || me.role !== "팀장" || me.status !== "승인") {
     redirect("/dashboard");
   }
 
+  const [{ data: profiles }, { data: tasks }] = await Promise.all([
+    supabase.from("profiles").select("*").order("sort_order"),
+    supabase.from("v_tasks").select("*").order("created_at", { ascending: true }),
+  ]);
+
+  const members = ((profiles ?? []) as Profile[]).filter(isAssignable).sort(byDisplayOrder);
+
   return (
-    <div className="max-w-2xl">
-      <h1 className="text-xl font-bold text-gray-900 mb-2">고과평가</h1>
-      <p className="text-sm text-gray-500 mb-4">팀장만 접근할 수 있는 화면입니다.</p>
-      <div className="bg-white rounded-xl border border-dashed border-gray-300 p-10 text-center">
-        <p className="text-gray-500 font-medium mb-2">2차 개발 예정 기능입니다</p>
+    <div className="space-y-4">
+      <div>
+        <h1 className="text-xl font-bold text-gray-900">고과평가</h1>
+        <p className="text-sm text-gray-500 mt-0.5">
+          팀장만 볼 수 있는 화면입니다. 실적 수치는 업무 기록에서 자동으로 계산됩니다.
+        </p>
+      </div>
+
+      <EvaluationReport
+        members={members}
+        tasks={(tasks ?? []) as TaskWithEffectiveStatus[]}
+      />
+
+      <div className="bg-white rounded-xl border border-dashed border-gray-300 p-6">
+        <p className="text-sm font-medium text-gray-600 mb-1">2차 개발 예정</p>
         <p className="text-sm text-gray-400 leading-relaxed">
-          평가기준표, 배점/가중치, 자동 평가점수 계산, 업무 실적 연동, 정성평가, 이력관리 등은
-          2차 개발에서 반영됩니다. 현재는 관련 데이터 구조(평가기간·평가항목·평가점수)만
-          미리 준비되어 있습니다.
+          위 실적 수치를 바탕으로 한 평가기준표, 배점·가중치, 자동 평가점수 계산, 정성평가,
+          평가이력 관리는 2차 개발에서 붙입니다. 현재는 평가에 쓸 <strong>객관적 실적 수치</strong>를
+          먼저 뽑아 두는 단계입니다.
         </p>
       </div>
     </div>

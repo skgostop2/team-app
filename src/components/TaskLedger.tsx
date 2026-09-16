@@ -12,7 +12,7 @@ import StatusBadge from "@/components/StatusBadge";
  * 업무 진행 현황 — 메모 프로그램과 같은 대장(臺帳) 양식.
  * 한 건에 한 줄씩, 번호를 붙여 위에서 아래로 계속 쌓인다.
  *
- * NO. | 작성일 | 업무내용 | 진행일정 | 완료일 | 담당자 | 지시자 | 진행률 | 상태 | 비고
+ * NO. | 작성일 | 업무내용 | 진행일정 | 완료일 | 소요일 | 일정대비 | 담당자 | 지시자 | 진행률 | 상태 | 비고
  *
  * 담당자는 체크로 고른다. 여러 명 체크할 수 있다.
  */
@@ -65,6 +65,8 @@ export default function TaskLedger({
               <Th className="w-auto min-w-[300px]">업무내용</Th>
               <Th className="w-24 text-center">진행일정</Th>
               <Th className="w-24 text-center">완료일</Th>
+              <Th className="w-20 text-center">소요일</Th>
+              <Th className="w-24 text-center">일정대비</Th>
               {showAssignee && <Th className="w-44">담당자</Th>}
               <Th className="w-24">지시자</Th>
               <Th className="w-28 text-center">진행률</Th>
@@ -122,6 +124,20 @@ export default function TaskLedger({
                   <Td className="text-center text-gray-600 whitespace-nowrap">
                     {formatShortDate(t.completed_at)}
                   </Td>
+
+                  {/* 지시일로부터 걸린 일수 */}
+                  <Td className="text-center text-gray-600 whitespace-nowrap">
+                    {t.elapsed_days != null
+                      ? t.effective_status === "완료"
+                        ? `${t.elapsed_days}일`
+                        : `${t.elapsed_days}일째`
+                      : ""}
+                  </Td>
+
+                  {/* 완료계획일 대비 */}
+                  <Td className="text-center whitespace-nowrap">
+                    <ScheduleDiff task={t} />
+                  </Td>
                   {showAssignee && (
                     <Td className="text-gray-600">
                       {canAssign ? (
@@ -174,7 +190,7 @@ export default function TaskLedger({
 
             {tasks.length === 0 && (
               <tr>
-                <td colSpan={showAssignee ? 10 : 9} className="px-4 py-10 text-center text-gray-400">
+                <td colSpan={showAssignee ? 12 : 11} className="px-4 py-10 text-center text-gray-400">
                   {emptyText}
                 </td>
               </tr>
@@ -183,6 +199,35 @@ export default function TaskLedger({
         </table>
       </div>
     </div>
+  );
+}
+
+/**
+ * 완료계획일 대비 며칠인가.
+ * 완료된 업무는 실제 결과, 진행 중인 업무는 오늘 기준 전망을 보여준다.
+ */
+function ScheduleDiff({ task }: { task: TaskWithEffectiveStatus }) {
+  const d = task.schedule_diff_days;
+  if (d == null) return <span className="text-gray-300">—</span>;
+
+  const done = task.effective_status === "완료";
+
+  if (d > 0) {
+    return (
+      <span className="text-red-600 font-semibold">
+        {d}일 초과
+        {!done && <span className="block text-[10px] font-normal">진행중</span>}
+      </span>
+    );
+  }
+  if (d === 0) {
+    return <span className="text-gray-600">{done ? "계획대로" : "오늘 마감"}</span>;
+  }
+  // d < 0
+  return done ? (
+    <span className="text-emerald-600 font-semibold">{-d}일 단축</span>
+  ) : (
+    <span className="text-gray-500">D-{-d}</span>
   );
 }
 
