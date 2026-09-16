@@ -26,6 +26,8 @@ export interface Task {
   instructor: string | null;
   /** 비고 */
   note: string | null;
+  /** 참여자 (담당 1명 + 참여자 여러 명) */
+  deputy_ids: string[];
   start_date: string | null;
   due_date: string | null;
   progress: number;
@@ -87,3 +89,13 @@ export interface EvaluationCriteria {
 // (전체 스키마 자동생성 대신 사용 지점에서 위 인터페이스로 캐스팅)
 // eslint-disable-next-line @typescript-eslint/no-explicit-any
 export type Database = any;
+
+/** 담당 인계 기록 — 담당자가 바뀌어도 기록은 남는다 */
+export interface TaskAssigneeLog {
+  id: string;
+  task_id: string;
+  prev_assignee_id: string | null;
+  new_assignee_id: string | null;
+  changed_by: string | null;
+  changed_at: string;
+}

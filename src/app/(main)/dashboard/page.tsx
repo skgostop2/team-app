@@ -50,10 +50,11 @@ export default function DashboardPage() {
   // 팀장이 공개를 켜두면 팀원도 팀 전체 현황을 본다
   const canSeeTeam = isLead || shared;
 
-  const myTasks = useMemo(
-    () => tasks.filter((t) => t.assignee_id === me?.id),
-    [tasks, me?.id]
-  );
+  // 체크된 사람은 모두 그 업무의 담당자다 (여러 명 체크 가능)
+  const isOn = (t: TaskWithEffectiveStatus, uid?: string) =>
+    !!uid && (t.assignee_id === uid || (t.deputy_ids ?? []).includes(uid));
+
+  const myTasks = useMemo(() => tasks.filter((t) => isOn(t, me?.id)), [tasks, me?.id]);
   const scopedTasks = canSeeTeam ? tasks : myTasks;
 
   const stats = useMemo(() => summarize(scopedTasks), [scopedTasks]);
@@ -75,7 +76,7 @@ export default function DashboardPage() {
     return profiles
       .filter(isAssignable)
       .map((p) => {
-        const mine = tasks.filter((t) => t.assignee_id === p.id);
+        const mine = tasks.filter((t) => isOn(t, p.id));
         const s = summarize(mine);
         const active = mine.filter((t) => t.effective_status !== "완료");
         const delayed = mine.filter((t) => t.effective_status === "지연");
@@ -257,6 +258,9 @@ export default function DashboardPage() {
         profiles={profiles}
         title={canSeeTeam ? "업무 진행 현황 (팀 전체)" : "업무 진행 현황 (내 업무)"}
         showAssignee={canSeeTeam}
+        canAssign={isLead}
+        onAssigned={load}
+        viewerId={me?.id}
         emptyText={canSeeTeam ? "등록된 업무가 없습니다." : "배정된 업무가 없습니다."}
       />
     </div>

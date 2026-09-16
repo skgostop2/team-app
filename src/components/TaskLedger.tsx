@@ -1,8 +1,11 @@
 "use client";
 
+import { useState } from "react";
 import Link from "next/link";
 import type { Profile, TaskWithEffectiveStatus } from "@/lib/types";
 import { formatShortDate, formatIsoDate, cn } from "@/lib/utils";
+import { isAssignable, roleOrder } from "@/lib/roles";
+import { createClient } from "@/lib/supabase/client";
 import StatusBadge from "@/components/StatusBadge";
 
 /**
@@ -10,6 +13,8 @@ import StatusBadge from "@/components/StatusBadge";
  * 한 건에 한 줄씩, 번호를 붙여 위에서 아래로 계속 쌓인다.
  *
  * NO. | 작성일 | 업무내용 | 진행일정 | 완료일 | 담당자 | 지시자 | 진행률 | 상태 | 비고
+ *
+ * 담당자는 체크로 고른다. 여러 명 체크할 수 있다.
  */
 export default function TaskLedger({
   tasks,
@@ -17,19 +22,39 @@ export default function TaskLedger({
   title = "업무 진행 현황",
   showAssignee = true,
   emptyText = "등록된 업무가 없습니다.",
+  canAssign = false,
+  onAssigned,
+  viewerId,
+  handedOverIds,
 }: {
   tasks: TaskWithEffectiveStatus[];
   profiles: Profile[];
   title?: string;
   showAssignee?: boolean;
   emptyText?: string;
+  /** 팀장·실장이면 담당자 칸에서 바로 사람을 고를 수 있다 */
+  canAssign?: boolean;
+  onAssigned?: () => void;
+  /** 보고 있는 사람 */
+  viewerId?: string;
+  /** 보고 있는 사람이 예전에 담당했다가 넘긴 업무 id 들 */
+  handedOverIds?: Set<string>;
 }) {
+  const assignables = profiles
+    .filter(isAssignable)
+    .sort((a, b) => roleOrder(a.role) - roleOrder(b.role) || a.name.localeCompare(b.name));
+
+  const unassigned = tasks.filter((t) => !t.assignee_id).length;
+
   return (
     <div className="bg-white rounded-xl border border-gray-200">
       <div className="flex items-baseline justify-between gap-3 px-4 py-3 border-b border-gray-200 flex-wrap">
         <h2 className="text-base font-bold text-gray-900">{title}</h2>
         <p className="text-xs text-gray-400">
           출력일: {formatIsoDate(new Date().toISOString())} &nbsp;|&nbsp; 총 {tasks.length}건
+          {canAssign && unassigned > 0 && (
+            <span className="text-amber-600 font-medium"> · 담당자 미지정 {unassigned}건</span>
+          )}
         </p>
       </div>
 
@@ -42,7 +67,7 @@ export default function TaskLedger({
               <Th className="w-auto min-w-[300px]">업무내용</Th>
               <Th className="w-24 text-center">진행일정</Th>
               <Th className="w-24 text-center">완료일</Th>
-              {showAssignee && <Th className="w-24">담당자</Th>}
+              {showAssignee && <Th className="w-44">담당자</Th>}
               <Th className="w-24">지시자</Th>
               <Th className="w-28 text-center">진행률</Th>
               <Th className="w-20 text-center">상태</Th>
@@ -52,9 +77,24 @@ export default function TaskLedger({
           <tbody>
             {tasks.map((t, i) => {
               const assignee = profiles.find((p) => p.id === t.assignee_id);
+              const deputies = (t.deputy_ids ?? [])
+                .map((id) => profiles.find((p) => p.id === id))
+                .filter(Boolean) as Profile[];
               const overdue = t.effective_status === "지연";
+              // 내가 하던 업무인데 지금은 남이 담당 → 넘긴 업무 (실제 인계 기록이 있을 때만)
+              const handedOver =
+                !!viewerId &&
+                !!handedOverIds?.has(t.id) &&
+                t.assignee_id !== viewerId &&
+                !(t.deputy_ids ?? []).includes(viewerId);
               return (
-                <tr key={t.id} className="border-b border-gray-200 last:border-0 hover:bg-gray-50">
+                <tr
+                  key={t.id}
+                  className={cn(
+                    "border-b border-gray-200 last:border-0 hover:bg-gray-50",
+                    handedOver && "bg-gray-50/60"
+                  )}
+                >
                   <Td className="text-center text-gray-500">{i + 1}</Td>
                   <Td className="text-gray-600 whitespace-nowrap">{formatIsoDate(t.created_at)}</Td>
                   <Td className="min-w-[300px]">
@@ -72,6 +112,11 @@ export default function TaskLedger({
                         {t.description}
                       </span>
                     )}
+                    {handedOver && (
+                      <span className="block text-[11px] text-gray-500 mt-1">
+                        → {assignee?.name ?? "미지정"} 님에게 인계됨 (기록은 남아 있습니다)
+                      </span>
+                    )}
                   </Td>
                   <Td className={cn("text-center whitespace-nowrap", overdue ? "text-red-600 font-medium" : "text-gray-600")}>
                     {formatShortDate(t.due_date)}
@@ -81,12 +126,34 @@ export default function TaskLedger({
                   </Td>
                   {showAssignee && (
                     <Td className="text-gray-600">
-                      {assignee?.name ?? ""}
-                      {assignee?.status === "삭제" && (
-                        <span className="block text-[11px] text-gray-400">(삭제된 계정)</span>
-                      )}
-                      {assignee?.status === "가입대기" && (
-                        <span className="block text-[11px] text-amber-600">(가입대기)</span>
+                      {canAssign ? (
+                        <AssigneePicker
+                          taskId={t.id}
+                          current={t.assignee_id}
+                          deputies={t.deputy_ids ?? []}
+                          options={assignables}
+                          fallback={assignee}
+                          onDone={onAssigned}
+                        />
+                      ) : (
+                        <>
+                          {assignee || deputies.length > 0 ? (
+                            <span className="block break-keep">
+                              {[assignee, ...deputies]
+                                .filter(Boolean)
+                                .map((p) => (p as Profile).name)
+                                .join(", ")}
+                            </span>
+                          ) : (
+                            <span className="text-amber-600">미지정</span>
+                          )}
+                          {assignee?.status === "삭제" && (
+                            <span className="block text-[11px] text-gray-400">(삭제된 계정)</span>
+                          )}
+                          {assignee?.status === "가입대기" && (
+                            <span className="block text-[11px] text-amber-600">(가입대기)</span>
+                          )}
+                        </>
                       )}
                     </Td>
                   )}
@@ -117,6 +184,107 @@ export default function TaskLedger({
           </tbody>
         </table>
       </div>
+    </div>
+  );
+}
+
+/**
+ * 목록에서 바로 담당자를 체크한다. 여러 명 체크할 수 있다.
+ * 담당이 바뀌어도 이전 담당자 화면에서 업무가 사라지지 않는다 (인계 기록이 남는다).
+ */
+function AssigneePicker({
+  taskId,
+  current,
+  deputies,
+  options,
+  fallback,
+  onDone,
+}: {
+  taskId: string;
+  current: string | null;
+  deputies: string[];
+  options: Profile[];
+  fallback?: Profile;
+  onDone?: () => void;
+}) {
+  const [saving, setSaving] = useState(false);
+  const [error, setError] = useState<string | null>(null);
+  const [open, setOpen] = useState(false);
+
+  // 체크된 사람들 = 담당 1명 + 나머지. 화면에서는 구분 없이 한 줄로 보여준다.
+  const checked = [current, ...deputies].filter(Boolean) as string[];
+
+  const list =
+    fallback && !options.some((o) => o.id === fallback.id) ? [...options, fallback] : options;
+
+  const checkedNames = checked
+    .map((id) => list.find((p) => p.id === id)?.name)
+    .filter(Boolean)
+    .join(", ");
+
+  async function toggle(id: string) {
+    const next = checked.includes(id) ? checked.filter((c) => c !== id) : [...checked, id];
+    setSaving(true);
+    setError(null);
+
+    const supabase = createClient();
+    const patch: Record<string, unknown> = {
+      assignee_id: next[0] ?? null,
+      deputy_ids: next.slice(1),
+    };
+    // 담당이 바뀌면 새 담당자가 "확인했습니다"를 다시 눌러야 한다
+    if ((next[0] ?? null) !== current) patch.confirmed_at = null;
+
+    const { error: err } = await supabase.from("tasks").update(patch).eq("id", taskId);
+    setSaving(false);
+    if (err) {
+      setError("저장 실패");
+      return;
+    }
+    onDone?.();
+  }
+
+  return (
+    <div className="space-y-1">
+      <button
+        type="button"
+        onClick={() => setOpen((v) => !v)}
+        disabled={saving}
+        className={cn(
+          "w-full text-left rounded-md border px-2 py-1.5 text-sm bg-white disabled:opacity-50 break-keep",
+          checked.length ? "border-gray-300 text-gray-800" : "border-amber-300 text-amber-700"
+        )}
+      >
+        {checkedNames || "미지정 — 눌러서 체크"}
+      </button>
+
+      {open && (
+        <div className="rounded-md border border-gray-200 bg-white p-2 space-y-1 max-h-44 overflow-y-auto">
+          {options.map((p) => (
+            <label key={p.id} className="flex items-center gap-2 text-xs cursor-pointer py-0.5">
+              <input
+                type="checkbox"
+                checked={checked.includes(p.id)}
+                disabled={saving}
+                onChange={() => toggle(p.id)}
+                className="w-4 h-4"
+              />
+              <span className="break-keep">
+                {p.name}
+                {p.position ? ` ${p.position}` : ""}
+                {p.status === "가입대기" && <span className="text-amber-600"> (가입대기)</span>}
+              </span>
+            </label>
+          ))}
+          {options.length === 0 && (
+            <p className="text-[11px] text-gray-400">
+              등록된 인원이 없습니다. 팀원관리에서 먼저 등록하세요.
+            </p>
+          )}
+        </div>
+      )}
+
+      {error && <span className="block text-[11px] text-red-600">{error}</span>}
     </div>
   );
 }

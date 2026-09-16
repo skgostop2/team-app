@@ -2,7 +2,7 @@
 
 import { useEffect, useMemo, useState } from "react";
 import { createClient } from "@/lib/supabase/client";
-import type { Profile, TaskWithEffectiveStatus } from "@/lib/types";
+import type { Profile, TaskAssigneeLog, TaskWithEffectiveStatus } from "@/lib/types";
 import { isManager, isAssignable } from "@/lib/roles";
 import TaskLedger from "@/components/TaskLedger";
 import NewTaskModal from "@/components/NewTaskModal";
@@ -15,6 +15,7 @@ export default function TasksPage() {
   const [hideDone, setHideDone] = useState(false);
   const [showNewModal, setShowNewModal] = useState(false);
   const [loading, setLoading] = useState(true);
+  const [handedOverIds, setHandedOverIds] = useState<Set<string>>(new Set());
 
   async function load() {
     const supabase = createClient();
@@ -23,17 +24,21 @@ export default function TasksPage() {
     } = await supabase.auth.getUser();
     if (!user) return;
 
-    const [{ data: profile }, { data: allProfiles }, { data: allTasks }] = await Promise.all([
+    const [{ data: profile }, { data: allProfiles }, { data: allTasks }, { data: logs }] =
+      await Promise.all([
       supabase.from("profiles").select("*").eq("id", user.id).single(),
       // 삭제된 팀원도 포함 (지난 업무의 담당자 이름 표시용). 담당자 지정 목록은 아래에서 따로 추림
       supabase.from("profiles").select("*").order("name"),
       // 메모 양식처럼 오래된 것이 위, 새 업무가 아래로 쌓이도록 오름차순
       supabase.from("v_tasks").select("*").order("created_at", { ascending: true }),
+      // 내가 예전에 담당했다가 넘긴 업무 (기록은 사라지지 않는다)
+      supabase.from("task_assignee_log").select("*").eq("prev_assignee_id", user.id),
     ]);
 
     setMe(profile as Profile);
     setProfiles((allProfiles ?? []) as Profile[]);
     setTasks((allTasks ?? []) as TaskWithEffectiveStatus[]);
+    setHandedOverIds(new Set(((logs ?? []) as TaskAssigneeLog[]).map((l) => l.task_id)));
     setLoading(false);
   }
 
@@ -44,7 +49,16 @@ export default function TasksPage() {
   const isLead = isManager(me);
 
   const visibleTasks = useMemo(() => {
-    let list = isLead && showAll ? tasks : tasks.filter((t) => t.assignee_id === me?.id);
+    // 팀원 화면에는 내가 담당인 업무 + 내가 참여자인 업무 + 내가 넘긴(인계한) 업무가 모두 보인다.
+    // 담당이 바뀌어도 업무가 그냥 사라지지 않게 하기 위함이다.
+    const mine = (t: TaskWithEffectiveStatus) =>
+      t.assignee_id === me?.id || (t.deputy_ids ?? []).includes(me?.id ?? "");
+    let list = isLead
+      ? showAll
+        ? tasks
+        : tasks.filter((t) => mine(t) || !t.assignee_id)
+      : // RLS 가 이미 "내 업무 + 참여 + 인계한 업무"만 내려주므로 그대로 보여준다
+        tasks;
     if (hideDone) list = list.filter((t) => t.effective_status !== "완료");
     return list;
   }, [tasks, isLead, showAll, hideDone, me?.id]);
@@ -95,7 +109,11 @@ export default function TasksPage() {
         tasks={visibleTasks}
         profiles={profiles}
         title={isLead && showAll ? "업무 진행 현황 (전체)" : "업무 진행 현황 (내 업무)"}
-        showAssignee={isLead && showAll}
+        showAssignee={isLead}
+        canAssign={isLead}
+        onAssigned={load}
+        viewerId={me?.id}
+        handedOverIds={handedOverIds}
         emptyText="표시할 업무가 없습니다."
       />
 

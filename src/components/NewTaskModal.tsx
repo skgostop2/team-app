@@ -18,7 +18,7 @@ export default function NewTaskModal({
 }) {
   const [title, setTitle] = useState("");
   const [description, setDescription] = useState("");
-  const [assigneeId, setAssigneeId] = useState(profiles[0]?.id ?? "");
+  const [assigneeId, setAssigneeId] = useState("");
   const [instructor, setInstructor] = useState(defaultInstructor);
   const [note, setNote] = useState("");
   const [dueDate, setDueDate] = useState("");
@@ -48,11 +48,6 @@ export default function NewTaskModal({
       setError("업무 제목을 입력해주세요.");
       return;
     }
-    if (!assigneeId) {
-      setError("담당자를 선택해주세요.");
-      return;
-    }
-
     setSaving(true);
     const supabase = createClient();
     const {
@@ -62,7 +57,7 @@ export default function NewTaskModal({
     const { error: insertError } = await supabase.from("tasks").insert({
       title: title.trim(),
       description: description.trim() || null,
-      assignee_id: assigneeId,
+      assignee_id: assigneeId || null,
       created_by: user?.id,
       instructor: instructor.trim() || null,
       note: note.trim() || null,
@@ -109,12 +104,17 @@ export default function NewTaskModal({
               onChange={(e) => setAssigneeId(e.target.value)}
               className="w-full rounded-lg border border-gray-300 px-3 py-2.5 text-base focus:outline-none focus:ring-2 focus:ring-blue-500"
             >
+              <option value="">— 미지정 (나중에 목록에서 지정) —</option>
               {profiles.map((p) => (
                 <option key={p.id} value={p.id}>
                   {p.name} ({p.role}){p.status === "가입대기" ? " · 가입대기" : ""}
                 </option>
               ))}
             </select>
+            <p className="text-xs text-gray-400 mt-1">
+              사람이 아직 등록 전이면 비워두세요. 업무 목록의 담당자 칸에서 나중에 바로 지정할 수
+              있습니다.
+            </p>
           </div>
           <div>
             <label className="block text-sm font-medium text-gray-700 mb-1">지시자</label>

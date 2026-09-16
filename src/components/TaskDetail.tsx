@@ -14,6 +14,7 @@ const HISTORY_LABELS: Record<string, string> = {
   title: "제목 변경",
   description: "상세내용 변경",
   assignee_id: "담당자 변경",
+  deputy_ids: "참여자 변경",
   instructor: "지시자 변경",
   note: "비고 변경",
   due_date: "마감일 변경",
