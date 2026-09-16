@@ -4,7 +4,7 @@ import { useState } from "react";
 import Link from "next/link";
 import type { Profile, TaskWithEffectiveStatus } from "@/lib/types";
 import { formatShortDate, formatIsoDate, cn } from "@/lib/utils";
-import { isAssignable, roleOrder } from "@/lib/roles";
+import { isAssignable, byDisplayOrder } from "@/lib/roles";
 import { createClient } from "@/lib/supabase/client";
 import StatusBadge from "@/components/StatusBadge";
 
@@ -40,9 +40,7 @@ export default function TaskLedger({
   /** 보고 있는 사람이 예전에 담당했다가 넘긴 업무 id 들 */
   handedOverIds?: Set<string>;
 }) {
-  const assignables = profiles
-    .filter(isAssignable)
-    .sort((a, b) => roleOrder(a.role) - roleOrder(b.role) || a.name.localeCompare(b.name));
+  const assignables = profiles.filter(isAssignable).sort(byDisplayOrder);
 
   const unassigned = tasks.filter((t) => !t.assignee_id).length;
 

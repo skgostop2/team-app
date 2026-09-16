@@ -5,7 +5,7 @@ import Link from "next/link";
 import { createClient } from "@/lib/supabase/client";
 import { formatElapsed, isLongInactive, formatDate, cn } from "@/lib/utils";
 import type { Profile, TaskWithEffectiveStatus } from "@/lib/types";
-import { isManager, isAssignable } from "@/lib/roles";
+import { isManager, isAssignable, byDisplayOrder } from "@/lib/roles";
 import TaskLedger from "@/components/TaskLedger";
 
 export default function DashboardPage() {
@@ -72,7 +72,7 @@ export default function DashboardPage() {
   }
 
   const byMember = useMemo(() => {
-    // 팀원별 카드는 현재 재직 중인 인원 + 가입 전 미리 등록해 둔 인원 (미리 배정한 업무를 보기 위해)
+    // 현재 재직 중인 인원 + 가입 전 미리 등록해 둔 인원 (미리 배정한 업무를 보기 위해)
     return profiles
       .filter(isAssignable)
       .map((p) => {
@@ -98,10 +98,31 @@ export default function DashboardPage() {
           workload,
         };
       })
-      .sort((a, b) => b.total - a.total);
+      .sort((a, b) => byDisplayOrder(a.profile, b.profile));
   }, [profiles, tasks]);
 
-  const maxWorkload = Math.max(1, ...byMember.map((m) => m.workload));
+  // 과중도는 절대 기준으로 본다. 팀 내 상대값으로만 보면 다들 1건씩일 때도
+  // 지연 하나 때문에 "높음"이 떠서 실제와 다르게 보인다.
+  const WORKLOAD_HIGH = 8;
+  const maxWorkload = Math.max(WORKLOAD_HIGH, ...byMember.map((m) => m.workload));
+
+  const [reordering, setReordering] = useState(false);
+
+  // ▲▼ 로 팀원 순서를 바꾼다 (팀장·실장만). 순서는 모든 화면에 함께 적용된다.
+  async function reorder(index: number, dir: -1 | 1) {
+    const target = index + dir;
+    if (target < 0 || target >= byMember.length) return;
+    const a = byMember[index].profile;
+    const b = byMember[target].profile;
+    setReordering(true);
+    const supabase = createClient();
+    await Promise.all([
+      supabase.from("profiles").update({ sort_order: b.sort_order }).eq("id", a.id),
+      supabase.from("profiles").update({ sort_order: a.sort_order }).eq("id", b.id),
+    ]);
+    await load();
+    setReordering(false);
+  }
 
   if (loading) {
     return <p className="text-sm text-gray-400">불러오는 중...</p>;
@@ -163,107 +184,12 @@ export default function DashboardPage() {
       )}
 
       {isLead && (
-        <div>
-          <h2 className="text-sm font-semibold text-gray-700 mb-3">팀원별 진척 현황</h2>
-          <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-3">
-            {byMember.map((m) => (
-              <div key={m.profile.id} className="bg-white rounded-xl border border-gray-200 p-4">
-                <div className="flex items-start justify-between mb-3">
-                  <div className="min-w-0">
-                    <p className="font-medium text-gray-900">
-                      {m.profile.name}
-                      <span className="text-xs text-gray-400 font-normal"> {m.profile.role}</span>
-                    </p>
-                    {m.profile.status === "가입대기" ? (
-                      <p className="text-xs text-amber-600">아직 회원가입 전 · 업무는 미리 배정됨</p>
-                    ) : (
-                      <p className="text-xs text-gray-400">
-                        마지막 접속 {formatElapsed(m.profile.last_seen_at)}
-                        {isLongInactive(m.profile.last_seen_at) && (
-                          <span className="text-red-500 font-medium"> · 장기 미접속</span>
-                        )}
-                      </p>
-                    )}
-                  </div>
-                  <span className="text-xs px-2 py-1 rounded-full bg-gray-100 text-gray-600 shrink-0">
-                    총 {m.total}건
-                  </span>
-                </div>
-
-                <div className="space-y-2.5">
-                  <div>
-                    <div className="flex items-center justify-between text-xs mb-1">
-                      <span className="text-gray-500">평균 진척율</span>
-                      <span className="font-semibold text-gray-900">{m.avgProgress}%</span>
-                    </div>
-                    <ProgressBar value={m.avgProgress} />
-                  </div>
-
-                  <div>
-                    <div className="flex items-center justify-between text-xs mb-1">
-                      <span className="text-gray-500">달성율 (완료 {m.done}/{m.total})</span>
-                      <span className="font-semibold text-emerald-600">{m.completionRate}%</span>
-                    </div>
-                    <ProgressBar value={m.completionRate} color="bg-emerald-500" />
-                  </div>
-
-                  <div>
-                    <div className="flex items-center justify-between text-xs mb-1">
-                      <span className="text-gray-500">업무 과중도</span>
-                      <span
-                        className={cn(
-                          "font-semibold",
-                          m.workload / maxWorkload > 0.7
-                            ? "text-red-600"
-                            : m.workload / maxWorkload > 0.4
-                              ? "text-amber-600"
-                              : "text-gray-500"
-                        )}
-                      >
-                        {m.workload / maxWorkload > 0.7
-                          ? "높음"
-                          : m.workload / maxWorkload > 0.4
-                            ? "보통"
-                            : "여유"}
-                      </span>
-                    </div>
-                    <ProgressBar
-                      value={Math.min(100, (m.workload / maxWorkload) * 100)}
-                      color={
-                        m.workload / maxWorkload > 0.7
-                          ? "bg-red-500"
-                          : m.workload / maxWorkload > 0.4
-                            ? "bg-amber-500"
-                            : "bg-gray-400"
-                      }
-                    />
-                  </div>
-                </div>
-
-                <div className="flex gap-3 text-xs text-gray-500 mt-3 pt-3 border-t border-gray-100 flex-wrap">
-                  <span>진행중 {m.active}</span>
-                  <span className="text-red-500">지연 {m.delayed}</span>
-                  <span className="text-amber-500">마감임박 {m.dueSoon}</span>
-                  {m.unconfirmed > 0 && (
-                    <span className="text-blue-600 font-medium">미확인 {m.unconfirmed}</span>
-                  )}
-                </div>
-
-                <Link
-                  href={`/tasks?as=${m.profile.id}`}
-                  className="block mt-3 text-center text-xs px-3 py-2 rounded-lg border border-gray-300 text-gray-600 hover:bg-gray-50"
-                >
-                  이 팀원 화면 보기
-                </Link>
-              </div>
-            ))}
-            {byMember.length === 0 && (
-              <div className="col-span-full text-center py-10 text-gray-400 text-sm bg-white rounded-xl border border-gray-200">
-                등록된 팀원이 없습니다.
-              </div>
-            )}
-          </div>
-        </div>
+        <MemberProgressTable
+          rows={byMember}
+          maxWorkload={maxWorkload}
+          onReorder={reorder}
+          reordering={reordering}
+        />
       )}
 
       <TaskLedger
@@ -277,6 +203,206 @@ export default function DashboardPage() {
         emptyText={canSeeTeam ? "등록된 업무가 없습니다." : "배정된 업무가 없습니다."}
       />
     </div>
+  );
+}
+
+type MemberRow = {
+  profile: Profile;
+  total: number;
+  done: number;
+  delayed: number;
+  dueSoon: number;
+  unconfirmed: number;
+  active: number;
+  avgProgress: number;
+  completionRate: number;
+  workload: number;
+};
+
+/** 팀원별 진척 현황 — 업무 목록과 같은 표 양식. 한 사람에 한 줄, 위에서 아래로. */
+function MemberProgressTable({
+  rows,
+  maxWorkload,
+  onReorder,
+  reordering,
+}: {
+  rows: MemberRow[];
+  maxWorkload: number;
+  onReorder: (index: number, dir: -1 | 1) => void;
+  reordering: boolean;
+}) {
+  return (
+    <div className="bg-white rounded-xl border border-gray-200">
+      <div className="flex items-baseline justify-between gap-3 px-4 py-3 border-b border-gray-200 flex-wrap">
+        <h2 className="text-base font-bold text-gray-900">팀원별 진척 현황</h2>
+        <p className="text-xs text-gray-400">
+          ▲▼ 로 순서를 바꾸면 담당자 선택 목록에도 같은 순서로 적용됩니다
+        </p>
+      </div>
+
+      <div className="overflow-x-auto">
+        <table className="w-full text-sm border-collapse min-w-[900px] table-fixed">
+          <thead>
+            <tr className="bg-blue-50 text-gray-700 text-xs">
+              <MTh className="w-16 text-center">순서</MTh>
+              <MTh className="w-40">이름</MTh>
+              <MTh className="w-16 text-center">업무</MTh>
+              <MTh className="w-40">평균 진척율</MTh>
+              <MTh className="w-40">달성율</MTh>
+              <MTh className="w-32">업무 과중도</MTh>
+              <MTh className="w-16 text-center">진행중</MTh>
+              <MTh className="w-16 text-center">지연</MTh>
+              <MTh className="w-20 text-center">마감임박</MTh>
+              <MTh className="w-16 text-center">미확인</MTh>
+              <MTh className="w-24 text-center">화면</MTh>
+            </tr>
+          </thead>
+          <tbody>
+            {rows.map((m, i) => {
+              const ratio = m.workload / maxWorkload;
+              const heavy = ratio > 0.7;
+              const medium = ratio > 0.4;
+              return (
+                <tr key={m.profile.id} className="border-b border-gray-200 last:border-0 hover:bg-gray-50">
+                  <MTd className="text-center">
+                    <div className="flex items-center justify-center gap-0.5">
+                      <button
+                        onClick={() => onReorder(i, -1)}
+                        disabled={reordering || i === 0}
+                        title="위로"
+                        className="px-1.5 py-0.5 rounded border border-gray-200 text-gray-500 hover:bg-gray-100 disabled:opacity-30"
+                      >
+                        ▲
+                      </button>
+                      <button
+                        onClick={() => onReorder(i, 1)}
+                        disabled={reordering || i === rows.length - 1}
+                        title="아래로"
+                        className="px-1.5 py-0.5 rounded border border-gray-200 text-gray-500 hover:bg-gray-100 disabled:opacity-30"
+                      >
+                        ▼
+                      </button>
+                    </div>
+                  </MTd>
+
+                  <MTd>
+                    <span className="font-medium text-gray-900 break-keep">{m.profile.name}</span>
+                    {m.profile.position && (
+                      <span className="text-xs text-gray-400"> {m.profile.position}</span>
+                    )}
+                    {m.profile.status === "가입대기" ? (
+                      <span className="block text-[11px] text-amber-600">가입 전 · 미리 배정됨</span>
+                    ) : (
+                      <span className="block text-[11px] text-gray-400">
+                        {formatElapsed(m.profile.last_seen_at)}
+                        {isLongInactive(m.profile.last_seen_at) && (
+                          <span className="text-red-500 font-medium"> · 장기 미접속</span>
+                        )}
+                      </span>
+                    )}
+                  </MTd>
+
+                  <MTd className="text-center text-gray-600">{m.total}</MTd>
+
+                  <MTd>
+                    <div className="flex items-center gap-2">
+                      <div className="flex-1 min-w-[50px]">
+                        <ProgressBar value={m.avgProgress} />
+                      </div>
+                      <span className="text-xs font-semibold text-gray-900 w-9 text-right">
+                        {m.avgProgress}%
+                      </span>
+                    </div>
+                  </MTd>
+
+                  <MTd>
+                    <div className="flex items-center gap-2">
+                      <div className="flex-1 min-w-[50px]">
+                        <ProgressBar value={m.completionRate} color="bg-emerald-500" />
+                      </div>
+                      <span className="text-xs font-semibold text-emerald-600 w-9 text-right">
+                        {m.completionRate}%
+                      </span>
+                    </div>
+                    <span className="block text-[11px] text-gray-400 mt-0.5">
+                      완료 {m.done}/{m.total}
+                    </span>
+                  </MTd>
+
+                  <MTd>
+                    <div className="flex items-center gap-2">
+                      <div className="flex-1 min-w-[40px]">
+                        <ProgressBar
+                          value={Math.min(100, ratio * 100)}
+                          color={heavy ? "bg-red-500" : medium ? "bg-amber-500" : "bg-gray-400"}
+                        />
+                      </div>
+                      <span
+                        className={cn(
+                          "text-xs font-semibold w-8 text-right",
+                          heavy ? "text-red-600" : medium ? "text-amber-600" : "text-gray-500"
+                        )}
+                      >
+                        {heavy ? "높음" : medium ? "보통" : "여유"}
+                      </span>
+                    </div>
+                  </MTd>
+
+                  <MTd className="text-center text-gray-600">{m.active}</MTd>
+                  <MTd className={cn("text-center", m.delayed > 0 ? "text-red-600 font-semibold" : "text-gray-400")}>
+                    {m.delayed}
+                  </MTd>
+                  <MTd className={cn("text-center", m.dueSoon > 0 ? "text-amber-600 font-semibold" : "text-gray-400")}>
+                    {m.dueSoon}
+                  </MTd>
+                  <MTd className={cn("text-center", m.unconfirmed > 0 ? "text-blue-600 font-semibold" : "text-gray-400")}>
+                    {m.unconfirmed}
+                  </MTd>
+
+                  <MTd className="text-center">
+                    <Link
+                      href={`/tasks?as=${m.profile.id}`}
+                      className="inline-block text-xs px-2.5 py-1.5 rounded-lg border border-gray-300 text-gray-600 hover:bg-gray-50 whitespace-nowrap"
+                    >
+                      보기
+                    </Link>
+                  </MTd>
+                </tr>
+              );
+            })}
+
+            {rows.length === 0 && (
+              <tr>
+                <td colSpan={11} className="px-4 py-10 text-center text-gray-400">
+                  등록된 팀원이 없습니다.
+                </td>
+              </tr>
+            )}
+          </tbody>
+        </table>
+      </div>
+    </div>
+  );
+}
+
+function MTh({ className, children }: { className?: string; children: React.ReactNode }) {
+  return (
+    <th
+      className={cn(
+        "px-3 py-2.5 font-medium text-left border-b border-gray-300 border-r border-gray-200 last:border-r-0",
+        className
+      )}
+    >
+      {children}
+    </th>
+  );
+}
+
+function MTd({ className, children }: { className?: string; children: React.ReactNode }) {
+  return (
+    <td className={cn("px-3 py-2.5 align-top border-r border-gray-100 last:border-r-0", className)}>
+      {children}
+    </td>
   );
 }
 

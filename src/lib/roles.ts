@@ -30,3 +30,13 @@ export function roleOrder(role: Role): number {
   if (role === "팀장") return 1;
   return 2;
 }
+
+/** 팀장이 정한 순서대로 정렬 (같으면 역할 → 이름 순) */
+export function byDisplayOrder(a: Profile, b: Profile): number {
+  const ao = a.sort_order ?? 1000;
+  const bo = b.sort_order ?? 1000;
+  if (ao !== bo) return ao - bo;
+  const ro = roleOrder(a.role) - roleOrder(b.role);
+  if (ro !== 0) return ro;
+  return a.name.localeCompare(b.name);
+}

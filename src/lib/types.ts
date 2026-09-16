@@ -14,6 +14,8 @@ export interface Profile {
   position: string | null;
   created_at: string;
   last_seen_at: string;
+  /** 팀장이 정한 표시 순서 */
+  sort_order: number;
 }
 
 export interface Task {

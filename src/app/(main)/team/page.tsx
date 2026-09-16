@@ -5,7 +5,7 @@ import { createClient } from "@/lib/supabase/client";
 import { callEdgeFunction } from "@/lib/edge";
 import { formatElapsed, formatDate, isLongInactive } from "@/lib/utils";
 import type { Profile } from "@/lib/types";
-import { isManager, isTeamLead } from "@/lib/roles";
+import { isManager, isTeamLead, byDisplayOrder } from "@/lib/roles";
 
 export default function TeamPage() {
   const [me, setMe] = useState<Profile | null>(null);
@@ -17,6 +17,7 @@ export default function TeamPage() {
   const [message, setMessage] = useState<string | null>(null);
   const [showDirectorForm, setShowDirectorForm] = useState(false);
   const [showPreForm, setShowPreForm] = useState(false);
+  const [editTarget, setEditTarget] = useState<Profile | null>(null);
 
   async function load() {
     const supabase = createClient();
@@ -27,7 +28,7 @@ export default function TeamPage() {
 
     const [{ data: profile }, { data: all }] = await Promise.all([
       supabase.from("profiles").select("*").eq("id", user.id).single(),
-      supabase.from("profiles").select("*").order("created_at", { ascending: false }),
+      supabase.from("profiles").select("*").order("sort_order"),
     ]);
 
     setMe(profile as Profile);
@@ -57,8 +58,12 @@ export default function TeamPage() {
     setBusyId(null);
   }
 
-  const members = profiles.filter((p) => p.role === "팀원" && p.status === "승인");
-  const pending = profiles.filter((p) => p.role === "팀원" && p.status === "가입대기");
+  const members = profiles
+    .filter((p) => p.role === "팀원" && p.status === "승인")
+    .sort(byDisplayOrder);
+  const pending = profiles
+    .filter((p) => p.role === "팀원" && p.status === "가입대기")
+    .sort(byDisplayOrder);
   const directors = profiles.filter((p) => p.role === "실장" && p.status !== "삭제");
   const deleted = profiles.filter((p) => p.status === "삭제");
   const lead = profiles.find((p) => p.role === "팀장" && p.status !== "삭제");
@@ -196,12 +201,20 @@ export default function TeamPage() {
                     등록일 {formatDate(p.created_at)} · 이 이메일로 회원가입하면 자동 연결됩니다
                   </p>
                 </div>
+                <div className="flex gap-2 flex-wrap">
+                <button
+                  onClick={() => setEditTarget(p)}
+                  className="text-xs px-3 py-1.5 rounded-lg border border-gray-300 text-gray-600 hover:bg-gray-50"
+                >
+                  정보 수정
+                </button>
                 <button
                   onClick={() => setDeleteTarget(p)}
                   className="text-xs px-3 py-1.5 rounded-lg border border-red-200 text-red-600 hover:bg-red-50"
                 >
                   삭제
                 </button>
+                </div>
               </div>
             ))}
           </div>
@@ -254,6 +267,18 @@ export default function TeamPage() {
         </section>
       )}
 
+      {editTarget && (
+        <EditPreRegisteredModal
+          profile={editTarget}
+          onClose={() => setEditTarget(null)}
+          onSaved={async (name) => {
+            setEditTarget(null);
+            setMessage(`${name}님 정보를 수정했습니다.`);
+            await load();
+          }}
+        />
+      )}
+
       {pwTarget && <ChangePasswordModal profile={pwTarget} onClose={() => setPwTarget(null)} />}
 
       {deleteTarget && (
@@ -271,6 +296,105 @@ export default function TeamPage() {
           }}
         />
       )}
+    </div>
+  );
+}
+
+/** 가입 전 인원의 이름·이메일·직급을 고친다. 배정해 둔 업무는 그대로 유지된다. */
+function EditPreRegisteredModal({
+  profile,
+  onClose,
+  onSaved,
+}: {
+  profile: Profile;
+  onClose: () => void;
+  onSaved: (name: string) => void;
+}) {
+  const [name, setName] = useState(profile.name);
+  const [email, setEmail] = useState(profile.email);
+  const [position, setPosition] = useState(profile.position ?? "");
+  const [error, setError] = useState<string | null>(null);
+  const [saving, setSaving] = useState(false);
+
+  async function handleSubmit(e: React.FormEvent) {
+    e.preventDefault();
+    setError(null);
+    if (!name.trim() || !email.trim()) {
+      setError("이름과 이메일을 입력해주세요.");
+      return;
+    }
+    setSaving(true);
+    const { error: fnError } = await callEdgeFunction(
+      "update-pre-registered",
+      {
+        target_user_id: profile.id,
+        name: name.trim(),
+        email: email.trim(),
+        position: position.trim(),
+      },
+      { authed: true }
+    );
+    if (fnError) {
+      setError(fnError);
+      setSaving(false);
+      return;
+    }
+    onSaved(name.trim());
+  }
+
+  return (
+    <div className="fixed inset-0 z-40 bg-black/40 flex items-center justify-center p-4">
+      <div className="bg-white w-full max-w-sm rounded-2xl p-6">
+        <h2 className="text-lg font-bold text-gray-900 mb-1">가입 전 인원 정보 수정</h2>
+        <p className="text-xs text-gray-500 mb-4">
+          이미 배정해 둔 업무는 그대로 유지됩니다. 본인이 아래 이메일로 회원가입하면 연결됩니다.
+        </p>
+        <form onSubmit={handleSubmit} className="space-y-3">
+          <div>
+            <label className="block text-xs font-medium text-gray-500 mb-1">이름</label>
+            <input
+              value={name}
+              onChange={(e) => setName(e.target.value)}
+              className="w-full rounded-lg border border-gray-300 px-3 py-2.5 text-base"
+            />
+          </div>
+          <div>
+            <label className="block text-xs font-medium text-gray-500 mb-1">이메일</label>
+            <input
+              type="email"
+              value={email}
+              onChange={(e) => setEmail(e.target.value)}
+              className="w-full rounded-lg border border-gray-300 px-3 py-2.5 text-base"
+            />
+          </div>
+          <div>
+            <label className="block text-xs font-medium text-gray-500 mb-1">직급</label>
+            <input
+              value={position}
+              onChange={(e) => setPosition(e.target.value)}
+              placeholder="예: 책임, 매니저"
+              className="w-full rounded-lg border border-gray-300 px-3 py-2.5 text-base"
+            />
+          </div>
+          {error && <p className="text-sm text-red-600">{error}</p>}
+          <div className="flex gap-2 pt-1">
+            <button
+              type="button"
+              onClick={onClose}
+              className="flex-1 rounded-lg border border-gray-300 py-2.5 font-medium text-gray-600 hover:bg-gray-50"
+            >
+              취소
+            </button>
+            <button
+              type="submit"
+              disabled={saving}
+              className="flex-1 rounded-lg bg-blue-600 text-white py-2.5 font-medium hover:bg-blue-700 disabled:opacity-50"
+            >
+              {saving ? "저장 중..." : "저장"}
+            </button>
+          </div>
+        </form>
+      </div>
     </div>
   );
 }
