@@ -1,8 +1,9 @@
 "use client";
 
 import { useMemo, useState } from "react";
-import type { Profile, TaskWithEffectiveStatus } from "@/lib/types";
+import type { EvaluationCriterion, Profile, TaskWithEffectiveStatus } from "@/lib/types";
 import { cn } from "@/lib/utils";
+import { createClient } from "@/lib/supabase/client";
 
 /**
  * 고과평가용 실적 집계.
@@ -14,10 +15,14 @@ import { cn } from "@/lib/utils";
 export default function EvaluationReport({
   members,
   tasks,
+  criteria: initialCriteria,
 }: {
   members: Profile[];
   tasks: TaskWithEffectiveStatus[];
+  criteria: EvaluationCriterion[];
 }) {
+  const [criteria, setCriteria] = useState<EvaluationCriterion[]>(initialCriteria);
+  const [showCriteria, setShowCriteria] = useState(false);
   const [months, setMonths] = useState<number>(3);
   const [draftFor, setDraftFor] = useState<string | null>(null);
 
@@ -107,6 +112,19 @@ export default function EvaluationReport({
     return `${fmt(f)} ~ ${fmt(t)}`;
   })();
 
+  const activeCriteria = criteria
+    .filter((c) => c.enabled && c.metric_key && c.target != null && c.comparator)
+    .sort((a, b) => a.sort_order - b.sort_order);
+
+  async function saveTarget(id: string, target: number) {
+    setCriteria((prev) => prev.map((c) => (c.id === id ? { ...c, target } : c)));
+    const supabase = createClient();
+    await supabase
+      .from("evaluation_criteria")
+      .update({ target, updated_at: new Date().toISOString() })
+      .eq("id", id);
+  }
+
   const draftRow = rows.find((r) => r.profile.id === draftFor);
 
   return (
@@ -131,6 +149,50 @@ export default function EvaluationReport({
         </div>
       </div>
 
+      <div className="px-4 py-2 border-b border-gray-100 bg-gray-50 flex items-center justify-between gap-3 flex-wrap">
+        <p className="text-xs text-gray-600">
+          <strong>평가 기준</strong>{" "}
+          {activeCriteria.map((c) => (
+            <span key={c.id} className="mr-2 whitespace-nowrap">
+              {c.name} {c.comparator === "gte" ? "≥" : "≤"} {c.target}
+              {c.unit}
+            </span>
+          ))}
+        </p>
+        <button
+          onClick={() => setShowCriteria((v) => !v)}
+          className="text-xs px-2.5 py-1.5 rounded-lg border border-gray-300 text-gray-600 hover:bg-white"
+        >
+          {showCriteria ? "닫기" : "기준 고치기"}
+        </button>
+      </div>
+
+      {showCriteria && (
+        <div className="px-4 py-3 border-b border-gray-100 bg-white space-y-2">
+          <p className="text-xs text-gray-500">
+            기준값을 바꾸면 아래 충족/미달 판정이 바로 다시 계산됩니다.
+          </p>
+          {activeCriteria.map((c) => (
+            <div key={c.id} className="flex items-center gap-2 flex-wrap">
+              <span className="text-sm text-gray-700 w-32">{c.name}</span>
+              <span className="text-sm text-gray-400">
+                {c.comparator === "gte" ? "이상이면 충족" : "이하면 충족"}
+              </span>
+              <input
+                type="number"
+                value={c.target ?? 0}
+                onChange={(e) => saveTarget(c.id, Number(e.target.value))}
+                className="w-24 rounded-lg border border-gray-300 px-2 py-1.5 text-sm"
+              />
+              <span className="text-sm text-gray-500">{c.unit}</span>
+              {c.description && (
+                <span className="text-xs text-gray-400 break-keep">{c.description}</span>
+              )}
+            </div>
+          ))}
+        </div>
+      )}
+
       <p className="px-4 py-2 text-xs text-gray-500 border-b border-gray-100 bg-gray-50">
         {label} · 소요일은 <strong>지시일부터 완료까지</strong>, 일정 준수는{" "}
         <strong>완료계획일 기준</strong>으로 계산합니다. 완료계획일이 없는 업무는 준수 판정에서
@@ -150,6 +212,7 @@ export default function EvaluationReport({
               <Th className="w-20 text-center">초과 건수</Th>
               <Th className="w-24 text-center">평균 초과일</Th>
               <Th className="w-28 text-center">현재 지연</Th>
+              <Th className="w-28 text-center">기준 충족</Th>
               <Th className="w-24 text-center">보고서</Th>
             </tr>
           </thead>
@@ -216,6 +279,10 @@ export default function EvaluationReport({
                 </Td>
 
                 <Td className="text-center">
+                  <CriteriaResult row={r} criteria={activeCriteria} />
+                </Td>
+
+                <Td className="text-center">
                   <button
                     onClick={() => setDraftFor(r.profile.id)}
                     className="text-xs px-2.5 py-1.5 rounded-lg border border-gray-300 text-gray-600 hover:bg-gray-50 whitespace-nowrap"
@@ -228,7 +295,7 @@ export default function EvaluationReport({
 
             {rows.length === 0 && (
               <tr>
-                <td colSpan={10} className="px-4 py-10 text-center text-gray-400">
+                <td colSpan={11} className="px-4 py-10 text-center text-gray-400">
                   등록된 팀원이 없습니다.
                 </td>
               </tr>
@@ -241,6 +308,7 @@ export default function EvaluationReport({
         <DraftModal
           row={draftRow}
           teamAvg={teamAvg}
+          criteria={activeCriteria}
           periodLabel={label}
           periodText={periodText}
           onClose={() => setDraftFor(null)}
@@ -268,6 +336,66 @@ function Td({ className, children }: { className?: string; children: React.React
     <td className={cn("px-3 py-2.5 align-top border-r border-gray-100 last:border-r-0", className)}>
       {children}
     </td>
+  );
+}
+
+
+/** 지표 키에 해당하는 실제 값을 꺼낸다. 산출할 수 없으면 null. */
+function metricValue(r: Row, key: string): number | null {
+  switch (key) {
+    case "completion_rate":
+      return r.total ? r.completionRate : null;
+    case "on_time_rate":
+      return r.onTimeRate;
+    case "avg_overdue":
+      return r.judged ? r.avgOverdue : null;
+    case "delayed_now":
+      return r.delayedNow;
+    default:
+      return null;
+  }
+}
+
+type Judged = {
+  criterion: EvaluationCriterion;
+  value: number | null;
+  met: boolean | null;
+};
+
+/** 기준 대비 충족 여부. 사람에 대한 판단이 아니라 정해둔 기준에 닿았는지만 본다. */
+function judge(r: Row, criteria: EvaluationCriterion[]): Judged[] {
+  return criteria.map((c) => {
+    const value = metricValue(r, c.metric_key!);
+    if (value == null || c.target == null) return { criterion: c, value, met: null };
+    const met = c.comparator === "gte" ? value >= c.target : value <= c.target;
+    return { criterion: c, value, met };
+  });
+}
+
+function CriteriaResult({ row, criteria }: { row: Row; criteria: EvaluationCriterion[] }) {
+  const results = judge(row, criteria);
+  const judgedOnes = results.filter((x) => x.met !== null);
+  if (judgedOnes.length === 0) return <span className="text-gray-300">—</span>;
+  const met = judgedOnes.filter((x) => x.met).length;
+  const all = judgedOnes.length;
+
+  return (
+    <div>
+      <span
+        className={cn(
+          "font-semibold",
+          met === all ? "text-emerald-600" : met >= all / 2 ? "text-amber-600" : "text-red-600"
+        )}
+      >
+        {met}/{all} 충족
+      </span>
+      <span className="block text-[11px] text-gray-400 break-keep">
+        {judgedOnes
+          .filter((x) => !x.met)
+          .map((x) => x.criterion.name)
+          .join(", ") || "전 항목 충족"}
+      </span>
+    </div>
   );
 }
 
@@ -299,7 +427,13 @@ type TeamAvg = {
  * 의도적으로 "사실"만 적는다. 성실/미흡 같은 사람에 대한 판단 문구는 넣지 않는다.
  * 고과는 사람의 급여와 승진이 걸린 일이라, 판단은 팀장이 직접 내려야 한다.
  */
-function buildDraft(r: Row, team: TeamAvg, periodLabel: string, periodText: string): string {
+function buildDraft(
+  r: Row,
+  team: TeamAvg,
+  criteria: EvaluationCriterion[],
+  periodLabel: string,
+  periodText: string
+): string {
   const name = `${r.profile.name}${r.profile.position ? ` ${r.profile.position}` : ""}`;
   const L: string[] = [];
 
@@ -375,6 +509,24 @@ function buildDraft(r: Row, team: TeamAvg, periodLabel: string, periodText: stri
   }
   L.push("");
 
+  // 5. 평가기준 대비 결과 — 정해둔 기준에 닿았는지만 표시한다
+  const results = judge(r, criteria).filter((x) => x.met !== null);
+  if (results.length > 0) {
+    L.push("5. 평가기준 대비 결과");
+    for (const x of results) {
+      const c = x.criterion;
+      const sign = c.comparator === "gte" ? "이상" : "이하";
+      L.push(
+        `   ${c.name}: 기준 ${c.target}${c.unit} ${sign} / 실적 ${x.value}${c.unit} → ${
+          x.met ? "충족" : "미달"
+        }`
+      );
+    }
+    const met = results.filter((x) => x.met).length;
+    L.push(`   충족 ${met}/${results.length}항목`);
+    L.push("");
+  }
+
   L.push("※ 위 수치는 업무관리 시스템 기록에서 자동 산출한 것입니다.");
   L.push("   업무의 난이도, 중요도, 돌발업무 대응, 협업 기여 등은 수치에 담기지 않습니다.");
   L.push("   종합의견은 팀장이 직접 작성하십시오.");
@@ -388,20 +540,22 @@ function buildDraft(r: Row, team: TeamAvg, periodLabel: string, periodText: stri
 function DraftModal({
   row,
   teamAvg,
+  criteria,
   periodLabel,
   periodText,
   onClose,
 }: {
   row: Row;
   teamAvg: TeamAvg;
+  criteria: EvaluationCriterion[];
   periodLabel: string;
   periodText: string;
   onClose: () => void;
 }) {
   const [copied, setCopied] = useState(false);
   const text = useMemo(
-    () => buildDraft(row, teamAvg, periodLabel, periodText),
-    [row, teamAvg, periodLabel, periodText]
+    () => buildDraft(row, teamAvg, criteria, periodLabel, periodText),
+    [row, teamAvg, criteria, periodLabel, periodText]
   );
 
   async function copy() {

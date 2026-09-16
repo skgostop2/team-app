@@ -1,6 +1,6 @@
 import { redirect } from "next/navigation";
 import { createClient } from "@/lib/supabase/server";
-import type { Profile, TaskWithEffectiveStatus } from "@/lib/types";
+import type { EvaluationCriterion, Profile, TaskWithEffectiveStatus } from "@/lib/types";
 import { isAssignable, byDisplayOrder } from "@/lib/roles";
 import EvaluationReport from "@/components/EvaluationReport";
 
@@ -28,9 +28,10 @@ export default async function EvaluationPage() {
     redirect("/dashboard");
   }
 
-  const [{ data: profiles }, { data: tasks }] = await Promise.all([
+  const [{ data: profiles }, { data: tasks }, { data: criteria }] = await Promise.all([
     supabase.from("profiles").select("*").order("sort_order"),
     supabase.from("v_tasks").select("*").order("created_at", { ascending: true }),
+    supabase.from("evaluation_criteria").select("*").order("sort_order"),
   ]);
 
   const members = ((profiles ?? []) as Profile[]).filter(isAssignable).sort(byDisplayOrder);
@@ -47,14 +48,15 @@ export default async function EvaluationPage() {
       <EvaluationReport
         members={members}
         tasks={(tasks ?? []) as TaskWithEffectiveStatus[]}
+        criteria={(criteria ?? []) as EvaluationCriterion[]}
       />
 
       <div className="bg-white rounded-xl border border-dashed border-gray-300 p-6">
         <p className="text-sm font-medium text-gray-600 mb-1">2차 개발 예정</p>
         <p className="text-sm text-gray-400 leading-relaxed">
-          위 실적 수치를 바탕으로 한 평가기준표, 배점·가중치, 자동 평가점수 계산, 정성평가,
-          평가이력 관리는 2차 개발에서 붙입니다. 현재는 평가에 쓸 <strong>객관적 실적 수치</strong>를
-          먼저 뽑아 두는 단계입니다.
+          배점·가중치를 반영한 자동 점수 계산, 정성평가 항목, 평가이력 관리는 2차 개발에서
+          붙입니다. 현재는 <strong>객관적 실적 수치</strong>와 <strong>기준 대비 충족 여부</strong>
+          까지 나옵니다.
         </p>
       </div>
     </div>

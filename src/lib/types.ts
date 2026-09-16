@@ -109,3 +109,19 @@ export interface TaskAssigneeLog {
   changed_by: string | null;
   changed_at: string;
 }
+
+/** 고과평가 기준 — 기준값은 팀장이 직접 정한다 */
+export interface EvaluationCriterion {
+  id: string;
+  name: string;
+  description: string | null;
+  weight: number | null;
+  /** 업무 기록에서 자동 산출되는 지표 키. 수기 항목이면 null */
+  metric_key: "completion_rate" | "on_time_rate" | "avg_overdue" | "delayed_now" | null;
+  target: number | null;
+  /** gte = 이상이면 충족, lte = 이하면 충족 */
+  comparator: "gte" | "lte" | null;
+  unit: string;
+  sort_order: number;
+  enabled: boolean;
+}
