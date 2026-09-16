@@ -1,6 +1,8 @@
 "use client";
 
 import { useEffect, useMemo, useState } from "react";
+import Link from "next/link";
+import { useSearchParams } from "next/navigation";
 import { createClient } from "@/lib/supabase/client";
 import type { Profile, TaskAssigneeLog, TaskWithEffectiveStatus } from "@/lib/types";
 import { isManager, isAssignable } from "@/lib/roles";
@@ -16,6 +18,10 @@ export default function TasksPage() {
   const [showNewModal, setShowNewModal] = useState(false);
   const [loading, setLoading] = useState(true);
   const [handedOverIds, setHandedOverIds] = useState<Set<string>>(new Set());
+
+  // 팀장·실장이 특정 팀원의 화면을 그대로 들여다보는 모드 (?as=<id>)
+  const searchParams = useSearchParams();
+  const asId = searchParams.get("as");
 
   async function load() {
     const supabase = createClient();
@@ -47,8 +53,18 @@ export default function TasksPage() {
   }, []);
 
   const isLead = isManager(me);
+  const viewingAs = isLead && asId ? profiles.find((p) => p.id === asId) : undefined;
 
   const visibleTasks = useMemo(() => {
+    if (viewingAs) {
+      // 그 사람 화면 그대로: 본인이 체크된 업무만
+      let list = tasks.filter(
+        (t) => t.assignee_id === viewingAs.id || (t.deputy_ids ?? []).includes(viewingAs.id)
+      );
+      if (hideDone) list = list.filter((t) => t.effective_status !== "완료");
+      return list;
+    }
+
     // 팀원 화면에는 내가 담당인 업무 + 내가 참여자인 업무 + 내가 넘긴(인계한) 업무가 모두 보인다.
     // 담당이 바뀌어도 업무가 그냥 사라지지 않게 하기 위함이다.
     const mine = (t: TaskWithEffectiveStatus) =>
@@ -65,12 +81,40 @@ export default function TasksPage() {
 
   if (loading) return <p className="text-sm text-gray-400">불러오는 중...</p>;
 
+  const unconfirmed = visibleTasks.filter((t) => t.is_new).length;
+
   return (
     <div className="space-y-4">
+      {viewingAs && (
+        <div className="rounded-xl border border-blue-200 bg-blue-50 px-4 py-3 flex items-start justify-between gap-3 flex-wrap">
+          <div>
+            <p className="text-sm font-semibold text-blue-900">
+              {viewingAs.name} 님 화면으로 보는 중
+            </p>
+            <p className="text-xs text-blue-700 mt-0.5">
+              이 팀원에게 보이는 그대로입니다. 여기서는 내용을 바꿀 수 없습니다.
+              {unconfirmed > 0 && (
+                <span className="font-semibold"> · 아직 확인하지 않은 업무 {unconfirmed}건</span>
+              )}
+            </p>
+          </div>
+          <Link
+            href="/tasks"
+            className="text-xs px-3 py-2 rounded-lg bg-white border border-blue-300 text-blue-700 font-medium hover:bg-blue-100"
+          >
+            내 화면으로 돌아가기
+          </Link>
+        </div>
+      )}
+
       <div className="flex items-start justify-between gap-3 flex-wrap">
         <div>
           <h1 className="text-xl font-bold text-gray-900">
-            {isLead && showAll ? "전체 업무" : "내 업무"}
+            {viewingAs
+              ? `${viewingAs.name} 님의 업무`
+              : isLead && showAll
+                ? "전체 업무"
+                : "내 업무"}
           </h1>
           <p className="text-sm text-gray-500 mt-0.5">
             업무를 누르면 상세 화면에서 진행률과 비고를 고칠 수 있습니다.
@@ -86,7 +130,7 @@ export default function TasksPage() {
             />
             완료 숨기기
           </label>
-          {isLead && (
+          {isLead && !viewingAs && (
             <button
               onClick={() => setShowAll((v) => !v)}
               className="text-xs px-3 py-2 rounded-lg border border-gray-300 text-gray-600 hover:bg-gray-50 bg-white"
@@ -94,7 +138,7 @@ export default function TasksPage() {
               {showAll ? "내 업무만" : "전체 보기"}
             </button>
           )}
-          {isLead && (
+          {isLead && !viewingAs && (
             <button
               onClick={() => setShowNewModal(true)}
               className="text-xs px-3 py-2 rounded-lg bg-blue-600 text-white font-medium hover:bg-blue-700"
@@ -108,12 +152,18 @@ export default function TasksPage() {
       <TaskLedger
         tasks={visibleTasks}
         profiles={profiles}
-        title={isLead && showAll ? "업무 진행 현황 (전체)" : "업무 진행 현황 (내 업무)"}
+        title={
+          viewingAs
+            ? `업무 진행 현황 (${viewingAs.name} 님)`
+            : isLead && showAll
+              ? "업무 진행 현황 (전체)"
+              : "업무 진행 현황 (내 업무)"
+        }
         showAssignee={isLead}
-        canAssign={isLead}
+        canAssign={isLead && !viewingAs}
         onAssigned={load}
-        viewerId={me?.id}
-        handedOverIds={handedOverIds}
+        viewerId={viewingAs ? viewingAs.id : me?.id}
+        handedOverIds={viewingAs ? undefined : handedOverIds}
         emptyText="표시할 업무가 없습니다."
       />
 

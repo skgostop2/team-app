@@ -81,6 +81,8 @@ export default function DashboardPage() {
         const active = mine.filter((t) => t.effective_status !== "완료");
         const delayed = mine.filter((t) => t.effective_status === "지연");
         const dueSoon = mine.filter((t) => isDueSoon(t));
+        // 업무를 받고 아직 "확인했습니다"를 누르지 않은 건 — 안 챙기고 있는지 보는 신호
+        const unconfirmed = mine.filter((t) => t.is_new);
         // 업무 과중도: 진행중 + 지연×2 + 마감임박×1.5
         const workload = active.length + delayed.length * 2 + dueSoon.length * 1.5;
         return {
@@ -89,6 +91,7 @@ export default function DashboardPage() {
           done: s.done,
           delayed: delayed.length,
           dueSoon: dueSoon.length,
+          unconfirmed: unconfirmed.length,
           active: active.length,
           avgProgress: s.avgProgress,
           completionRate: s.completionRate,
@@ -237,11 +240,21 @@ export default function DashboardPage() {
                   </div>
                 </div>
 
-                <div className="flex gap-3 text-xs text-gray-500 mt-3 pt-3 border-t border-gray-100">
+                <div className="flex gap-3 text-xs text-gray-500 mt-3 pt-3 border-t border-gray-100 flex-wrap">
                   <span>진행중 {m.active}</span>
                   <span className="text-red-500">지연 {m.delayed}</span>
                   <span className="text-amber-500">마감임박 {m.dueSoon}</span>
+                  {m.unconfirmed > 0 && (
+                    <span className="text-blue-600 font-medium">미확인 {m.unconfirmed}</span>
+                  )}
                 </div>
+
+                <Link
+                  href={`/tasks?as=${m.profile.id}`}
+                  className="block mt-3 text-center text-xs px-3 py-2 rounded-lg border border-gray-300 text-gray-600 hover:bg-gray-50"
+                >
+                  이 팀원 화면 보기
+                </Link>
               </div>
             ))}
             {byMember.length === 0 && (
