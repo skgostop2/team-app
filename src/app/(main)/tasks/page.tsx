@@ -9,6 +9,9 @@ import { isManager, isAssignable } from "@/lib/roles";
 import TaskLedger from "@/components/TaskLedger";
 import ViewAsBanner from "@/components/ViewAsBanner";
 import NewTaskModal from "@/components/NewTaskModal";
+import ImportTasksModal from "@/components/ImportTasksModal";
+import PrintButton from "@/components/PrintButton";
+import PrintHeader from "@/components/PrintHeader";
 
 export default function TasksPage() {
   const [me, setMe] = useState<Profile | null>(null);
@@ -18,6 +21,8 @@ export default function TasksPage() {
   const [hideDone, setHideDone] = useState(false);
   const [onlyMemberAdded, setOnlyMemberAdded] = useState(false);
   const [showNewModal, setShowNewModal] = useState(false);
+  const [showImport, setShowImport] = useState(false);
+  const [importMsg, setImportMsg] = useState<string | null>(null);
   const [loading, setLoading] = useState(true);
   const [handedOverIds, setHandedOverIds] = useState<Set<string>>(new Set());
 
@@ -104,7 +109,18 @@ export default function TasksPage() {
         />
       )}
 
-      <div className="flex items-start justify-between gap-3 flex-wrap">
+      <PrintHeader
+        title={
+          viewingAs
+            ? `업무 진행 현황 — ${viewingAs.name}`
+            : isLead && showAll
+              ? "업무 진행 현황 (전체)"
+              : "업무 진행 현황"
+        }
+        subtitle={`${me?.team_name ?? ""} ${hideDone ? "· 완료 제외" : ""} · 총 ${visibleTasks.length}건`}
+      />
+
+      <div className="no-print flex items-start justify-between gap-3 flex-wrap">
         <div>
           <h1 className="text-xl font-bold text-gray-900">
             {viewingAs
@@ -140,12 +156,21 @@ export default function TasksPage() {
           )}
           {isLead && !viewingAs && (
             <button
+              onClick={() => setShowImport(true)}
+              className="text-xs px-3 py-2 rounded-lg border border-gray-300 text-gray-600 hover:bg-gray-50 bg-white"
+            >
+              엑셀 가져오기
+            </button>
+          )}
+          {isLead && !viewingAs && (
+            <button
               onClick={() => setShowAll((v) => !v)}
               className="text-xs px-3 py-2 rounded-lg border border-gray-300 text-gray-600 hover:bg-gray-50 bg-white"
             >
               {showAll ? "내 업무만" : "전체 보기"}
             </button>
           )}
+          <PrintButton />
           {!viewingAs && (
             <button
               onClick={() => setShowNewModal(true)}
@@ -176,6 +201,25 @@ export default function TasksPage() {
         onChanged={load}
         emptyText="표시할 업무가 없습니다."
       />
+
+      {importMsg && (
+        <div className="rounded-xl bg-emerald-50 border border-emerald-200 px-4 py-3 text-sm text-emerald-700">
+          {importMsg}
+        </div>
+      )}
+
+      {showImport && me && (
+        <ImportTasksModal
+          members={profiles.filter(isAssignable)}
+          createdBy={me.id}
+          onClose={() => setShowImport(false)}
+          onDone={async (count) => {
+            setShowImport(false);
+            setImportMsg(`엑셀에서 ${count}건을 등록했습니다. 담당자가 미지정인 건은 담당자 칸에서 체크해 주십시오.`);
+            await load();
+          }}
+        />
+      )}
 
       {showNewModal && (
         <NewTaskModal

@@ -80,7 +80,7 @@ export default function NewTaskModal({
   }
 
   return (
-    <div className="fixed inset-0 z-40 bg-black/40 flex items-end sm:items-center justify-center p-0 sm:p-4">
+    <div className="no-print fixed inset-0 z-40 bg-black/40 flex items-end sm:items-center justify-center p-0 sm:p-4">
       <div className="bg-white w-full sm:max-w-md rounded-t-2xl sm:rounded-2xl p-6 max-h-[90dvh] overflow-y-auto">
         <h2 className="text-lg font-bold text-gray-900 mb-1">
           {selfMode ? "내 업무 추가" : "새 업무 지시"}

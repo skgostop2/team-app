@@ -23,3 +23,92 @@ body {
   font-family: -apple-system, BlinkMacSystemFont, "Apple SD Gothic Neo", "Malgun Gothic",
     "Segoe UI", Roboto, sans-serif;
 }
+
+/* ── 인쇄 ──────────────────────────────────────────────
+   보고용으로 그대로 뽑을 수 있게. 화면의 메뉴·버튼·필터는 빠지고
+   표만 A4 가로로 앉는다. 폰에서 인쇄해도 카드가 아니라 표로 나온다. */
+@media print {
+  @page {
+    size: A4 landscape;
+    margin: 8mm;
+  }
+
+  html,
+  body {
+    background: #fff !important;
+    color: #000 !important;
+  }
+
+  /* 메뉴, 버튼, 필터처럼 종이에 필요 없는 것 */
+  .no-print {
+    display: none !important;
+  }
+
+  /* 화면에서는 숨어 있고 종이에만 나오는 머리글 */
+  .print-only {
+    display: block !important;
+  }
+
+  /* 폰 카드 대신 표로 */
+  .print-hide {
+    display: none !important;
+  }
+  .print-show {
+    display: block !important;
+  }
+
+  /* 표를 종이 폭에 맞춘다 */
+  .print-table {
+    width: 100% !important;
+    min-width: 0 !important;
+    font-size: 8pt !important;
+    overflow: visible !important;
+  }
+  .print-table table {
+    width: 100% !important;
+    min-width: 0 !important;
+    /* 화면에서는 칸 폭을 px 로 고정해 두었는데, 종이 폭은 그보다 좁다.
+       고정 폭을 그대로 쓰면 업무내용 칸이 0 으로 짜부라진다. 종이에서는
+       폭 고정을 풀어 내용에 맞게 나눠 갖게 한다. */
+    table-layout: auto !important;
+  }
+  .print-table col {
+    width: auto !important;
+  }
+  .print-table thead {
+    display: table-header-group; /* 여러 장이면 머리줄 반복 */
+  }
+  .print-table tr,
+  .print-block {
+    break-inside: avoid;
+    page-break-inside: avoid;
+  }
+  .print-table th,
+  .print-table td {
+    border: 1px solid #999 !important;
+    padding: 2px 3px !important;
+    white-space: normal !important;
+  }
+  /* 칸 안의 두 줄 제한을 풀어 전체 내용이 찍히게 */
+  .print-table .line-clamp-1,
+  .print-table .line-clamp-2,
+  .print-table .line-clamp-3 {
+    -webkit-line-clamp: unset !important;
+    display: block !important;
+    overflow: visible !important;
+  }
+
+  /* 그림자·둥근 테두리는 종이에서 의미가 없다 */
+  * {
+    box-shadow: none !important;
+  }
+  a {
+    text-decoration: none !important;
+    color: #000 !important;
+  }
+}
+
+/* 화면에서는 인쇄용 머리글을 숨긴다 */
+.print-only {
+  display: none;
+}

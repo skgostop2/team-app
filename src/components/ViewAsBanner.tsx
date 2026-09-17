@@ -25,7 +25,7 @@ export default function ViewAsBanner({
   basePath: string;
 }) {
   return (
-    <div className="rounded-xl border border-blue-200 bg-blue-50 px-4 py-3 space-y-2">
+    <div className="no-print rounded-xl border border-blue-200 bg-blue-50 px-4 py-3 space-y-2">
       <div className="flex items-start justify-between gap-3 flex-wrap">
         <div className="min-w-0">
           <p className="text-sm font-semibold text-blue-900">

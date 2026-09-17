@@ -24,11 +24,13 @@ export default function AppShell({
 
   return (
     <div className="min-h-dvh bg-gray-50 md:flex">
-      <Sidebar profile={profile} />
+      <div className="no-print contents">
+        <Sidebar profile={profile} />
+      </div>
 
       <div className="flex-1 min-w-0">
         {/* 모바일 상단바 */}
-        <header className="md:hidden sticky top-0 z-20 bg-white border-b border-gray-200 px-4 h-14 flex items-center justify-between">
+        <header className="no-print md:hidden sticky top-0 z-20 bg-white border-b border-gray-200 px-4 h-14 flex items-center justify-between">
           <span className="font-bold text-gray-900">업무관리</span>
           <span className="text-xs text-gray-500">{profile.name}님</span>
         </header>
@@ -36,9 +38,13 @@ export default function AppShell({
         <main className="p-4 md:p-8 pb-20 md:pb-8 max-w-[1400px] mx-auto">{children}</main>
       </div>
 
-      <MobileNav isLead={isManager(profile)} />
+      <div className="no-print contents">
+        <MobileNav isLead={isManager(profile)} />
+      </div>
       <NoticePopup userId={profile.id} />
-      <NotesPanel />
+      <div className="no-print contents">
+        <NotesPanel />
+      </div>
     </div>
   );
 }

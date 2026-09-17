@@ -9,6 +9,8 @@ import type { Profile, TaskWithEffectiveStatus } from "@/lib/types";
 import { isManager, isAssignable, byDisplayOrder } from "@/lib/roles";
 import TaskLedger from "@/components/TaskLedger";
 import ViewAsBanner from "@/components/ViewAsBanner";
+import PrintButton from "@/components/PrintButton";
+import PrintHeader from "@/components/PrintHeader";
 
 export default function DashboardPage() {
   const [me, setMe] = useState<Profile | null>(null);
@@ -155,7 +157,18 @@ export default function DashboardPage() {
         />
       )}
 
-      <div className="flex items-start justify-between gap-3 flex-wrap">
+      <PrintHeader
+        title={
+          viewingAs
+            ? `업무 현황 — ${viewingAs.name}`
+            : canSeeTeam
+              ? "팀 업무 현황"
+              : "내 업무 현황"
+        }
+        subtitle={`전체 ${stats.total}건 · 진행중 ${stats.inProgress}건 · 지연 ${stats.delayed}건 · 달성율 ${stats.completionRate}%`}
+      />
+
+      <div className="no-print flex items-start justify-between gap-3 flex-wrap">
         <div>
           <h1 className="text-xl font-bold text-gray-900">
             {viewingAs
@@ -175,6 +188,8 @@ export default function DashboardPage() {
           </p>
         </div>
 
+        <div className="flex items-center gap-2 flex-wrap">
+        <PrintButton />
         {isLead && !viewingAs && (
           <label className="flex items-center gap-2 text-xs text-gray-600 bg-white border border-gray-200 rounded-lg px-3 py-2 cursor-pointer">
             <input
@@ -187,9 +202,10 @@ export default function DashboardPage() {
             팀 현황을 팀원에게 공개
           </label>
         )}
+        </div>
       </div>
 
-      <div className="grid grid-cols-2 md:grid-cols-4 gap-3">
+      <div className="grid grid-cols-2 md:grid-cols-4 gap-3 print-block">
         <StatCard label={canSeeTeam ? "전체 업무" : "내 업무"} value={stats.total} />
         <StatCard label="진행중" value={stats.inProgress} accent="text-blue-600" />
         <StatCard label="지연" value={stats.delayed} accent="text-red-600" />
@@ -274,7 +290,7 @@ function MemberProgressTable({
   reordering: boolean;
 }) {
   return (
-    <div className="bg-white rounded-xl border border-gray-200">
+    <div className="bg-white rounded-xl border border-gray-200 print-block">
       <div className="flex items-baseline justify-between gap-3 px-4 py-3 border-b border-gray-200 flex-wrap">
         <h2 className="text-base font-bold text-gray-900">팀원별 진척 현황</h2>
         <p className="text-xs text-gray-400">
@@ -282,7 +298,7 @@ function MemberProgressTable({
         </p>
       </div>
 
-      <div className="overflow-x-auto">
+      <div className="overflow-x-auto print-table">
         <table className="w-full text-sm border-collapse min-w-[900px] table-fixed">
           <thead>
             <tr className="bg-blue-50 text-gray-700 text-xs">

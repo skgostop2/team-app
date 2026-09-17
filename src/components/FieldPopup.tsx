@@ -70,7 +70,7 @@ export default function FieldPopup({
 
   return (
     <div
-      className="fixed inset-0 z-50 bg-black/40 flex items-end md:items-center justify-center p-0 md:p-4"
+      className="no-print fixed inset-0 z-50 bg-black/40 flex items-end md:items-center justify-center p-0 md:p-4"
       onClick={(e) => {
         if (e.target === e.currentTarget) tryClose();
       }}

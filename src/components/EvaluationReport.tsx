@@ -199,7 +199,7 @@ export default function EvaluationReport({
         제외됩니다.
       </p>
 
-      <div className="overflow-x-auto">
+      <div className="overflow-x-auto print-table">
         <table className="w-full text-sm border-collapse min-w-[940px] table-fixed">
           <thead>
             <tr className="bg-blue-50 text-gray-700 text-xs">
@@ -569,7 +569,7 @@ function DraftModal({
   }
 
   return (
-    <div className="fixed inset-0 z-40 bg-black/40 flex items-center justify-center p-4">
+    <div className="no-print fixed inset-0 z-40 bg-black/40 flex items-center justify-center p-4">
       <div className="bg-white w-full max-w-2xl rounded-2xl p-6 max-h-[90dvh] flex flex-col">
         <div className="flex items-start justify-between gap-3 mb-1">
           <h2 className="text-lg font-bold text-gray-900">

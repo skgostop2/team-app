@@ -8,12 +8,13 @@ import { createClient } from "@/lib/supabase/client";
 import StatusBadge from "@/components/StatusBadge";
 import FieldPopup from "@/components/FieldPopup";
 import TaskEditModal from "@/components/TaskEditModal";
+import ProgressLogModal from "@/components/ProgressLogModal";
 
 /**
  * 업무 진행 현황 — 메모 프로그램과 같은 대장(臺帳) 양식.
  * 한 건에 한 줄씩, 번호를 붙여 위에서 아래로 계속 쌓인다.
  *
- * NO. | 작성일 | 업무내용 | 진행일정 | 완료일 | 소요일 | 일정대비 | 담당자 | 지시자 | 진행률 | 상태 | 비고 | 이력
+ * NO. | 작성일 | 업무내용 | 진행일정 | 완료일 | 소요일 | 일정대비 | 담당자 | 지시자 | 진행률 | 진행기록 | 상태 | 비고 | 이력
  *
  * 고치는 방법: 칸을 누르면 그 칸만 고치는 작은 창이 표 위에 뜬다.
  * 화면을 옮기지 않으므로 표에서 보던 자리를 잃지 않는다.
@@ -32,6 +33,30 @@ type EditTarget = {
     | "instructor"
     | "note";
 };
+
+/**
+ * PC 표의 칸 폭(px).
+ *
+ * 업무내용은 여기에 없다 — 남는 폭을 전부 받는 칸이라서다.
+ * 칸을 늘리거나 줄일 때는 여기만 고치면 표 최소 폭도 같이 따라간다.
+ */
+const COL = {
+  no: 40,
+  date: 76,
+  due: 76,
+  done: 76,
+  days: 56,
+  diff: 84,
+  assignee: 136,
+  instructor: 80,
+  progress: 96,
+  log: 180,
+  status: 64,
+  note: 100,
+  hist: 44,
+  /** 업무내용이 이 폭보다 좁아지면 글자가 한 자씩 끊긴다 */
+  titleMin: 280,
+} as const;
 
 export default function TaskLedger({
   tasks,
@@ -64,7 +89,26 @@ export default function TaskLedger({
   canEdit?: boolean;
 }) {
   const [edit, setEdit] = useState<EditTarget | null>(null);
+
+  // 나머지 칸 합 + 업무내용 최소 폭 = 표 최소 폭
+  const tableMinWidth =
+    COL.no +
+    COL.date +
+    COL.due +
+    COL.done +
+    COL.days +
+    COL.diff +
+    (showAssignee ? COL.assignee : 0) +
+    COL.instructor +
+    COL.progress +
+    COL.log +
+    COL.status +
+    COL.note +
+    COL.hist +
+    COL.titleMin;
+
   const [detailId, setDetailId] = useState<string | null>(null);
+  const [logTask, setLogTask] = useState<TaskWithEffectiveStatus | null>(null);
 
   const assignables = profiles.filter(isAssignable).sort(byDisplayOrder);
   const unassigned = tasks.filter((t) => !t.assignee_id).length;
@@ -113,6 +157,22 @@ export default function TaskLedger({
         />
       )}
 
+      {logTask && (
+        <ProgressLogModal
+          task={logTask}
+          profiles={profiles}
+          canWrite={
+            canEdit &&
+            (canAssign ||
+              (!!viewerId &&
+                (logTask.assignee_id === viewerId ||
+                  (logTask.deputy_ids ?? []).includes(viewerId))))
+          }
+          onClose={() => setLogTask(null)}
+          onChanged={() => onChanged?.()}
+        />
+      )}
+
       {detailId && (
         <TaskEditModal
           taskId={detailId}
@@ -122,7 +182,7 @@ export default function TaskLedger({
       )}
 
       {/* 폰 — 표는 칸이 좁아 못 쓰므로 한 건씩 위아래로 펼쳐서 보여준다 */}
-      <div className="md:hidden divide-y divide-gray-200">
+      <div className="md:hidden print-hide divide-y divide-gray-200">
         {tasks.map((t, i) => {
           const assignee = profiles.find((p) => p.id === t.assignee_id);
           const deputies = (t.deputy_ids ?? [])
@@ -274,6 +334,30 @@ export default function TaskLedger({
                 </Row>
               </dl>
 
+              <div className="mt-2.5">
+                <dt className="text-xs text-gray-400">
+                  진행기록 {t.update_count ? `(${t.update_count})` : ""}
+                </dt>
+                <button
+                  type="button"
+                  onClick={() => setLogTask(t)}
+                  className="w-full text-left rounded px-1 -mx-1 hover:bg-blue-50 mt-0.5"
+                >
+                  {t.last_update_text ? (
+                    <>
+                      <span className="block text-sm text-gray-700 break-keep line-clamp-2">
+                        {t.last_update_text}
+                      </span>
+                      <span className="block text-[11px] text-gray-400">
+                        {formatShortDate(t.last_update_at)} {t.last_update_by}
+                      </span>
+                    </>
+                  ) : (
+                    <span className="text-sm text-gray-300">＋ 기록 추가</span>
+                  )}
+                </button>
+              </div>
+
               <div className="mt-2">
                 <dt className="text-xs text-gray-400">비고</dt>
                 <Cell
@@ -302,23 +386,49 @@ export default function TaskLedger({
       </div>
 
       {/* PC — 메모 양식 그대로의 표 */}
-      <div className="hidden md:block overflow-x-auto">
-        <table className="w-full text-sm border-collapse min-w-[1100px] table-fixed">
+      <div className="hidden md:block print-show print-table overflow-x-auto">
+        {/*
+          칸 폭은 colgroup 한 곳에서만 정한다.
+          업무내용만 폭을 비워 남는 폭을 전부 받게 하고, 표의 최소 폭은
+          "나머지 칸 합 + 업무내용 최소 폭"으로 잡는다. 이 계산을 빼먹으면
+          업무내용 칸이 0으로 짜부라져 글자가 세로로 한 줄씩 떨어진다.
+        */}
+        <table
+          className="w-full text-sm border-collapse table-fixed"
+          style={{ minWidth: tableMinWidth }}
+        >
+          <colgroup>
+            <col style={{ width: COL.no }} />
+            <col style={{ width: COL.date }} />
+            <col /> {/* 업무내용 — 남는 폭 전부 */}
+            <col style={{ width: COL.due }} />
+            <col style={{ width: COL.done }} />
+            <col style={{ width: COL.days }} />
+            <col style={{ width: COL.diff }} />
+            {showAssignee && <col style={{ width: COL.assignee }} />}
+            <col style={{ width: COL.instructor }} />
+            <col style={{ width: COL.progress }} />
+            <col style={{ width: COL.log }} />
+            <col style={{ width: COL.status }} />
+            <col style={{ width: COL.note }} />
+            <col style={{ width: COL.hist }} />
+          </colgroup>
           <thead>
             <tr className="bg-blue-50 text-gray-700 text-xs">
-              <Th className="w-14 text-center">NO.</Th>
-              <Th className="w-28">작성일</Th>
-              <Th className="w-auto min-w-[300px]">업무내용</Th>
-              <Th className="w-24 text-center">진행일정</Th>
-              <Th className="w-24 text-center">완료일</Th>
-              <Th className="w-20 text-center">소요일</Th>
-              <Th className="w-24 text-center">일정대비</Th>
-              {showAssignee && <Th className="w-44">담당자</Th>}
-              <Th className="w-24">지시자</Th>
-              <Th className="w-28 text-center">진행률</Th>
-              <Th className="w-20 text-center">상태</Th>
-              <Th className="w-32">비고</Th>
-              <Th className="w-16 text-center">이력</Th>
+              <Th className="text-center">NO.</Th>
+              <Th>작성일</Th>
+              <Th>업무내용</Th>
+              <Th className="text-center">진행일정</Th>
+              <Th className="text-center">완료일</Th>
+              <Th className="text-center">소요일</Th>
+              <Th className="text-center">일정대비</Th>
+              {showAssignee && <Th>담당자</Th>}
+              <Th>지시자</Th>
+              <Th className="text-center">진행률</Th>
+              <Th>진행기록</Th>
+              <Th className="text-center">상태</Th>
+              <Th>비고</Th>
+              <Th className="text-center">이력</Th>
             </tr>
           </thead>
           <tbody>
@@ -361,7 +471,7 @@ export default function TaskLedger({
                   <Td className="text-gray-600 whitespace-nowrap">{formatIsoDate(t.created_at)}</Td>
 
                   {/* 업무내용 — 제목과 상세내용이 각각 자기 창으로 열린다 */}
-                  <Td className="min-w-[300px]">
+                  <Td>
                     <Cell
                       enabled={canDirect}
                       onClick={() => setEdit({ task: t, field: "title" })}
@@ -502,6 +612,30 @@ export default function TaskLedger({
                     </Cell>
                   </Td>
 
+                  {/* 진행기록 — 마지막 기록이 보이고, 누르면 전체가 뜬다 */}
+                  <Td className="text-xs">
+                    <button
+                      type="button"
+                      onClick={() => setLogTask(t)}
+                      title="진행기록 보기 / 추가"
+                      className="w-full text-left rounded px-1 -mx-1 hover:bg-blue-50 hover:ring-1 hover:ring-blue-200"
+                    >
+                      {t.last_update_text ? (
+                        <>
+                          <span className="block text-gray-700 line-clamp-2 break-keep">
+                            {t.last_update_text}
+                          </span>
+                          <span className="block text-[10px] text-gray-400 mt-0.5">
+                            {formatShortDate(t.last_update_at)} {t.last_update_by} · 총{" "}
+                            {t.update_count ?? 0}건
+                          </span>
+                        </>
+                      ) : (
+                        <span className="text-gray-300">＋ 기록</span>
+                      )}
+                    </button>
+                  </Td>
+
                   <Td className="text-center">
                     <StatusBadge status={t.effective_status} />
                   </Td>
@@ -535,7 +669,7 @@ export default function TaskLedger({
             {tasks.length === 0 && (
               <tr>
                 <td
-                  colSpan={showAssignee ? 13 : 12}
+                  colSpan={showAssignee ? 14 : 13}
                   className="px-4 py-10 text-center text-gray-400"
                 >
                   {emptyText}

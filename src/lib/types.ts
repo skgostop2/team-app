@@ -53,6 +53,24 @@ export interface TaskWithEffectiveStatus extends Task {
   overdue_days: number;
   /** 기한 내 완료 여부. 완료 전이거나 계획일이 없으면 null */
   on_time: boolean | null;
+  /** 진행기록 건수 */
+  update_count: number | null;
+  /** 마지막 진행기록 */
+  last_update_at: string | null;
+  last_update_text: string | null;
+  last_update_by: string | null;
+}
+
+/** 진행기록 — 업무가 어떻게 되어가는지 그때그때 적어 쌓는 이력. 지워지지 않는다. */
+export interface TaskUpdate {
+  id: string;
+  task_id: string;
+  author_id: string | null;
+  content: string;
+  progress_from: number | null;
+  progress_to: number | null;
+  created_at: string;
+  edited_at: string | null;
 }
 
 export interface TaskHistory {

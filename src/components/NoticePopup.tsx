@@ -61,7 +61,7 @@ export default function NoticePopup({ userId }: { userId: string }) {
   const current = queue[0];
 
   return (
-    <div className="fixed inset-0 z-50 bg-black/50 flex items-center justify-center p-4">
+    <div className="no-print fixed inset-0 z-50 bg-black/50 flex items-center justify-center p-4">
       <div className="bg-white rounded-2xl shadow-xl w-full max-w-md p-6">
         <p className="text-xs font-medium text-blue-600 mb-1">
           공지사항{queue.length > 1 ? ` (${queue.length}건 중 1건)` : ""}

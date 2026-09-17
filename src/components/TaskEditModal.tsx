@@ -19,7 +19,7 @@ export default function TaskEditModal({
 }) {
   return (
     <div
-      className="fixed inset-0 z-40 bg-black/40 flex items-start md:items-center justify-center p-0 md:p-4 overflow-y-auto"
+      className="no-print fixed inset-0 z-40 bg-black/40 flex items-start md:items-center justify-center p-0 md:p-4 overflow-y-auto"
       onClick={(e) => {
         // 바깥을 눌러 닫는다. 창 안을 누른 경우는 닫지 않는다.
         if (e.target === e.currentTarget) onClose();

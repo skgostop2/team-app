@@ -3,6 +3,8 @@ import { createClient } from "@/lib/supabase/server";
 import type { EvaluationCriterion, Profile, TaskWithEffectiveStatus } from "@/lib/types";
 import { isAssignable, byDisplayOrder } from "@/lib/roles";
 import EvaluationReport from "@/components/EvaluationReport";
+import PrintButton from "@/components/PrintButton";
+import PrintHeader from "@/components/PrintHeader";
 
 export default async function EvaluationPage() {
   const supabase = await createClient();
@@ -38,11 +40,19 @@ export default async function EvaluationPage() {
 
   return (
     <div className="space-y-4">
-      <div>
-        <h1 className="text-xl font-bold text-gray-900">고과평가</h1>
-        <p className="text-sm text-gray-500 mt-0.5">
-          팀장만 볼 수 있는 화면입니다. 실적 수치는 업무 기록에서 자동으로 계산됩니다.
-        </p>
+      <PrintHeader
+        title="고과평가 참고자료 — 팀원별 업무 실적"
+        subtitle={`${me.team_name ?? ""} · 작성 ${me.name} · 업무 기록에서 자동 산출된 수치입니다`}
+      />
+
+      <div className="no-print flex items-start justify-between gap-3 flex-wrap">
+        <div>
+          <h1 className="text-xl font-bold text-gray-900">고과평가</h1>
+          <p className="text-sm text-gray-500 mt-0.5">
+            팀장만 볼 수 있는 화면입니다. 실적 수치는 업무 기록에서 자동으로 계산됩니다.
+          </p>
+        </div>
+        <PrintButton />
       </div>
 
       <EvaluationReport
@@ -51,7 +61,7 @@ export default async function EvaluationPage() {
         criteria={(criteria ?? []) as EvaluationCriterion[]}
       />
 
-      <div className="bg-white rounded-xl border border-dashed border-gray-300 p-6">
+      <div className="no-print bg-white rounded-xl border border-dashed border-gray-300 p-6">
         <p className="text-sm font-medium text-gray-600 mb-1">2차 개발 예정</p>
         <p className="text-sm text-gray-400 leading-relaxed">
           배점·가중치를 반영한 자동 점수 계산, 정성평가 항목, 평가이력 관리는 2차 개발에서
