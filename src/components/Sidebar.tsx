@@ -10,6 +10,7 @@ const NAV = [
   { href: "/dashboard", leadLabel: "전체 대시보드", memberLabel: "내 현황", access: "all" },
   { href: "/tasks", leadLabel: "업무관리", memberLabel: "내 업무", access: "all" },
   { href: "/notices", leadLabel: "공지사항", memberLabel: "공지사항", access: "all" },
+  { href: "/notes", leadLabel: "내 메모장", memberLabel: "내 메모장", access: "all" },
   { href: "/team", leadLabel: "팀원관리", memberLabel: "팀원관리", access: "manager" },
   { href: "/evaluation", leadLabel: "고과평가", memberLabel: "고과평가", access: "teamLead" },
 ] as const;

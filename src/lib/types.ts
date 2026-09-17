@@ -125,3 +125,18 @@ export interface EvaluationCriterion {
   sort_order: number;
   enabled: boolean;
 }
+
+/** 개인 메모 — 본인만 볼 수 있다 (팀장·실장도 못 본다) */
+export interface PersonalNote {
+  id: string;
+  user_id: string;
+  title: string;
+  content: string;
+  pinned: boolean;
+  /** 특정 업무에 붙여둔 메모면 그 업무 id */
+  task_id: string | null;
+  /** 휴지통에 들어간 시각. null 이면 보통 메모 */
+  deleted_at: string | null;
+  created_at: string;
+  updated_at: string;
+}

@@ -7,6 +7,7 @@ import { isManager } from "@/lib/roles";
 import Sidebar from "./Sidebar";
 import MobileNav from "./MobileNav";
 import NoticePopup from "./NoticePopup";
+import NotesPanel from "./NotesPanel";
 
 export default function AppShell({
   profile,
@@ -37,6 +38,7 @@ export default function AppShell({
 
       <MobileNav isLead={isManager(profile)} />
       <NoticePopup userId={profile.id} />
+      <NotesPanel />
     </div>
   );
 }
