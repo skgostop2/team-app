@@ -9,6 +9,24 @@ import StatusBadge from "@/components/StatusBadge";
 import { isManager, isAssignable } from "@/lib/roles";
 import { useUnsavedChanges } from "@/lib/useUnsavedChanges";
 
+/**
+ * 날짜 문자열(YYYY-MM-DD)을 그 날 정오 기준 ISO 로 바꾼다.
+ * 자정으로 저장하면 시간대 차이로 완료일이 하루 밀려 보이는 일이 생긴다.
+ */
+function toIsoAtNoon(dateStr: string): string | null {
+  if (!/^\d{4}-\d{2}-\d{2}$/.test(dateStr)) return null;
+  const d = new Date(`${dateStr}T12:00:00`);
+  if (Number.isNaN(d.getTime())) return null;
+  return d.toISOString();
+}
+
+function todayStr(): string {
+  const d = new Date();
+  return `${d.getFullYear()}-${String(d.getMonth() + 1).padStart(2, "0")}-${String(
+    d.getDate()
+  ).padStart(2, "0")}`;
+}
+
 const HISTORY_LABELS: Record<string, string> = {
   created: "업무 생성",
   title: "제목 변경",
@@ -17,12 +35,24 @@ const HISTORY_LABELS: Record<string, string> = {
   deputy_ids: "참여자 변경",
   instructor: "지시자 변경",
   note: "비고 변경",
+  completed_at: "완료일 변경",
   due_date: "마감일 변경",
   progress: "진행률 변경",
   status: "상태 변경",
 };
 
-export default function TaskDetail({ taskId }: { taskId: string }) {
+export default function TaskDetail({
+  taskId,
+  inModal = false,
+  onClose,
+  onChanged,
+}: {
+  taskId: string;
+  /** 표 위에 창으로 띄운 경우 — 화면 이동 대신 창을 닫는다 */
+  inModal?: boolean;
+  onClose?: () => void;
+  onChanged?: () => void;
+}) {
   const router = useRouter();
   const [me, setMe] = useState<Profile | null>(null);
   const [task, setTask] = useState<TaskWithEffectiveStatus | null>(null);
@@ -39,6 +69,8 @@ export default function TaskDetail({ taskId }: { taskId: string }) {
   const [dueDate, setDueDate] = useState("");
   const [instructor, setInstructor] = useState("");
   const [note, setNote] = useState("");
+  // 완료일 — 실제로 끝낸 날을 직접 넣는다 (자동으로 오늘 날짜가 찍히면 실적 수치가 틀어진다)
+  const [doneDate, setDoneDate] = useState("");
 
   // 작성 중인 내용이 있으면 화면을 다시 불러와도 덮어쓰지 않는다
   const dirtyRef = useRef(false);
@@ -88,6 +120,7 @@ export default function TaskDetail({ taskId }: { taskId: string }) {
         setDueDate(tt.due_date ?? "");
         setInstructor(tt.instructor ?? "");
         setNote(tt.note ?? "");
+        setDoneDate(tt.completed_at ? tt.completed_at.slice(0, 10) : "");
       }
     }
     setHistory((h ?? []) as TaskHistory[]);
@@ -124,6 +157,7 @@ export default function TaskDetail({ taskId }: { taskId: string }) {
     }
     clearDirty();
     await load();
+    onChanged?.();
     setSaving(false);
   }
 
@@ -143,6 +177,7 @@ export default function TaskDetail({ taskId }: { taskId: string }) {
     }
     clearDirty();
     await load();
+    onChanged?.();
     setSaving(false);
   }
 
@@ -151,6 +186,7 @@ export default function TaskDetail({ taskId }: { taskId: string }) {
     const supabase = createClient();
     await supabase.from("tasks").update({ confirmed_at: new Date().toISOString() }).eq("id", taskId);
     await load();
+    onChanged?.();
     setSaving(false);
   }
 
@@ -160,6 +196,73 @@ export default function TaskDetail({ taskId }: { taskId: string }) {
     const status = progress >= 100 ? "완료" : progress > 0 ? "진행중" : "대기";
     await supabase.from("tasks").update({ progress, status }).eq("id", taskId);
     await load();
+    onChanged?.();
+    setSaving(false);
+  }
+
+  /** 완료 처리 — 실제로 끝낸 날을 함께 저장한다 */
+  async function completeWith(dateStr: string) {
+    setSaving(true);
+    setError(null);
+
+    const iso = toIsoAtNoon(dateStr);
+    if (!iso) {
+      setError("완료일을 올바르게 입력해주세요.");
+      setSaving(false);
+      return;
+    }
+    if (task && iso < task.created_at) {
+      setError("완료일이 지시일보다 앞설 수 없습니다.");
+      setSaving(false);
+      return;
+    }
+
+    const supabase = createClient();
+    const { error } = await supabase
+      .from("tasks")
+      .update({ status: "완료", progress: 100, completed_at: iso })
+      .eq("id", taskId);
+
+    if (error) {
+      setError(error.message);
+      setSaving(false);
+      return;
+    }
+    await load();
+    onChanged?.();
+    setSaving(false);
+  }
+
+  /** 이미 완료된 업무의 완료일만 고친다 */
+  async function saveDoneDate() {
+    setSaving(true);
+    setError(null);
+
+    const iso = toIsoAtNoon(doneDate);
+    if (!iso) {
+      setError("완료일을 올바르게 입력해주세요.");
+      setSaving(false);
+      return;
+    }
+    if (task && iso < task.created_at) {
+      setError("완료일이 지시일보다 앞설 수 없습니다.");
+      setSaving(false);
+      return;
+    }
+
+    const supabase = createClient();
+    const { error } = await supabase
+      .from("tasks")
+      .update({ completed_at: iso })
+      .eq("id", taskId);
+
+    if (error) {
+      setError(error.message);
+      setSaving(false);
+      return;
+    }
+    await load();
+    onChanged?.();
     setSaving(false);
   }
 
@@ -168,6 +271,7 @@ export default function TaskDetail({ taskId }: { taskId: string }) {
     const supabase = createClient();
     await supabase.from("tasks").update({ status: "진행중", progress: 90 }).eq("id", taskId);
     await load();
+    onChanged?.();
     setSaving(false);
   }
 
@@ -176,6 +280,11 @@ export default function TaskDetail({ taskId }: { taskId: string }) {
     setSaving(true);
     const supabase = createClient();
     await supabase.from("tasks").delete().eq("id", taskId);
+    if (inModal) {
+      onChanged?.();
+      onClose?.();
+      return;
+    }
     router.push("/tasks");
   }
 
@@ -185,10 +294,23 @@ export default function TaskDetail({ taskId }: { taskId: string }) {
   const canEditProgress = isAssignee || isLead;
 
   return (
-    <div className="max-w-2xl space-y-6">
-      <button onClick={() => router.back()} className="text-sm text-gray-500 hover:text-gray-800">
-        ← 목록으로
-      </button>
+    <div className={inModal ? "space-y-5" : "max-w-2xl space-y-6"}>
+      {inModal ? (
+        <div className="flex items-center justify-between gap-2">
+          <p className="text-sm font-semibold text-gray-700">업무 수정</p>
+          <button
+            onClick={() => onClose?.()}
+            className="text-gray-400 hover:text-gray-700 text-2xl leading-none px-1"
+            title="닫기 (표로 돌아가기)"
+          >
+            ×
+          </button>
+        </div>
+      ) : (
+        <button onClick={() => router.back()} className="text-sm text-gray-500 hover:text-gray-800">
+          ← 목록으로
+        </button>
+      )}
 
       <div className="bg-white rounded-xl border border-gray-200 p-5 space-y-4">
         <div className="flex items-center gap-2 flex-wrap">
@@ -338,6 +460,46 @@ export default function TaskDetail({ taskId }: { taskId: string }) {
           </div>
         </div>
 
+        {canEditProgress && (
+          <div className="rounded-lg border border-gray-200 p-3">
+            <label className="block text-xs font-medium text-gray-500 mb-1">
+              완료일 {task.status !== "완료" && "(실제로 끝낸 날)"}
+            </label>
+            <div className="flex items-center gap-2 flex-wrap">
+              <input
+                type="date"
+                value={doneDate || todayStr()}
+                max={todayStr()}
+                min={task.created_at.slice(0, 10)}
+                onChange={(e) => setDoneDate(e.target.value)}
+                className="rounded-lg border border-gray-300 px-3 py-2 text-base"
+              />
+              {task.status === "완료" ? (
+                <button
+                  onClick={saveDoneDate}
+                  disabled={saving || doneDate === (task.completed_at ?? "").slice(0, 10)}
+                  className="text-sm px-4 py-2 rounded-lg bg-gray-900 text-white font-medium hover:bg-black disabled:opacity-50"
+                >
+                  완료일 저장
+                </button>
+              ) : (
+                <button
+                  onClick={() => completeWith(doneDate || todayStr())}
+                  disabled={saving}
+                  className="text-sm px-4 py-2 rounded-lg bg-emerald-600 text-white font-medium hover:bg-emerald-700 disabled:opacity-50"
+                >
+                  이 날짜로 완료처리
+                </button>
+              )}
+            </div>
+            <p className="text-xs text-gray-400 mt-1.5">
+              {task.status === "완료"
+                ? "날짜가 틀렸으면 고쳐서 저장하세요. 소요일과 일정 준수 수치에 바로 반영됩니다."
+                : "며칠 전에 끝낸 일이면 그 날짜로 바꿔서 완료처리하세요. 오늘로 찍으면 소요일이 실제보다 길게 잡힙니다."}
+            </p>
+          </div>
+        )}
+
         <div className="flex flex-wrap gap-2 pt-2 border-t border-gray-100">
           {task.is_new && isAssignee && (
             <button
@@ -346,15 +508,6 @@ export default function TaskDetail({ taskId }: { taskId: string }) {
               className="text-sm px-4 py-2 rounded-lg bg-gray-900 text-white font-medium hover:bg-black disabled:opacity-50"
             >
               확인했습니다
-            </button>
-          )}
-          {canEditProgress && task.status !== "완료" && (
-            <button
-              onClick={() => updateProgress(100)}
-              disabled={saving}
-              className="text-sm px-4 py-2 rounded-lg bg-emerald-600 text-white font-medium hover:bg-emerald-700 disabled:opacity-50"
-            >
-              완료처리
             </button>
           )}
           {canEditProgress && task.status === "완료" && (
@@ -378,7 +531,19 @@ export default function TaskDetail({ taskId }: { taskId: string }) {
         </div>
 
         {task.completed_at && (
-          <p className="text-xs text-gray-400">완료일: {formatDateTime(task.completed_at)}</p>
+          <p className="text-xs text-gray-400">
+            완료일: {formatDate(task.completed_at)} · 소요 {task.elapsed_days}일
+            {task.schedule_diff_days != null && (
+              <>
+                {" · "}
+                {task.schedule_diff_days > 0
+                  ? `계획보다 ${task.schedule_diff_days}일 초과`
+                  : task.schedule_diff_days < 0
+                    ? `계획보다 ${-task.schedule_diff_days}일 단축`
+                    : "계획대로"}
+              </>
+            )}
+          </p>
         )}
       </div>
 

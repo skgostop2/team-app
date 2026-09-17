@@ -2,11 +2,13 @@
 
 import { useEffect, useMemo, useState } from "react";
 import Link from "next/link";
+import { useSearchParams } from "next/navigation";
 import { createClient } from "@/lib/supabase/client";
 import { formatElapsed, isLongInactive, formatDate, cn } from "@/lib/utils";
 import type { Profile, TaskWithEffectiveStatus } from "@/lib/types";
 import { isManager, isAssignable, byDisplayOrder } from "@/lib/roles";
 import TaskLedger from "@/components/TaskLedger";
+import ViewAsBanner from "@/components/ViewAsBanner";
 
 export default function DashboardPage() {
   const [me, setMe] = useState<Profile | null>(null);
@@ -15,6 +17,10 @@ export default function DashboardPage() {
   const [shared, setShared] = useState(false);
   const [loading, setLoading] = useState(true);
   const [togglingShare, setTogglingShare] = useState(false);
+
+  // 팀장·실장이 특정 팀원의 화면을 그대로 들여다보는 모드 (?as=<id>)
+  const searchParams = useSearchParams();
+  const asId = searchParams.get("as");
 
   async function load() {
     const supabase = createClient();
@@ -47,14 +53,19 @@ export default function DashboardPage() {
   }, []);
 
   const isLead = isManager(me);
-  // 팀장이 공개를 켜두면 팀원도 팀 전체 현황을 본다
-  const canSeeTeam = isLead || shared;
+  const viewingAs = isLead && asId ? profiles.find((p) => p.id === asId) : undefined;
+
+  // 팀장이 공개를 켜두면 팀원도 팀 전체 현황을 본다.
+  // 팀원 화면 보기 중이면 그 팀원 기준으로 판단한다.
+  const canSeeTeam = viewingAs ? shared : isLead || shared;
 
   // 체크된 사람은 모두 그 업무의 담당자다 (여러 명 체크 가능)
   const isOn = (t: TaskWithEffectiveStatus, uid?: string) =>
     !!uid && (t.assignee_id === uid || (t.deputy_ids ?? []).includes(uid));
 
-  const myTasks = useMemo(() => tasks.filter((t) => isOn(t, me?.id)), [tasks, me?.id]);
+  // 화면 보기 중이면 그 팀원 업무를 "내 업무"로 삼는다
+  const subjectId = viewingAs ? viewingAs.id : me?.id;
+  const myTasks = useMemo(() => tasks.filter((t) => isOn(t, subjectId)), [tasks, subjectId]);
   const scopedTasks = canSeeTeam ? tasks : myTasks;
 
   const stats = useMemo(() => summarize(scopedTasks), [scopedTasks]);
@@ -83,6 +94,8 @@ export default function DashboardPage() {
         const dueSoon = mine.filter((t) => isDueSoon(t));
         // 업무를 받고 아직 "확인했습니다"를 누르지 않은 건 — 안 챙기고 있는지 보는 신호
         const unconfirmed = mine.filter((t) => t.is_new);
+        // 본인이 스스로 올린 업무 건수
+        const selfAdded = mine.filter((t) => t.source === "팀원추가" && t.created_by === p.id);
         // 업무 과중도: 진행중 + 지연×2 + 마감임박×1.5
         const workload = active.length + delayed.length * 2 + dueSoon.length * 1.5;
         return {
@@ -92,6 +105,7 @@ export default function DashboardPage() {
           delayed: delayed.length,
           dueSoon: dueSoon.length,
           unconfirmed: unconfirmed.length,
+          selfAdded: selfAdded.length,
           active: active.length,
           avgProgress: s.avgProgress,
           completionRate: s.completionRate,
@@ -128,23 +142,40 @@ export default function DashboardPage() {
     return <p className="text-sm text-gray-400">불러오는 중...</p>;
   }
 
+  const unconfirmedForSubject = myTasks.filter((t) => t.is_new).length;
+
   return (
     <div className="space-y-6">
+      {viewingAs && (
+        <ViewAsBanner
+          current={viewingAs}
+          members={byMember.map((m) => m.profile)}
+          unconfirmed={unconfirmedForSubject}
+          basePath="/dashboard"
+        />
+      )}
+
       <div className="flex items-start justify-between gap-3 flex-wrap">
         <div>
           <h1 className="text-xl font-bold text-gray-900">
-            {canSeeTeam ? "전체 팀 대시보드" : "내 업무 현황"}
+            {viewingAs
+              ? `${viewingAs.name} 님 화면`
+              : canSeeTeam
+                ? "전체 팀 대시보드"
+                : "내 업무 현황"}
           </h1>
           <p className="text-sm text-gray-500 mt-0.5">
-            {isLead
-              ? "팀원별 진척율과 달성율을 한눈에 확인합니다."
-              : canSeeTeam
-                ? "팀 전체 현황과 내가 맡은 업무를 함께 봅니다."
-                : "내가 맡은 업무의 진행 상황입니다."}
+            {viewingAs
+              ? "이 팀원에게 보이는 그대로입니다."
+              : isLead
+                ? "팀원별 진척율과 달성율을 한눈에 확인합니다."
+                : canSeeTeam
+                  ? "팀 전체 현황과 내가 맡은 업무를 함께 봅니다."
+                  : "내가 맡은 업무의 진행 상황입니다."}
           </p>
         </div>
 
-        {isLead && (
+        {isLead && !viewingAs && (
           <label className="flex items-center gap-2 text-xs text-gray-600 bg-white border border-gray-200 rounded-lg px-3 py-2 cursor-pointer">
             <input
               type="checkbox"
@@ -169,10 +200,12 @@ export default function DashboardPage() {
         />
       </div>
 
-      {!isLead && (
+      {(!isLead || viewingAs) && (
         <div className="bg-white rounded-xl border border-gray-200 p-4">
           <div className="flex items-center justify-between mb-2">
-            <p className="text-sm font-semibold text-gray-700">내 평균 진척율</p>
+            <p className="text-sm font-semibold text-gray-700">
+              {viewingAs ? `${viewingAs.name} 님 평균 진척율` : "내 평균 진척율"}
+            </p>
             <span className="text-sm font-bold text-gray-900">{myStats.avgProgress}%</span>
           </div>
           <ProgressBar value={myStats.avgProgress} />
@@ -183,7 +216,7 @@ export default function DashboardPage() {
         </div>
       )}
 
-      {isLead && (
+      {isLead && !viewingAs && (
         <MemberProgressTable
           rows={byMember}
           maxWorkload={maxWorkload}
@@ -195,11 +228,19 @@ export default function DashboardPage() {
       <TaskLedger
         tasks={scopedTasks}
         profiles={profiles}
-        title={canSeeTeam ? "업무 진행 현황 (팀 전체)" : "업무 진행 현황 (내 업무)"}
+        title={
+          viewingAs
+            ? `업무 진행 현황 (${viewingAs.name} 님이 보는 화면)`
+            : canSeeTeam
+              ? "업무 진행 현황 (팀 전체)"
+              : "업무 진행 현황 (내 업무)"
+        }
         showAssignee={canSeeTeam}
-        canAssign={isLead}
+        canAssign={isLead && !viewingAs}
         onAssigned={load}
-        viewerId={me?.id}
+        viewerId={subjectId}
+        canEdit={!viewingAs}
+        onChanged={load}
         emptyText={canSeeTeam ? "등록된 업무가 없습니다." : "배정된 업무가 없습니다."}
       />
     </div>
@@ -213,6 +254,7 @@ type MemberRow = {
   delayed: number;
   dueSoon: number;
   unconfirmed: number;
+  selfAdded: number;
   active: number;
   avgProgress: number;
   completionRate: number;
@@ -236,7 +278,7 @@ function MemberProgressTable({
       <div className="flex items-baseline justify-between gap-3 px-4 py-3 border-b border-gray-200 flex-wrap">
         <h2 className="text-base font-bold text-gray-900">팀원별 진척 현황</h2>
         <p className="text-xs text-gray-400">
-          ▲▼ 로 순서를 바꾸면 담당자 선택 목록에도 같은 순서로 적용됩니다
+          ▲▼ 순서 변경 · &quot;추가&quot;는 팀원이 스스로 올린 업무 건수
         </p>
       </div>
 
@@ -254,6 +296,7 @@ function MemberProgressTable({
               <MTh className="w-16 text-center">지연</MTh>
               <MTh className="w-20 text-center">마감임박</MTh>
               <MTh className="w-16 text-center">미확인</MTh>
+              <MTh className="w-16 text-center">추가</MTh>
               <MTh className="w-24 text-center">화면</MTh>
             </tr>
           </thead>
@@ -359,6 +402,21 @@ function MemberProgressTable({
                     {m.unconfirmed}
                   </MTd>
 
+                  {/* 본인이 스스로 올린 업무 — 누르면 그 팀원 화면에서 확인 */}
+                  <MTd className="text-center">
+                    {m.selfAdded > 0 ? (
+                      <Link
+                        href={`/tasks?as=${m.profile.id}`}
+                        className="text-blue-700 font-semibold underline underline-offset-2"
+                        title="이 팀원이 추가한 업무 보기"
+                      >
+                        {m.selfAdded}
+                      </Link>
+                    ) : (
+                      <span className="text-gray-400">0</span>
+                    )}
+                  </MTd>
+
                   <MTd className="text-center">
                     <Link
                       href={`/tasks?as=${m.profile.id}`}
@@ -373,7 +431,7 @@ function MemberProgressTable({
 
             {rows.length === 0 && (
               <tr>
-                <td colSpan={11} className="px-4 py-10 text-center text-gray-400">
+                <td colSpan={12} className="px-4 py-10 text-center text-gray-400">
                   등록된 팀원이 없습니다.
                 </td>
               </tr>

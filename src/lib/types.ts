@@ -30,6 +30,8 @@ export interface Task {
   note: string | null;
   /** 참여자 (담당 1명 + 참여자 여러 명) */
   deputy_ids: string[];
+  /** 지시 = 팀장·실장이 지시한 업무, 팀원추가 = 팀원이 스스로 올린 업무 */
+  source: "지시" | "팀원추가";
   start_date: string | null;
   due_date: string | null;
   progress: number;

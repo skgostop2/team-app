@@ -7,6 +7,7 @@ import { createClient } from "@/lib/supabase/client";
 import type { Profile, TaskAssigneeLog, TaskWithEffectiveStatus } from "@/lib/types";
 import { isManager, isAssignable } from "@/lib/roles";
 import TaskLedger from "@/components/TaskLedger";
+import ViewAsBanner from "@/components/ViewAsBanner";
 import NewTaskModal from "@/components/NewTaskModal";
 
 export default function TasksPage() {
@@ -15,6 +16,7 @@ export default function TasksPage() {
   const [profiles, setProfiles] = useState<Profile[]>([]);
   const [showAll, setShowAll] = useState(false);
   const [hideDone, setHideDone] = useState(false);
+  const [onlyMemberAdded, setOnlyMemberAdded] = useState(false);
   const [showNewModal, setShowNewModal] = useState(false);
   const [loading, setLoading] = useState(true);
   const [handedOverIds, setHandedOverIds] = useState<Set<string>>(new Set());
@@ -72,12 +74,20 @@ export default function TasksPage() {
     let list = isLead
       ? showAll
         ? tasks
-        : tasks.filter((t) => mine(t) || !t.assignee_id)
+        : // 내 업무 + 미지정 + 팀원이 스스로 올린 업무 (팀장이 놓치지 않게)
+          tasks.filter((t) => mine(t) || !t.assignee_id || t.source === "팀원추가")
       : // RLS 가 이미 "내 업무 + 참여 + 인계한 업무"만 내려주므로 그대로 보여준다
         tasks;
     if (hideDone) list = list.filter((t) => t.effective_status !== "완료");
+    if (onlyMemberAdded) list = list.filter((t) => t.source === "팀원추가");
     return list;
-  }, [tasks, isLead, showAll, hideDone, me?.id]);
+  }, [tasks, isLead, showAll, hideDone, onlyMemberAdded, me?.id, viewingAs]);
+
+  // 팀원이 스스로 올린 업무가 몇 건인지 (팀장이 바로 알아볼 수 있게)
+  const memberAddedCount = useMemo(
+    () => tasks.filter((t) => t.source === "팀원추가").length,
+    [tasks]
+  );
 
   if (loading) return <p className="text-sm text-gray-400">불러오는 중...</p>;
 
@@ -86,25 +96,12 @@ export default function TasksPage() {
   return (
     <div className="space-y-4">
       {viewingAs && (
-        <div className="rounded-xl border border-blue-200 bg-blue-50 px-4 py-3 flex items-start justify-between gap-3 flex-wrap">
-          <div>
-            <p className="text-sm font-semibold text-blue-900">
-              {viewingAs.name} 님 화면으로 보는 중
-            </p>
-            <p className="text-xs text-blue-700 mt-0.5">
-              이 팀원에게 보이는 그대로입니다. 여기서는 내용을 바꿀 수 없습니다.
-              {unconfirmed > 0 && (
-                <span className="font-semibold"> · 아직 확인하지 않은 업무 {unconfirmed}건</span>
-              )}
-            </p>
-          </div>
-          <Link
-            href="/tasks"
-            className="text-xs px-3 py-2 rounded-lg bg-white border border-blue-300 text-blue-700 font-medium hover:bg-blue-100"
-          >
-            내 화면으로 돌아가기
-          </Link>
-        </div>
+        <ViewAsBanner
+          current={viewingAs}
+          members={profiles.filter(isAssignable)}
+          unconfirmed={unconfirmed}
+          basePath="/tasks"
+        />
       )}
 
       <div className="flex items-start justify-between gap-3 flex-wrap">
@@ -130,6 +127,17 @@ export default function TasksPage() {
             />
             완료 숨기기
           </label>
+          {isLead && !viewingAs && memberAddedCount > 0 && (
+            <label className="flex items-center gap-1.5 text-xs text-blue-700 border border-blue-300 bg-blue-50 rounded-lg px-3 py-2 cursor-pointer">
+              <input
+                type="checkbox"
+                checked={onlyMemberAdded}
+                onChange={(e) => setOnlyMemberAdded(e.target.checked)}
+                className="w-3.5 h-3.5"
+              />
+              팀원추가분만 ({memberAddedCount})
+            </label>
+          )}
           {isLead && !viewingAs && (
             <button
               onClick={() => setShowAll((v) => !v)}
@@ -138,12 +146,12 @@ export default function TasksPage() {
               {showAll ? "내 업무만" : "전체 보기"}
             </button>
           )}
-          {isLead && !viewingAs && (
+          {!viewingAs && (
             <button
               onClick={() => setShowNewModal(true)}
               className="text-xs px-3 py-2 rounded-lg bg-blue-600 text-white font-medium hover:bg-blue-700"
             >
-              + 새 업무 지시
+              {isLead ? "+ 새 업무 지시" : "+ 내 업무 추가"}
             </button>
           )}
         </div>
@@ -164,6 +172,8 @@ export default function TasksPage() {
         onAssigned={load}
         viewerId={viewingAs ? viewingAs.id : me?.id}
         handedOverIds={viewingAs ? undefined : handedOverIds}
+        canEdit={!viewingAs}
+        onChanged={load}
         emptyText="표시할 업무가 없습니다."
       />
 
@@ -171,6 +181,8 @@ export default function TasksPage() {
         <NewTaskModal
           profiles={profiles.filter(isAssignable)}
           defaultInstructor={me?.name ?? ""}
+          selfMode={!isLead}
+          selfId={me?.id}
           onClose={() => setShowNewModal(false)}
           onCreated={() => {
             setShowNewModal(false);

@@ -8,17 +8,22 @@ import { confirmDiscard, useUnsavedChanges } from "@/lib/useUnsavedChanges";
 export default function NewTaskModal({
   profiles,
   defaultInstructor = "",
+  /** 팀원이 자기 업무를 스스로 추가하는 모드 — 담당자는 본인으로 고정된다 */
+  selfMode = false,
+  selfId,
   onClose,
   onCreated,
 }: {
   profiles: Profile[];
   defaultInstructor?: string;
+  selfMode?: boolean;
+  selfId?: string;
   onClose: () => void;
   onCreated: () => void;
 }) {
   const [title, setTitle] = useState("");
   const [description, setDescription] = useState("");
-  const [assigneeId, setAssigneeId] = useState("");
+  const [assigneeId, setAssigneeId] = useState(selfMode ? (selfId ?? "") : "");
   const [instructor, setInstructor] = useState(defaultInstructor);
   const [note, setNote] = useState("");
   const [dueDate, setDueDate] = useState("");
@@ -77,7 +82,14 @@ export default function NewTaskModal({
   return (
     <div className="fixed inset-0 z-40 bg-black/40 flex items-end sm:items-center justify-center p-0 sm:p-4">
       <div className="bg-white w-full sm:max-w-md rounded-t-2xl sm:rounded-2xl p-6 max-h-[90dvh] overflow-y-auto">
-        <h2 className="text-lg font-bold text-gray-900 mb-4">새 업무 지시</h2>
+        <h2 className="text-lg font-bold text-gray-900 mb-1">
+          {selfMode ? "내 업무 추가" : "새 업무 지시"}
+        </h2>
+        <p className="text-xs text-gray-500 mb-4">
+          {selfMode
+            ? "내가 챙기는 일을 직접 올립니다. 팀장 목록에는 \"팀원추가\"로 표시됩니다."
+            : "담당자를 정하지 않고 등록해도 됩니다."}
+        </p>
         <form onSubmit={handleSubmit} className="space-y-4">
           <div>
             <label className="block text-sm font-medium text-gray-700 mb-1">업무 제목</label>
@@ -97,6 +109,14 @@ export default function NewTaskModal({
               className="w-full rounded-lg border border-gray-300 px-3 py-2.5 text-base focus:outline-none focus:ring-2 focus:ring-blue-500"
             />
           </div>
+          {selfMode ? (
+            <div className="rounded-lg bg-gray-50 border border-gray-200 px-3 py-2.5">
+              <p className="text-xs text-gray-500">담당자</p>
+              <p className="text-sm font-medium text-gray-800">
+                {profiles.find((p) => p.id === selfId)?.name ?? "본인"} (나)
+              </p>
+            </div>
+          ) : (
           <div>
             <label className="block text-sm font-medium text-gray-700 mb-1">담당자</label>
             <select
@@ -116,6 +136,8 @@ export default function NewTaskModal({
               있습니다.
             </p>
           </div>
+          )}
+          {!selfMode && (
           <div>
             <label className="block text-sm font-medium text-gray-700 mb-1">지시자</label>
             <input
@@ -128,6 +150,7 @@ export default function NewTaskModal({
               시스템에 계정이 없는 분도 그대로 적으시면 됩니다.
             </p>
           </div>
+          )}
           <div>
             <label className="block text-sm font-medium text-gray-700 mb-1">진행일정 (마감일)</label>
             <input
@@ -162,7 +185,7 @@ export default function NewTaskModal({
               disabled={saving}
               className="flex-1 rounded-lg bg-blue-600 text-white py-2.5 font-medium hover:bg-blue-700 disabled:opacity-50"
             >
-              {saving ? "등록 중..." : "등록"}
+              {saving ? "등록 중..." : selfMode ? "추가" : "등록"}
             </button>
           </div>
         </form>
