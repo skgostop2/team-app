@@ -3,6 +3,7 @@
 import { useMemo, useState } from "react";
 import { createClient } from "@/lib/supabase/client";
 import type { Profile } from "@/lib/types";
+import Link from "next/link";
 import { parseQuickLines, toQuickInsert } from "@/lib/quickAdd";
 
 /**
@@ -37,6 +38,7 @@ export default function QuickAssignForm({
   const [saving, setSaving] = useState(false);
   const [error, setError] = useState<string | null>(null);
   const [warn, setWarn] = useState<string | null>(null);
+  const [saved, setSaved] = useState<number | null>(null);
 
   const memberList = useMemo(() => members.map((m) => ({ id: m.id, name: m.name })), [members]);
 
@@ -58,41 +60,71 @@ export default function QuickAssignForm({
     setSaving(true);
     setError(null);
     setWarn(null);
-    const supabase = createClient();
+    setSaved(null);
 
-    // 지시 원문을 먼저 남긴다. 원문 보관이 안 돼도 업무 등록은 진행한다.
-    let batchId: string | null = null;
-    const { data: batch, error: batchErr } = await supabase
-      .from("assign_batches")
-      .insert({ content: text, created_by: createdBy, task_count: toAdd.length })
-      .select("id")
-      .single();
-    if (batchErr) setWarn(`지시 원문 보관은 실패했습니다 (${batchErr.message}). 업무는 등록합니다.`);
-    else batchId = (batch as { id: string }).id;
+    // 무슨 일이 생겨도 버튼이 "등록 중..."에 묶여 죽지 않도록 통째로 감싼다.
+    // 전에 이 보호가 없어서, 실패했는데 화면이 아무 말도 안 하고 버튼만 안 먹었다.
+    try {
+      const supabase = createClient();
 
-    const payload = toAdd.map((r) => ({
-      ...toQuickInsert(r, createdBy, {
-        instructor: instructor.trim() || null,
-        dueDate: dueDate || null,
-      }),
-      ...(batchId ? { batch_id: batchId } : {}),
-    }));
+      // 지시 원문을 먼저 남긴다. 원문 보관이 안 돼도 업무 등록은 진행한다.
+      let batchId: string | null = null;
+      const { data: batch, error: batchErr } = await supabase
+        .from("assign_batches")
+        .insert({ content: text, created_by: createdBy, task_count: toAdd.length })
+        .select("id")
+        .single();
+      if (batchErr)
+        setWarn(`지시 원문 보관은 실패했습니다 (${batchErr.message}). 업무는 등록합니다.`);
+      else batchId = (batch as { id: string }).id;
 
-    const { error: err } = await supabase.from("tasks").insert(payload);
-    setSaving(false);
-    if (err) {
-      setError(`등록에 실패했습니다: ${err.message}`);
-      return;
+      const payload = toAdd.map((r) => ({
+        ...toQuickInsert(r, createdBy, {
+          instructor: instructor.trim() || null,
+          dueDate: dueDate || null,
+        }),
+        ...(batchId ? { batch_id: batchId } : {}),
+      }));
+
+      const { error: err } = await supabase.from("tasks").insert(payload);
+      if (err) {
+        setError(`등록에 실패했습니다: ${err.message}`);
+        return;
+      }
+
+      setSaved(payload.length);
+      setText("");
+      setPicked({});
+      setDropped({});
+      onDone(payload.length);
+    } catch (e) {
+      setError(`등록 중 문제가 생겼습니다: ${e instanceof Error ? e.message : String(e)}`);
+    } finally {
+      setSaving(false);
     }
-
-    setText("");
-    setPicked({});
-    setDropped({});
-    onDone(payload.length);
   }
 
   const preview = (
     <>
+      {rows.length === 0 && text.trim().length > 0 && (
+        <div className="rounded-lg border border-amber-300 bg-amber-50 px-3 py-3 mb-3">
+          <p className="text-sm font-medium text-amber-800 break-keep">
+            이 글에서는 업무를 못 찾았습니다.
+          </p>
+          <p className="text-xs text-amber-700 mt-1 break-keep">
+            줄바꿈으로 한 건씩 나누거나, 글머리표(-)나 번호(1. 2.)를 붙여주시면 나눠집니다.
+            아래 버튼으로 이 글 전체를 한 건으로 넣을 수도 있습니다.
+          </p>
+          <button
+            type="button"
+            onClick={() => setText(text.trim() + " - ")}
+            className="text-xs mt-2 px-2.5 py-1.5 rounded-lg border border-amber-400 text-amber-800 bg-white hover:bg-amber-100"
+          >
+            이 글 끝에 &quot; - &quot; 붙여 담당자 지정하기
+          </button>
+        </div>
+      )}
+
       {rows.length === 0 && (
         <p className="text-xs text-gray-400 break-keep">
           이런 것도 읽습니다 — 업무 - 안윤환 · (담당 이준호 책임, 기한 9/17까지) · 1. 2. 3. 번호
@@ -223,12 +255,32 @@ export default function QuickAssignForm({
         {warn && <p className="text-sm text-amber-700 mt-2 break-keep">{warn}</p>}
         {error && <p className="text-sm text-red-600 mt-2 break-keep">{error}</p>}
 
+        {saved !== null && (
+          <div className="rounded-lg border border-emerald-300 bg-emerald-50 px-3 py-3 mt-3">
+            <p className="text-sm font-medium text-emerald-800">
+              {saved}건을 등록했습니다.
+            </p>
+            <Link
+              href="/tasks"
+              className="inline-block text-xs mt-2 px-2.5 py-1.5 rounded-lg border border-emerald-400 text-emerald-800 bg-white hover:bg-emerald-100"
+            >
+              업무관리에서 보기 →
+            </Link>
+          </div>
+        )}
+
         <button
           onClick={save}
           disabled={saving || toAdd.length === 0}
           className="w-full mt-3 rounded-lg bg-blue-600 text-white py-2.5 font-medium hover:bg-blue-700 disabled:opacity-50"
         >
-          {saving ? "등록 중..." : toAdd.length > 0 ? `${toAdd.length}건 지시 등록` : "등록"}
+          {saving
+            ? "등록 중..."
+            : toAdd.length > 0
+              ? `${toAdd.length}건 지시 등록`
+              : text.trim()
+                ? "읽을 업무가 없습니다"
+                : "글을 붙여넣어 주세요"}
         </button>
         <p className="text-xs text-gray-400 mt-2 text-center break-keep">
           등록하면 각 담당자 화면에 새 업무로 뜨고, 확인을 눌러야 신규 표시가 없어집니다.
