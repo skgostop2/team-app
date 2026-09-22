@@ -1,4 +1,4 @@
-import { bareName } from "./importTasks";
+import { bareName, parseDate } from "./importTasks";
 
 /**
  * 빠른 등록 — 한 줄에 한 건씩 적은 글을 업무로 바꾼다.
@@ -27,6 +27,8 @@ export type QuickRow = {
   /** 원래 줄 */
   raw: string;
   title: string;
+  /** 글에서 읽어낸 기한 (없으면 null) */
+  dueDate: string | null;
   /** 담당자 (첫 번째 이름) */
   assigneeId: string | null;
   /** 참여자 (두 번째 이후 이름) */
@@ -174,40 +176,188 @@ export function splitTitleAndNames(line: string): { title: string; names: string
   return { title: raw, names: [] };
 }
 
+/**
+ * 붙여넣은 글을 건별로 가른다.
+ *
+ * 줄바꿈이 먼저다. 다만 카톡·메일에서 긁어오면 한 줄에
+ * "1. ... 2. ... 3. ..." 처럼 다 붙어 오는 경우가 있어 번호도 경계로 본다.
+ */
+export function splitItems(text: string): string[] {
+  const out: string[] = [];
+  for (const line of (text ?? "").split(/\r?\n/)) {
+    const t = line.trim();
+    if (!t) continue;
+    // 한 줄 안에 번호가 둘 이상이면 번호마다 끊는다
+    const marks = [...t.matchAll(/(?:^|\s)(\d{1,2})\s*[.)]\s+/g)];
+    if (marks.length >= 2) {
+      for (let i = 0; i < marks.length; i++) {
+        const start = marks[i].index! + marks[i][0].length;
+        const end = i + 1 < marks.length ? marks[i + 1].index! : t.length;
+        const piece = t.slice(start, end).trim();
+        if (piece) out.push(piece);
+      }
+      continue;
+    }
+    out.push(t);
+  }
+  return out.map((l) => l.replace(/^\s*(\d{1,2}\s*[.)]|[-•*·])\s*/, "").trim()).filter(Boolean);
+}
+
+/** 글 어디에 있든 기한처럼 생긴 날짜를 찾는다 */
+export function findDueDate(text: string): string | null {
+  const patterns = [
+    /기한\s*[:：]?\s*([0-9]{1,4}[-./월][0-9]{1,2}[일]?(?:[-./][0-9]{1,2})?)/,
+    /([0-9]{1,4}[-./][0-9]{1,2}(?:[-./][0-9]{1,2})?)\s*까지/,
+    /([0-9]{1,2}\s*월\s*[0-9]{1,2}\s*일?)\s*까지/,
+    /(?:^|\s)([0-9]{1,2}\/[0-9]{1,2})(?=\s|$)/,
+  ];
+  for (const re of patterns) {
+    const m = text.match(re);
+    if (m) {
+      const d = parseDate(m[1].replace(/\s+/g, ""));
+      if (d) return d;
+    }
+  }
+  return null;
+}
+
+/** 사람 이름이 아닌 게 뻔한 말들 — 업무지시 글에 늘 섞여 나온다 */
+const NOT_NAMES = [
+  "기한", "완료", "보고", "참여", "담당", "관련", "이하", "유관", "확인", "회신",
+  "제출", "필히", "협조", "진행", "예정", "까지", "부터", "이상", "이내",
+];
+/** "품질팀", "기계실" 처럼 조직 이름 */
+const ORG_TAIL = /(팀|실|부|과|반|처|소|그룹|센터)$/;
+
+/**
+ * "담당 이준호 책임, 기한 9/17까지 보고 완료 필" 같은 토막에서 이름만 골라낸다.
+ *
+ * 첫 토막은 이름 자리라 명단에 없어도 이름으로 본다 (그래야 "명단에 없습니다"라고
+ * 알려줄 수 있다). 두 번째부터는 명단에 있는 사람만 받는다 — 안 그러면
+ * "기한", "품질팀" 같은 말이 사람으로 둔갑한다.
+ */
+function namesFromClause(clause: string, members: Member[]): string[] {
+  const usable = (t: string): boolean => {
+    const b = bareName(t);
+    if (!looksLikeName(t)) return false;
+    if (NOT_NAMES.includes(b)) return false;
+    if (ORG_TAIL.test(b) && !members.some((m) => bareName(m.name) === b)) return false;
+    return true;
+  };
+
+  const names: string[] = [];
+  const pieces = clause.split(/[,、/&]|\s+및\s+|\s+와\s+|\s+과\s+/);
+  for (let i = 0; i < pieces.length; i++) {
+    const t = pieces[i].trim();
+    if (!t) continue;
+    // "이준호 책임 보고" 처럼 뒤에 말이 더 붙으면 앞쪽만 본다
+    const cand = usable(t) ? t : t.split(/\s+/)[0];
+    if (!usable(cand)) continue;
+
+    const known = matchName(cand, members).kind !== "none";
+    if (names.length === 0 || known) names.push(cand);
+  }
+  return names.slice(0, 3);
+}
+
+/**
+ * 한 건을 업무명·이름·기한으로 가른다.
+ *
+ * 실제로 오는 글이 한 가지 모양이 아니다. 아래 순서로 본다.
+ *   1) 끝의 괄호 안 — "(담당 이준호 책임, 기한 9/17까지 보고 완료 필)"
+ *   2) "담당" 이라는 말 뒤
+ *   3) 끝의 구분자 뒤 — "청소대차 진행보고 - 안윤환"
+ *   4) 그래도 없으면 글 안에 명단 이름이 그대로 들어있는지
+ */
+export function parseItem(
+  raw: string,
+  members: Member[]
+): { title: string; names: string[]; dueDate: string | null } {
+  const line = raw.trim();
+  const dueDate = findDueDate(line);
+
+  // 1) 끝의 괄호
+  const paren = line.match(/^(.*?)\s*[(（]\s*([^)）]*)\s*[)）]\s*$/);
+  if (paren && paren[1].trim()) {
+    const inner = paren[2];
+    const damdang = inner.match(/담당[자]?\s*[:：]?\s*(.+)$/);
+    const names = namesFromClause(damdang ? damdang[1] : inner, members);
+    if (names.length > 0) {
+      return { title: paren[1].trim(), names, dueDate: dueDate ?? findDueDate(inner) };
+    }
+  }
+
+  // 2) "담당" 뒤
+  const d = line.match(/^(.*?)[\s(（,]*담당[자]?\s*[:：]?\s*(.+)$/);
+  if (d && d[1].trim()) {
+    const names = namesFromClause(d[2], members);
+    if (names.length > 0) return { title: cleanTitle(d[1]), names, dueDate };
+  }
+
+  // 3) 끝의 구분자 뒤
+  const byTail = splitTitleAndNames(line);
+  if (byTail.names.length > 0) {
+    return { title: cleanTitle(byTail.title), names: byTail.names, dueDate };
+  }
+
+  // 4) 글 안에 명단 이름이 그대로 들어 있는 경우 (정확히 맞을 때만)
+  const found: string[] = [];
+  for (const m of members) {
+    const n = bareName(m.name);
+    if (n.length >= 2 && line.includes(n)) found.push(n);
+  }
+  if (found.length > 0) {
+    let title = line;
+    for (const n of found) title = title.replace(new RegExp(`[\\s,(（-]*${n}[\\s)）,]*`, "g"), " ");
+    return { title: cleanTitle(title) || line, names: found.slice(0, 3), dueDate };
+  }
+
+  return { title: cleanTitle(line), names: [], dueDate };
+}
+
+/** 업무명 앞뒤에 남은 직급·조사·구분자를 턴다 */
+function cleanTitle(s: string): string {
+  return s
+    // 이름을 뗀 자리에 남는 "매니저가", "책임이", "님께서" 같은 꼬리
+    .replace(
+      /^\s*(책임|매니저|팀장|실장|사원|주임|대리|과장|차장|부장|공장장|대표|이사|상무|전무|기사|반장|조장|님)\s*(이|가|은|는|께서|에게|한테)?\s*/,
+      ""
+    )
+    .replace(/[\s,]*[(（]\s*[)）]/g, "")
+    .replace(/[\s]*[-–—~:|,(（]\s*$/, "")
+    .replace(/\s{2,}/g, " ")
+    .trim();
+}
+
 /** 붙여넣은 글 전체를 업무 줄들로 바꾼다 */
 export function parseQuickLines(text: string, members: Member[]): QuickRow[] {
-  return (text ?? "")
-    .split(/\r?\n/)
-    .map((l) => l.trim())
-    // 번호 매김("1.", "1)", "-", "•")은 떼어낸다
-    .map((l) => l.replace(/^\s*(\d{1,2}\s*[.)]|[-•*·])\s*/, "").trim())
-    .filter((l) => l.length > 0)
-    .map((line) => {
-      const { title, names } = splitTitleAndNames(line);
-      const matches = names.map((n) => matchName(n, members));
-      const warnings: string[] = [];
+  return splitItems(text).map((line) => {
+    const { title, names, dueDate } = parseItem(line, members);
+    const matches = names.map((n) => matchName(n, members));
+    const warnings: string[] = [];
 
-      if (names.length === 0) warnings.push("이름을 못 찾았습니다 — 담당자를 골라주세요");
-      for (const m of matches) {
-        if (m.kind === "near") warnings.push(`"${m.token}" → ${m.name} 으로 봤습니다 (확인)`);
-        if (m.kind === "ambiguous")
-          warnings.push(
-            `"${m.token}" 는 ${m.candidates.map((c) => c.name).join(", ")} 중 누구인지 모르겠습니다`
-          );
-        if (m.kind === "none") warnings.push(`"${m.token}" 는 명단에 없습니다`);
-      }
-      if (title.length < 2) warnings.push("업무명이 너무 짧습니다");
+    if (names.length === 0) warnings.push("이름을 못 찾았습니다 — 담당자를 골라주세요");
+    for (const m of matches) {
+      if (m.kind === "near") warnings.push(`"${m.token}" → ${m.name} 으로 봤습니다 (확인)`);
+      if (m.kind === "ambiguous")
+        warnings.push(
+          `"${m.token}" 는 ${m.candidates.map((c) => c.name).join(", ")} 중 누구인지 모르겠습니다`
+        );
+      if (m.kind === "none") warnings.push(`"${m.token}" 는 명단에 없습니다`);
+    }
+    if (title.length < 2) warnings.push("업무명이 너무 짧습니다");
 
-      const ids = matches.map((m) => m.id);
-      return {
-        raw: line,
-        title,
-        assigneeId: ids[0] ?? null,
-        deputyIds: ids.slice(1).filter((x): x is string => !!x),
-        matches,
-        warnings,
-      };
-    });
+    const ids = matches.map((m) => m.id);
+    return {
+      raw: line,
+      title,
+      dueDate,
+      assigneeId: ids[0] ?? null,
+      deputyIds: ids.slice(1).filter((x): x is string => !!x),
+      matches,
+      warnings,
+    };
+  });
 }
 
 /** 등록용 한 건으로 만든다 */
@@ -222,7 +372,8 @@ export function toQuickInsert(
     deputy_ids: row.deputyIds,
     created_by: createdBy,
     instructor: opts.instructor ?? null,
-    due_date: opts.dueDate ?? null,
+    // 글에서 읽어낸 기한이 있으면 그걸 쓰고, 없으면 전체 공통으로 넣은 날짜를 쓴다
+    due_date: row.dueDate ?? opts.dueDate ?? null,
     progress: 0,
     status: "대기",
   };

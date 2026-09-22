@@ -87,7 +87,7 @@ export default function QuickAddModal({
           </button>
         </div>
         <p className="text-sm text-gray-500 mb-3 break-keep">
-          한 줄에 한 건씩 <strong>업무 - 이름</strong> 으로 붙여넣으면 바로 정리됩니다.
+          여러 줄을 한 번에 붙여넣으면 이름과 기한을 찾아 건별로 정리합니다.
         </p>
 
         <textarea
@@ -102,8 +102,9 @@ export default function QuickAddModal({
 
         {rows.length === 0 && (
           <p className="text-xs text-gray-400 mt-2 break-keep">
-            이런 것도 읽습니다 — 1. 번호 매김 · (안윤환) · 담당 안윤환 · 강신준 매니저 ·
-            여러 명(강신준, 이준호 → 첫 사람이 담당, 나머지는 참여자)
+            이런 것도 읽습니다 — 업무 - 안윤환 · (담당 이준호 책임, 기한 9/17까지) ·
+            1. 2. 3. 번호 매김(한 줄에 붙어 있어도 나눕니다) · 강신준 매니저 ·
+            여러 명(첫 사람이 담당, 나머지는 참여자)
           </p>
         )}
 
@@ -143,8 +144,12 @@ export default function QuickAddModal({
                       />
                       <div className="min-w-0 flex-1">
                         <p className="text-sm font-medium text-gray-900 break-keep">{r.title}</p>
-                        {deputies.length > 0 && (
-                          <p className="text-xs text-gray-500">참여 {deputies.join(", ")}</p>
+                        {(deputies.length > 0 || r.dueDate) && (
+                          <p className="text-xs text-gray-500">
+                            {r.dueDate && <span className="text-blue-700">기한 {r.dueDate.slice(5)}</span>}
+                            {r.dueDate && deputies.length > 0 && " · "}
+                            {deputies.length > 0 && `참여 ${deputies.join(", ")}`}
+                          </p>
                         )}
                         {warn && (
                           <p className="text-xs text-amber-700 break-keep">
@@ -187,7 +192,7 @@ export default function QuickAddModal({
                 />
               </label>
               <label className="text-xs text-gray-500">
-                진행일정 (전체 공통)
+                진행일정 (기한 못 읽은 건만)
                 <input
                   type="date"
                   value={dueDate}
