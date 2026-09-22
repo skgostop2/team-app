@@ -193,10 +193,9 @@ export default function TaskLedger({
             (canAssign ||
               (!!viewerId &&
                 (t.assignee_id === viewerId || (t.deputy_ids ?? []).includes(viewerId))));
-          const canDirect =
-            canEdit &&
-            (canAssign ||
-              (t.source === "팀원추가" && !!viewerId && t.created_by === viewerId));
+          // 업무 내용은 담당자·참여자도 고친다 (구두 지시를 담당이 직접 적고 고치는 현장에 맞춘다).
+          // 고친 내용은 모두 이력에 남는다.
+          const canDirect = canTouch;
           const handedOver =
             !!viewerId &&
             !!handedOverIds?.has(t.id) &&
@@ -301,7 +300,7 @@ export default function TaskLedger({
                   <div className="col-span-2">
                     <dt className="text-xs text-gray-400">담당자</dt>
                     <dd className="mt-0.5">
-                      {canAssign ? (
+                      {canTouch ? (
                         <AssigneePicker
                           taskId={t.id}
                           current={t.assignee_id}
@@ -445,12 +444,10 @@ export default function TaskLedger({
                 (canAssign ||
                   (!!viewerId &&
                     (t.assignee_id === viewerId || (t.deputy_ids ?? []).includes(viewerId))));
-              // 지시 내용(제목·상세·일정)은 관리자만.
-              // 단, 본인이 스스로 추가한 업무는 본인도 고칠 수 있다.
-              const canDirect =
-                canEdit &&
-                (canAssign ||
-                  (t.source === "팀원추가" && !!viewerId && t.created_by === viewerId));
+              // 업무 내용(제목·상세·일정)은 담당자·참여자도 고친다.
+              // 구두 지시가 오가는 현장에서는 담당이 직접 적고 고쳐야 표가 현실과 맞는다.
+              // 누가 무엇을 고쳤는지는 이력(task_history)에 전부 남는다.
+              const canDirect = canTouch;
 
               // 내가 하던 업무인데 지금은 남이 담당 → 넘긴 업무 (실제 인계 기록이 있을 때만)
               const handedOver =
@@ -552,7 +549,7 @@ export default function TaskLedger({
 
                   {showAssignee && (
                     <Td className="text-gray-600">
-                      {canAssign ? (
+                      {canTouch ? (
                         <AssigneePicker
                           taskId={t.id}
                           current={t.assignee_id}
