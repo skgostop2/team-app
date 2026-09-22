@@ -8,14 +8,20 @@ export default function MobileNav({ isLead }: { isLead: boolean }) {
   // isLead: 실장·팀장 (운영 권한 보유자)
   const pathname = usePathname();
 
-  const items = [
-    { href: "/dashboard", label: "홈", icon: "🏠" },
-    { href: "/tasks", label: "내업무", icon: "📋" },
-    { href: "/notices", label: "공지", icon: "📢" },
-    isLead
-      ? { href: "/team", label: "팀원", icon: "👥" }
-      : { href: "/logout", label: "로그아웃", icon: "🚪" },
-  ];
+  const items = isLead
+    ? [
+        { href: "/dashboard", label: "홈", icon: "🏠" },
+        { href: "/tasks", label: "업무", icon: "📋" },
+        { href: "/assign", label: "지시", icon: "✍️" },
+        { href: "/notices", label: "공지", icon: "📢" },
+        { href: "/team", label: "팀원", icon: "👥" },
+      ]
+    : [
+        { href: "/dashboard", label: "홈", icon: "🏠" },
+        { href: "/tasks", label: "내업무", icon: "📋" },
+        { href: "/notices", label: "공지", icon: "📢" },
+        { href: "/logout", label: "로그아웃", icon: "🚪" },
+      ];
 
   return (
     <nav className="md:hidden fixed bottom-0 inset-x-0 z-20 bg-white border-t border-gray-200 flex">
