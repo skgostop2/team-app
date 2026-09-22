@@ -10,6 +10,7 @@ import TaskLedger from "@/components/TaskLedger";
 import ViewAsBanner from "@/components/ViewAsBanner";
 import NewTaskModal from "@/components/NewTaskModal";
 import ImportTasksModal from "@/components/ImportTasksModal";
+import QuickAddModal from "@/components/QuickAddModal";
 import PrintButton from "@/components/PrintButton";
 import PrintHeader from "@/components/PrintHeader";
 
@@ -22,6 +23,7 @@ export default function TasksPage() {
   const [onlyMemberAdded, setOnlyMemberAdded] = useState(false);
   const [showNewModal, setShowNewModal] = useState(false);
   const [showImport, setShowImport] = useState(false);
+  const [showQuick, setShowQuick] = useState(false);
   const [importMsg, setImportMsg] = useState<string | null>(null);
   const [loading, setLoading] = useState(true);
   const [handedOverIds, setHandedOverIds] = useState<Set<string>>(new Set());
@@ -156,6 +158,14 @@ export default function TasksPage() {
           )}
           {isLead && !viewingAs && (
             <button
+              onClick={() => setShowQuick(true)}
+              className="text-xs px-3 py-2 rounded-lg border border-blue-300 text-blue-700 bg-blue-50 hover:bg-blue-100 font-medium"
+            >
+              빠른 등록
+            </button>
+          )}
+          {isLead && !viewingAs && (
+            <button
               onClick={() => setShowImport(true)}
               className="text-xs px-3 py-2 rounded-lg border border-gray-300 text-gray-600 hover:bg-gray-50 bg-white"
             >
@@ -206,6 +216,20 @@ export default function TasksPage() {
         <div className="rounded-xl bg-emerald-50 border border-emerald-200 px-4 py-3 text-sm text-emerald-700">
           {importMsg}
         </div>
+      )}
+
+      {showQuick && me && (
+        <QuickAddModal
+          members={profiles.filter(isAssignable)}
+          createdBy={me.id}
+          instructorDefault={me.name}
+          onClose={() => setShowQuick(false)}
+          onDone={(n) => {
+            setShowQuick(false);
+            setImportMsg(`${n}건을 등록했습니다.`);
+            load();
+          }}
+        />
       )}
 
       {showImport && me && (
