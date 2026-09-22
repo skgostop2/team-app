@@ -3,16 +3,19 @@
 import { useMemo, useState } from "react";
 import { createClient } from "@/lib/supabase/client";
 import type { Profile } from "@/lib/types";
-import { parseQuickLines, toQuickInsert, type QuickRow } from "@/lib/quickAdd";
+import { parseQuickLines, toQuickInsert } from "@/lib/quickAdd";
 
 /**
- * 빠른 등록 — 적어둔 대로 붙여넣으면 이름을 찾아 각자에게 붙인다.
+ * 빠른 등록 — 적어둔 대로 붙여넣으면 그 자리에서 이름을 찾아 정리한다.
  *
  *   청소대차 진행보고 - 안윤환
  *   에어드레인 용량 조사 보고 - 안윤환
  *
+ * 창은 하나다. 붙여넣는 즉시 아래에 정리된 결과가 뜨고, 등록만 누르면 된다.
+ * 업무명이 잘못 잡혔으면 위 글을 고치면 아래도 따라 바뀐다.
+ *
  * 이름이 확실치 않으면 제멋대로 정하지 않고 노란 표시를 띄운다.
- * 등록 전에 담당자를 바꿀 수 있고, 뺄 줄은 체크를 풀면 된다.
+ * 업무는 사람에게 붙는 것이라 잘못 붙은 한 건이 오래 간다.
  */
 export default function QuickAddModal({
   members,
@@ -28,9 +31,9 @@ export default function QuickAddModal({
   onDone: (count: number) => void;
 }) {
   const [text, setText] = useState("");
-  const [step, setStep] = useState<"paste" | "check">("paste");
-  const [rows, setRows] = useState<QuickRow[]>([]);
-  const [excluded, setExcluded] = useState<Set<number>>(new Set());
+  /** 사람이 직접 고른 담당자 (원래 줄 글자를 열쇠로 둔다 — 글을 고쳐도 남아 있게) */
+  const [picked, setPicked] = useState<Record<string, string>>({});
+  const [dropped, setDropped] = useState<Record<string, boolean>>({});
   const [instructor, setInstructor] = useState(instructorDefault ?? "");
   const [dueDate, setDueDate] = useState("");
   const [saving, setSaving] = useState(false);
@@ -38,29 +41,15 @@ export default function QuickAddModal({
 
   const memberList = useMemo(() => members.map((m) => ({ id: m.id, name: m.name })), [members]);
 
-  function analyze() {
-    const parsed = parseQuickLines(text, memberList);
-    if (parsed.length === 0) {
-      setError("읽을 줄이 없습니다. 한 줄에 한 건씩 적어주세요.");
-      return;
-    }
-    setError(null);
-    setRows(parsed);
-    setExcluded(new Set());
-    setStep("check");
-  }
+  // 글자가 바뀌는 즉시 다시 정리한다
+  const rows = useMemo(() => {
+    return parseQuickLines(text, memberList).map((r) => ({
+      ...r,
+      assigneeId: picked[r.raw] !== undefined ? picked[r.raw] || null : r.assigneeId,
+    }));
+  }, [text, memberList, picked]);
 
-  function setAssignee(i: number, id: string) {
-    setRows((prev) =>
-      prev.map((r, idx) => (idx === i ? { ...r, assigneeId: id || null } : r))
-    );
-  }
-
-  function setTitle(i: number, title: string) {
-    setRows((prev) => prev.map((r, idx) => (idx === i ? { ...r, title } : r)));
-  }
-
-  const toAdd = rows.filter((_, i) => !excluded.has(i));
+  const toAdd = rows.filter((r) => !dropped[r.raw]);
   const missing = toAdd.filter((r) => !r.assigneeId).length;
 
   async function save() {
@@ -97,62 +86,48 @@ export default function QuickAddModal({
             ×
           </button>
         </div>
+        <p className="text-sm text-gray-500 mb-3 break-keep">
+          한 줄에 한 건씩 <strong>업무 - 이름</strong> 으로 붙여넣으면 바로 정리됩니다.
+        </p>
 
-        {step === "paste" && (
-          <>
-            <p className="text-sm text-gray-500 mb-3 break-keep">
-              한 줄에 한 건씩, <strong>업무 - 이름</strong> 으로 적어주세요. 이름은 팀원 명단에서
-              찾아 붙입니다.
-            </p>
-            <textarea
-              value={text}
-              onChange={(e) => setText(e.target.value)}
-              placeholder={
-                "청소대차 진행보고 - 안윤환\n에어드레인 용량 조사 보고 - 안윤환\n발루프센서 배선 확인 체크시트 추가 보고 - 안윤환"
-              }
-              className="w-full h-56 md:h-64 rounded-lg border border-gray-300 px-3 py-2.5 text-base leading-relaxed"
-            />
-            <p className="text-xs text-gray-400 mt-2 break-keep">
-              이런 것도 읽습니다 — 1. 번호 매김 · (안윤환) · 담당 안윤환 · 강신준 매니저 ·
-              여러 명(강신준, 이준호 → 첫 사람이 담당, 나머지는 참여자)
-            </p>
+        <textarea
+          value={text}
+          onChange={(e) => setText(e.target.value)}
+          autoFocus
+          placeholder={
+            "청소대차 진행보고 - 안윤환\n에어드레인 용량 조사 보고 - 안윤환\n발루프센서 배선 확인 체크시트 추가 보고 - 안윤환"
+          }
+          className="w-full h-36 md:h-40 rounded-lg border border-gray-300 px-3 py-2.5 text-base leading-relaxed"
+        />
 
-            {error && <p className="text-sm text-red-600 mt-2">{error}</p>}
-
-            <div className="flex gap-2 pt-4">
-              <button
-                onClick={onClose}
-                className="flex-1 rounded-lg border border-gray-300 py-2.5 font-medium text-gray-600 hover:bg-gray-50"
-              >
-                취소
-              </button>
-              <button
-                onClick={analyze}
-                disabled={!text.trim()}
-                className="flex-1 rounded-lg bg-blue-600 text-white py-2.5 font-medium hover:bg-blue-700 disabled:opacity-50"
-              >
-                이름 찾기
-              </button>
-            </div>
-          </>
+        {rows.length === 0 && (
+          <p className="text-xs text-gray-400 mt-2 break-keep">
+            이런 것도 읽습니다 — 1. 번호 매김 · (안윤환) · 담당 안윤환 · 강신준 매니저 ·
+            여러 명(강신준, 이준호 → 첫 사람이 담당, 나머지는 참여자)
+          </p>
         )}
 
-        {step === "check" && (
+        {rows.length > 0 && (
           <>
-            <p className="text-sm text-gray-500 mb-3 break-keep">
-              {rows.length}건을 읽었습니다. 담당자를 확인하고 등록하세요.
+            <div className="flex items-baseline justify-between mt-3 mb-1.5">
+              <p className="text-sm font-semibold text-gray-700">
+                정리된 업무 {toAdd.length}건
+              </p>
               {missing > 0 && (
-                <span className="text-amber-700 font-medium"> · 담당자 없는 줄 {missing}건</span>
+                <p className="text-xs text-amber-700 font-medium">담당자 없음 {missing}건</p>
               )}
-            </p>
+            </div>
 
             <div className="border border-gray-200 rounded-lg overflow-hidden">
-              {rows.map((r, i) => {
-                const out = excluded.has(i);
+              {rows.map((r) => {
+                const out = !!dropped[r.raw];
                 const warn = r.warnings.length > 0;
+                const deputies = r.deputyIds
+                  .map((id) => members.find((m) => m.id === id)?.name)
+                  .filter(Boolean);
                 return (
                   <div
-                    key={i}
+                    key={r.raw}
                     className={`border-b border-gray-100 last:border-b-0 px-3 py-2.5 ${
                       out ? "bg-gray-50 opacity-50" : warn ? "bg-amber-50/60" : ""
                     }`}
@@ -161,36 +136,34 @@ export default function QuickAddModal({
                       <input
                         type="checkbox"
                         checked={!out}
-                        onChange={(e) => {
-                          const next = new Set(excluded);
-                          if (e.target.checked) next.delete(i);
-                          else next.add(i);
-                          setExcluded(next);
-                        }}
-                        className="w-4 h-4 mt-2 shrink-0"
+                        onChange={(e) =>
+                          setDropped((p) => ({ ...p, [r.raw]: !e.target.checked }))
+                        }
+                        className="w-4 h-4 mt-1.5 shrink-0"
                       />
                       <div className="min-w-0 flex-1">
-                        <input
-                          value={r.title}
-                          onChange={(e) => setTitle(i, e.target.value)}
-                          className="w-full rounded border border-transparent hover:border-gray-300 focus:border-gray-400 px-1.5 py-1 text-sm font-medium text-gray-900 bg-transparent"
-                        />
+                        <p className="text-sm font-medium text-gray-900 break-keep">{r.title}</p>
+                        {deputies.length > 0 && (
+                          <p className="text-xs text-gray-500">참여 {deputies.join(", ")}</p>
+                        )}
                         {warn && (
-                          <p className="text-xs text-amber-700 px-1.5 break-keep">
+                          <p className="text-xs text-amber-700 break-keep">
                             {r.warnings.join(" · ")}
                           </p>
                         )}
                       </div>
                       <select
                         value={r.assigneeId ?? ""}
-                        onChange={(e) => setAssignee(i, e.target.value)}
-                        className={`shrink-0 w-32 rounded-lg border px-2 py-1.5 text-sm ${
+                        onChange={(e) =>
+                          setPicked((p) => ({ ...p, [r.raw]: e.target.value }))
+                        }
+                        className={`shrink-0 w-28 md:w-32 rounded-lg border px-2 py-1.5 text-sm ${
                           r.assigneeId
                             ? "border-gray-300 text-gray-900"
                             : "border-amber-400 text-amber-700 bg-amber-50"
                         }`}
                       >
-                        <option value="">담당자 선택</option>
+                        <option value="">담당자</option>
                         {members.map((m) => (
                           <option key={m.id} value={m.id}>
                             {m.name}
@@ -214,7 +187,7 @@ export default function QuickAddModal({
                 />
               </label>
               <label className="text-xs text-gray-500">
-                진행일정 (전체 공통, 비워도 됩니다)
+                진행일정 (전체 공통)
                 <input
                   type="date"
                   value={dueDate}
@@ -223,30 +196,30 @@ export default function QuickAddModal({
                 />
               </label>
             </div>
-
-            {error && <p className="text-sm text-red-600 mt-2">{error}</p>}
-
-            <div className="flex gap-2 pt-4">
-              <button
-                onClick={() => setStep("paste")}
-                disabled={saving}
-                className="rounded-lg border border-gray-300 px-4 py-2.5 font-medium text-gray-600 hover:bg-gray-50 disabled:opacity-50"
-              >
-                뒤로
-              </button>
-              <button
-                onClick={save}
-                disabled={saving || toAdd.length === 0}
-                className="flex-1 rounded-lg bg-blue-600 text-white py-2.5 font-medium hover:bg-blue-700 disabled:opacity-50"
-              >
-                {saving ? "등록 중..." : `${toAdd.length}건 등록`}
-              </button>
-            </div>
-            <p className="text-xs text-gray-400 mt-2 text-center">
-              등록하면 각 담당자 화면에 새 업무로 뜨고, 확인을 눌러야 신규 표시가 없어집니다.
-            </p>
           </>
         )}
+
+        {error && <p className="text-sm text-red-600 mt-2">{error}</p>}
+
+        <div className="flex gap-2 pt-4">
+          <button
+            onClick={onClose}
+            disabled={saving}
+            className="rounded-lg border border-gray-300 px-4 py-2.5 font-medium text-gray-600 hover:bg-gray-50 disabled:opacity-50"
+          >
+            닫기
+          </button>
+          <button
+            onClick={save}
+            disabled={saving || toAdd.length === 0}
+            className="flex-1 rounded-lg bg-blue-600 text-white py-2.5 font-medium hover:bg-blue-700 disabled:opacity-50"
+          >
+            {saving ? "등록 중..." : toAdd.length > 0 ? `${toAdd.length}건 등록` : "등록"}
+          </button>
+        </div>
+        <p className="text-xs text-gray-400 mt-2 text-center break-keep">
+          업무명이 잘못 잡혔으면 위 글을 고치면 아래도 따라 바뀝니다.
+        </p>
       </div>
     </div>
   );
