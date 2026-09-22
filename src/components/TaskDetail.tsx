@@ -6,7 +6,8 @@ import { createClient } from "@/lib/supabase/client";
 import { formatDate, formatDateTime } from "@/lib/utils";
 import type { Profile, TaskHistory, TaskWithEffectiveStatus } from "@/lib/types";
 import StatusBadge from "@/components/StatusBadge";
-import { isManager, isAssignable } from "@/lib/roles";
+import { isManager, isTeamLead, isAssignable } from "@/lib/roles";
+import DeleteLock from "@/components/DeleteLock";
 import { useUnsavedChanges } from "@/lib/useUnsavedChanges";
 
 /**
@@ -36,7 +37,8 @@ const HISTORY_LABELS: Record<string, string> = {
   instructor: "지시자 변경",
   note: "비고 변경",
   completed_at: "완료일 변경",
-  due_date: "마감일 변경",
+  start_date: "작성일 변경",
+  due_date: "진행일정 변경",
   progress: "진행률 변경",
   status: "상태 변경",
 };
@@ -60,6 +62,7 @@ export default function TaskDetail({
   const [history, setHistory] = useState<TaskHistory[]>([]);
   const [loading, setLoading] = useState(true);
   const [saving, setSaving] = useState(false);
+  const [askDelete, setAskDelete] = useState(false);
   const [error, setError] = useState<string | null>(null);
 
   // 편집 필드 (팀장 전용)
@@ -132,6 +135,8 @@ export default function TaskDetail({
   }, [load]);
 
   const isLead = isManager(me);
+  // 삭제는 팀장만 (실장도 못 지운다 — 지우면 이력까지 사라지므로 한 사람으로 좁힌다)
+  const teamLead = isTeamLead(me);
   const isAssignee = task?.assignee_id === me?.id;
 
   async function saveLeadEdits() {
@@ -275,17 +280,28 @@ export default function TaskDetail({
     setSaving(false);
   }
 
-  async function deleteTask() {
-    if (!confirm("이 업무를 삭제하시겠습니까? 되돌릴 수 없습니다.")) return;
-    setSaving(true);
+  /**
+   * 삭제는 팀장만, 비밀번호를 넣어야 실행된다.
+   *
+   * RLS 는 조건에 안 맞으면 0줄을 지우고도 조용히 성공한다.
+   * 그래서 지운 뒤 정말 없어졌는지 확인한다 — "지웠다"는 말만 하고
+   * 실제로는 남아 있는 것이 제일 나쁘다.
+   */
+  async function deleteTask(): Promise<string | null> {
     const supabase = createClient();
-    await supabase.from("tasks").delete().eq("id", taskId);
+    const { error } = await supabase.from("tasks").delete().eq("id", taskId);
+    if (error) return `삭제하지 못했습니다: ${error.message}`;
+
+    const { data: still } = await supabase.from("tasks").select("id").eq("id", taskId).maybeSingle();
+    if (still) return "삭제 권한이 없습니다. 팀장만 지울 수 있습니다.";
+
     if (inModal) {
       onChanged?.();
       onClose?.();
-      return;
+      return null;
     }
     router.push("/tasks");
+    return null;
   }
 
   if (loading) return <p className="text-sm text-gray-400">불러오는 중...</p>;
@@ -519,9 +535,9 @@ export default function TaskDetail({
               진행중으로 되돌리기
             </button>
           )}
-          {isLead && (
+          {teamLead && (
             <button
-              onClick={deleteTask}
+              onClick={() => setAskDelete(true)}
               disabled={saving}
               className="text-sm px-4 py-2 rounded-lg border border-red-200 text-red-600 font-medium hover:bg-red-50 disabled:opacity-50 ml-auto"
             >
@@ -568,6 +584,14 @@ export default function TaskDetail({
           )}
         </div>
       </div>
+
+      {askDelete && task && (
+        <DeleteLock
+          title={task.title}
+          onConfirm={deleteTask}
+          onClose={() => setAskDelete(false)}
+        />
+      )}
     </div>
   );
 }
