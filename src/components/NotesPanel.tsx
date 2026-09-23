@@ -27,6 +27,8 @@ export default function NotesPanel() {
     setReady(true);
   }, []);
 
+  const [blocked, setBlocked] = useState(false);
+
   function toggle(next: boolean) {
     setOpen(next);
     try {
@@ -36,13 +38,25 @@ export default function NotesPanel() {
     }
   }
 
+  /**
+   * 메모장을 별도 창으로 띄운다.
+   *
+   * 앱 메뉴가 없는 /notes-window 를 연다. PC 는 작은 창으로,
+   * 폰은 브라우저가 창 크기를 무시하므로 새 탭으로 열린다.
+   * 차단당하면 조용히 지나가지 않고 알려준다.
+   */
   function popOut() {
-    // 버튼 클릭으로 열기 때문에 팝업 차단에 걸리지 않는다
-    window.open(
-      "/notes?popup=1",
+    const w = window.open(
+      "/notes-window",
       "team-app-notes",
       "width=520,height=720,menubar=no,toolbar=no,location=no,status=no"
     );
+    if (!w) {
+      setBlocked(true);
+      return;
+    }
+    w.focus();
+    setBlocked(false);
     toggle(false);
   }
 
@@ -87,8 +101,8 @@ export default function NotesPanel() {
               <div className="flex items-center gap-1.5 shrink-0">
                 <button
                   onClick={popOut}
-                  title="별도 창으로 띄우기"
-                  className="hidden md:block text-xs px-2.5 py-1.5 rounded-lg border border-gray-300 text-gray-600 hover:bg-gray-50"
+                  title="별도 창으로 띄우기 (업무 화면 옆에 놓고 쓰기)"
+                  className="text-xs px-2.5 py-1.5 rounded-lg border border-gray-300 text-gray-600 hover:bg-gray-50"
                 >
                   새 창으로
                 </button>

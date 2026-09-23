@@ -4,6 +4,7 @@ import { useCallback, useEffect, useRef, useState } from "react";
 import type { PersonalNote } from "@/lib/types";
 import { cn, formatDateTime } from "@/lib/utils";
 import {
+  appendLogLine,
   createNote,
   fetchNotes,
   purgeNote,
@@ -27,6 +28,10 @@ export default function NotesBoard({ compact = false }: { compact?: boolean }) {
   const [loading, setLoading] = useState(true);
   const [showTrash, setShowTrash] = useState(false);
   const [query, setQuery] = useState("");
+  /** 한 줄 기록 — 일지처럼 그날 한 장에 시각과 함께 쌓는다 */
+  const [logLine, setLogLine] = useState("");
+  const [logging, setLogging] = useState(false);
+  const [logError, setLogError] = useState<string | null>(null);
 
   // 저장 상태 — 자동저장이라 사용자에게 지금 상태를 알려줘야 한다
   const [dirty, setDirty] = useState(false);
@@ -88,6 +93,23 @@ export default function NotesBoard({ compact = false }: { compact?: boolean }) {
     return () => window.removeEventListener("beforeunload", onBeforeUnload);
   }, [dirty]);
 
+  async function quickLog() {
+    const text = logLine.trim();
+    if (!text || logging) return;
+    setLogging(true);
+    setLogError(null);
+    const { note, error } = await appendLogLine(text);
+    setLogging(false);
+    if (error || !note) {
+      // 실패해도 쓴 글을 지우지 않는다
+      setLogError(error ?? "기록하지 못했습니다.");
+      return;
+    }
+    setLogLine("");
+    await load();
+    setActiveId(note.id);
+  }
+
   async function addNote() {
     const n = await createNote({ title: "", content: "" });
     if (!n) return;
@@ -118,7 +140,34 @@ export default function NotesBoard({ compact = false }: { compact?: boolean }) {
   }
 
   return (
-    <div className={cn("flex flex-col h-full min-h-0", compact ? "" : "md:flex-row")}>
+    <div className="flex flex-col h-full min-h-0">
+      {/* 한 줄 기록 — 메모장에서 제일 많이 쓰는 동작이라 맨 위에 둔다 */}
+      <div className="p-2 border-b border-gray-200 shrink-0 bg-gray-50">
+        <div className="flex gap-2">
+          <input
+            value={logLine}
+            onChange={(e) => setLogLine(e.target.value)}
+            onKeyDown={(e) => {
+              if (e.key === "Enter" && !e.nativeEvent.isComposing) {
+                e.preventDefault();
+                quickLog();
+              }
+            }}
+            placeholder="한 줄 기록하고 Enter — 오늘 일지에 시각과 함께 쌓입니다"
+            className="flex-1 min-w-0 rounded-lg border border-gray-300 px-2.5 py-2 text-sm bg-white"
+          />
+          <button
+            onClick={quickLog}
+            disabled={logging || !logLine.trim()}
+            className="shrink-0 text-sm px-3 py-2 rounded-lg bg-gray-900 text-white font-medium hover:bg-black disabled:opacity-40"
+          >
+            {logging ? "기록 중" : "기록"}
+          </button>
+        </div>
+        {logError && <p className="text-xs text-red-600 mt-1.5">{logError}</p>}
+      </div>
+
+      <div className={cn("flex flex-col flex-1 min-h-0", compact ? "" : "md:flex-row")}>
       {/* 목록 */}
       <div
         className={cn(
@@ -295,6 +344,7 @@ export default function NotesBoard({ compact = false }: { compact?: boolean }) {
             </div>
           </div>
         )}
+      </div>
       </div>
     </div>
   );

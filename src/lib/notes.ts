@@ -82,3 +82,62 @@ export async function purgeNote(id: string): Promise<boolean> {
   const { error } = await supabase.from("personal_notes").delete().eq("id", id);
   return !error;
 }
+
+/** 오늘 날짜 제목 (일지 한 장이 하루치가 되게) */
+export function dailyLogTitle(d = new Date()): string {
+  const p = (n: number) => String(n).padStart(2, "0");
+  const days = ["일", "월", "화", "수", "목", "금", "토"];
+  return `일지 ${d.getFullYear()}-${p(d.getMonth() + 1)}-${p(d.getDate())} (${days[d.getDay()]})`;
+}
+
+/**
+ * 한 줄 기록.
+ *
+ * 메모를 "문서"로 다루면 쓸 때마다 새 메모를 만들지, 어디에 적을지 고민하게 된다.
+ * 일지처럼 그날 한 장에 시각과 함께 계속 쌓는 쪽이 현장에서 쓰기 쉽다.
+ * 기존 내용 뒤에 붙이기만 하므로 앞서 적은 것은 지워지지 않는다.
+ */
+export async function appendLogLine(
+  text: string
+): Promise<{ note: PersonalNote | null; error: string | null }> {
+  const line = text.trim();
+  if (!line) return { note: null, error: "내용이 비어 있습니다." };
+
+  const p = (n: number) => String(n).padStart(2, "0");
+  const now = new Date();
+  const stamp = `${p(now.getHours())}:${p(now.getMinutes())}`;
+  const title = dailyLogTitle(now);
+
+  const supabase = createClient();
+  const {
+    data: { user },
+  } = await supabase.auth.getUser();
+  if (!user) return { note: null, error: "로그인이 필요합니다." };
+
+  // 오늘 일지가 이미 있으면 거기에 붙인다
+  const { data: found } = await supabase
+    .from("personal_notes")
+    .select("*")
+    .eq("user_id", user.id)
+    .eq("title", title)
+    .is("deleted_at", null)
+    .limit(1);
+
+  const today = (found ?? [])[0] as PersonalNote | undefined;
+
+  if (today) {
+    const merged = today.content ? `${today.content}\n${stamp}  ${line}` : `${stamp}  ${line}`;
+    const { data, error } = await supabase
+      .from("personal_notes")
+      .update({ content: merged })
+      .eq("id", today.id)
+      .select()
+      .single();
+    if (error) return { note: null, error: `기록하지 못했습니다: ${error.message}` };
+    return { note: data as PersonalNote, error: null };
+  }
+
+  const created = await createNote({ title, content: `${stamp}  ${line}` });
+  if (!created) return { note: null, error: "기록하지 못했습니다." };
+  return { note: created, error: null };
+}
