@@ -43,22 +43,22 @@ type EditTarget = {
  */
 const COL = {
   no: 36,
-  date: 68,
+  date: 88,
   /** 진행일정 — 착수일 */
   start: 68,
   /** 완료계획 — 목표 완료일 (소요일·일정대비 계산 기준) */
   due: 72,
   /** 완료여부 — 완료 O + 실제 완료일 */
   done: 76,
-  days: 48,
+  days: 58,
   diff: 72,
   assignee: 112,
   instructor: 64,
   progress: 84,
-  log: 148,
+  log: 118,
   status: 56,
   note: 80,
-  hist: 40,
+  hist: 48,
   /** 업무내용이 이 폭보다 좁아지면 글자가 한 자씩 끊긴다.
       나머지 칸을 줄여 이 칸에 몰아준다 — 표에서 실제로 읽는 것은 여기다. */
   titleMin: 340,
@@ -1051,7 +1051,7 @@ function Th({ className, children }: { className?: string; children: React.React
   return (
     <th
       className={cn(
-        "px-3 py-2.5 font-medium text-left border-b border-gray-300 border-r border-gray-200 last:border-r-0",
+        "px-2 py-2.5 font-medium text-left border-b border-gray-300 border-r border-gray-200 last:border-r-0 overflow-hidden",
         className
       )}
     >
@@ -1062,7 +1062,14 @@ function Th({ className, children }: { className?: string; children: React.React
 
 function Td({ className, children }: { className?: string; children: React.ReactNode }) {
   return (
-    <td className={cn("px-3 py-2.5 align-top border-r border-gray-100 last:border-r-0", className)}>
+    // overflow-hidden: 칸보다 긴 글자가 옆 칸을 덮지 않도록 막는다.
+    // (작성일 "2026-09-15" 가 좁은 칸에서 업무내용 위로 넘쳐 들어간 적이 있다)
+    <td
+      className={cn(
+        "px-2 py-2.5 align-top border-r border-gray-100 last:border-r-0 overflow-hidden",
+        className
+      )}
+    >
       {children}
     </td>
   );
