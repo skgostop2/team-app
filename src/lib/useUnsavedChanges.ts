@@ -12,7 +12,10 @@ const MESSAGE = "저장하지 않은 내용이 있습니다. 이 화면을 나�
  */
 export function useUnsavedChanges(dirty: boolean) {
   const dirtyRef = useRef(dirty);
-  dirtyRef.current = dirty;
+  // 그리는 중에 ref 를 바꾸면 React 가 경고한다. 그려진 뒤에 맞춘다.
+  useEffect(() => {
+    dirtyRef.current = dirty;
+  }, [dirty]);
 
   useEffect(() => {
     function handleBeforeUnload(e: BeforeUnloadEvent) {

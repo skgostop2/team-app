@@ -1,6 +1,7 @@
 "use client";
 
 import { useState } from "react";
+import { checkPassword } from "@/lib/deleteLock";
 
 /**
  * 삭제 잠금 창.
@@ -10,8 +11,9 @@ import { useState } from "react";
  * 여기서는 "손이 미끄러져 사라지는 일"을 막는 것이 목적이다.
  *
  * 지워도 무엇을 언제 누가 지웠는지는 deleted_tasks 에 남는다.
+ *
+ * 비밀번호는 코드에 박아두지 않는다. DB 에 해시로 두고 팀원관리 화면에서 바꾼다.
  */
-const CODE = "0000";
 
 export default function DeleteLock({
   title,
@@ -28,13 +30,14 @@ export default function DeleteLock({
   const [busy, setBusy] = useState(false);
 
   async function run() {
-    if (code !== CODE) {
-      setError("비밀번호가 맞지 않습니다.");
-      return;
-    }
     setBusy(true);
     setError(null);
     try {
+      const check = await checkPassword(code);
+      if (!check.ok) {
+        setError(check.reason ?? "비밀번호가 맞지 않습니다.");
+        return;
+      }
       const err = await onConfirm();
       if (err) {
         setError(err);

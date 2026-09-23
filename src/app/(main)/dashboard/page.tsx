@@ -4,7 +4,7 @@ import { useEffect, useMemo, useState } from "react";
 import Link from "next/link";
 import { useSearchParams } from "next/navigation";
 import { createClient } from "@/lib/supabase/client";
-import { formatElapsed, isLongInactive, formatDate, cn } from "@/lib/utils";
+import { formatElapsed, isLongInactive, cn } from "@/lib/utils";
 import type { Profile, TaskWithEffectiveStatus } from "@/lib/types";
 import { isManager, isAssignable, byDisplayOrder } from "@/lib/roles";
 import TaskLedger from "@/components/TaskLedger";

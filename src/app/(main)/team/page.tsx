@@ -6,6 +6,7 @@ import { callEdgeFunction } from "@/lib/edge";
 import { formatElapsed, formatDate, isLongInactive } from "@/lib/utils";
 import type { Profile } from "@/lib/types";
 import { isManager, isTeamLead, byDisplayOrder } from "@/lib/roles";
+import DeletePasswordSetting from "@/components/DeletePasswordSetting";
 
 export default function TeamPage() {
   const [me, setMe] = useState<Profile | null>(null);
@@ -278,6 +279,9 @@ export default function TeamPage() {
           }}
         />
       )}
+
+      {/* 삭제 비밀번호는 팀장만 바꾼다 */}
+      {isTeamLead(me) && me && <DeletePasswordSetting userId={me.id} />}
 
       {pwTarget && <ChangePasswordModal profile={pwTarget} onClose={() => setPwTarget(null)} />}
 
