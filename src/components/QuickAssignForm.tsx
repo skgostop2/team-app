@@ -235,12 +235,26 @@ export default function QuickAssignForm({
           onChange={(e) => setText(e.target.value)}
           autoFocus
           placeholder={
-            "청소대차 진행보고 - 안윤환\n에어드레인 용량 조사 보고 - 안윤환\n발루프센서 배선 확인 체크시트 추가 보고 - 안윤환"
+            "여기에 지시 내용을 붙여넣으세요.\n\n예시)\n청소대차 진행보고 - 안윤환\n에어드레인 용량 조사 보고 - 안윤환"
           }
           className={`w-full rounded-lg border border-gray-300 px-3 py-2.5 text-base leading-relaxed ${
             wide ? "h-60 md:h-[26rem]" : "h-36 md:h-40"
           }`}
         />
+        {text.trim().length === 0 && (
+          <button
+            type="button"
+            onClick={() =>
+              setText(
+                "청소대차 진행보고 - 안윤환\n에어드레인 용량 조사 보고 - 안윤환\n발루프센서 배선 확인 체크시트 추가 보고 - 안윤환"
+              )
+            }
+            className="text-xs mt-2 px-2.5 py-1.5 rounded-lg border border-gray-300 text-gray-500 hover:bg-gray-50"
+          >
+            예시로 한번 해보기
+          </button>
+        )}
+
         {wide && (
           <p className="text-xs text-gray-400 mt-1.5 break-keep">
             지시 원문은 그대로 보관됩니다. 업무명이 잘못 잡혔으면 이 글을 고치면 오른쪽도 따라
