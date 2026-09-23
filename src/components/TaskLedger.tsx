@@ -42,25 +42,26 @@ type EditTarget = {
  * 칸을 늘리거나 줄일 때는 여기만 고치면 표 최소 폭도 같이 따라간다.
  */
 const COL = {
-  no: 40,
-  date: 76,
+  no: 36,
+  date: 68,
   /** 진행일정 — 착수일 */
-  start: 76,
-  /** 완료계획일정 — 목표 완료일 (소요일·일정대비 계산 기준) */
-  due: 84,
+  start: 68,
+  /** 완료계획 — 목표 완료일 (소요일·일정대비 계산 기준) */
+  due: 72,
   /** 완료여부 — 완료 O + 실제 완료일 */
-  done: 88,
-  days: 56,
-  diff: 84,
-  assignee: 136,
-  instructor: 80,
-  progress: 96,
-  log: 180,
-  status: 64,
-  note: 100,
-  hist: 44,
-  /** 업무내용이 이 폭보다 좁아지면 글자가 한 자씩 끊긴다 */
-  titleMin: 280,
+  done: 76,
+  days: 48,
+  diff: 72,
+  assignee: 112,
+  instructor: 64,
+  progress: 84,
+  log: 148,
+  status: 56,
+  note: 80,
+  hist: 40,
+  /** 업무내용이 이 폭보다 좁아지면 글자가 한 자씩 끊긴다.
+      나머지 칸을 줄여 이 칸에 몰아준다 — 표에서 실제로 읽는 것은 여기다. */
+  titleMin: 340,
 } as const;
 
 export default function TaskLedger({
@@ -441,7 +442,7 @@ export default function TaskLedger({
               <Th>작성일</Th>
               <Th>업무내용</Th>
               <Th className="text-center">진행일정</Th>
-              <Th className="text-center">완료계획일정</Th>
+              <Th className="text-center">완료계획</Th>
               <Th className="text-center">완료여부</Th>
               <Th className="text-center">소요일</Th>
               <Th className="text-center">일정대비</Th>
