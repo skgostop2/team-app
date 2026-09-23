@@ -152,7 +152,7 @@ export default function NewTaskModal({
           </div>
           )}
           <div>
-            <label className="block text-sm font-medium text-gray-700 mb-1">진행일정 (마감일)</label>
+            <label className="block text-sm font-medium text-gray-700 mb-1">완료계획일정</label>
             <input
               type="date"
               value={dueDate}

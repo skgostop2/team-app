@@ -36,9 +36,9 @@ const HISTORY_LABELS: Record<string, string> = {
   deputy_ids: "참여자 변경",
   instructor: "지시자 변경",
   note: "비고 변경",
-  completed_at: "완료일 변경",
-  start_date: "작성일 변경",
-  due_date: "진행일정 변경",
+  completed_at: "완료여부 변경",
+  start_date: "진행일정 변경",
+  due_date: "완료계획일정 변경",
   progress: "진행률 변경",
   status: "상태 변경",
 };
@@ -427,7 +427,7 @@ export default function TaskDetail({
                 <p className="text-sm text-gray-600 mt-1 whitespace-pre-wrap">{task.description}</p>
               )}
               <p className="text-xs text-gray-400 mt-2">
-                진행일정(마감일): {formatDate(task.due_date)}
+                완료계획일정: {formatDate(task.due_date)}
                 {task.instructor && <> · 지시자: {task.instructor}</>}
               </p>
             </div>
@@ -479,7 +479,7 @@ export default function TaskDetail({
         {canEditProgress && (
           <div className="rounded-lg border border-gray-200 p-3">
             <label className="block text-xs font-medium text-gray-500 mb-1">
-              완료일 {task.status !== "완료" && "(실제로 끝낸 날)"}
+              완료여부 {task.status !== "완료" && "— 끝낸 날짜를 넣으면 완료로 바뀝니다"}
             </label>
             <div className="flex items-center gap-2 flex-wrap">
               <input

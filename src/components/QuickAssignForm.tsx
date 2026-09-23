@@ -213,7 +213,7 @@ export default function QuickAssignForm({
               />
             </label>
             <label className="text-xs text-gray-500">
-              진행일정 (기한 못 읽은 건만)
+              완료계획일정 (기한 못 읽은 건만)
               <input
                 type="date"
                 value={dueDate}

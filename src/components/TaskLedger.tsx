@@ -14,7 +14,7 @@ import ProgressLogModal from "@/components/ProgressLogModal";
  * 업무 진행 현황 — 메모 프로그램과 같은 대장(臺帳) 양식.
  * 한 건에 한 줄씩, 번호를 붙여 위에서 아래로 계속 쌓인다.
  *
- * NO. | 작성일 | 업무내용 | 진행일정 | 완료일 | 소요일 | 일정대비 | 담당자 | 지시자 | 진행률 | 진행기록 | 상태 | 비고 | 이력
+ * NO. | 작성일 | 업무내용 | 진행일정 | 완료계획일정 | 완료여부 | 소요일 | 일정대비 | 담당자 | 지시자 | 진행률 | 진행기록 | 상태 | 비고 | 이력
  *
  * 고치는 방법: 칸을 누르면 그 칸만 고치는 작은 창이 표 위에 뜬다.
  * 화면을 옮기지 않으므로 표에서 보던 자리를 잃지 않는다.
@@ -27,6 +27,7 @@ type EditTarget = {
   field:
     | "title"
     | "description"
+    | "start_date"
     | "due_date"
     | "completed_at"
     | "progress"
@@ -43,8 +44,12 @@ type EditTarget = {
 const COL = {
   no: 40,
   date: 76,
-  due: 76,
-  done: 76,
+  /** 진행일정 — 착수일 */
+  start: 76,
+  /** 완료계획일정 — 목표 완료일 (소요일·일정대비 계산 기준) */
+  due: 84,
+  /** 완료여부 — 완료 O + 실제 완료일 */
+  done: 88,
   days: 56,
   diff: 84,
   assignee: 136,
@@ -94,6 +99,7 @@ export default function TaskLedger({
   const tableMinWidth =
     COL.no +
     COL.date +
+    COL.start +
     COL.due +
     COL.done +
     COL.days +
@@ -266,21 +272,37 @@ export default function TaskLedger({
                 <Row label="진행일정">
                   <Cell
                     enabled={canDirect}
+                    onClick={() => setEdit({ task: t, field: "start_date" })}
+                    title="눌러서 진행일정 수정 (착수일)"
+                  >
+                    {formatShortDate(t.start_date) || <span className="text-gray-300">—</span>}
+                  </Cell>
+                </Row>
+
+                <Row label="완료계획일정">
+                  <Cell
+                    enabled={canDirect}
                     onClick={() => setEdit({ task: t, field: "due_date" })}
-                    title="눌러서 진행일정 수정"
+                    title="눌러서 완료계획일정 수정"
                     className={t.effective_status === "지연" ? "text-red-600 font-medium" : ""}
                   >
                     {formatShortDate(t.due_date) || <span className="text-gray-300">—</span>}
                   </Cell>
                 </Row>
 
-                <Row label="완료일">
+                <Row label="완료여부">
                   <Cell
                     enabled={canTouch}
                     onClick={() => setEdit({ task: t, field: "completed_at" })}
-                    title="눌러서 완료일 수정"
+                    title="눌러서 완료 처리 / 완료일 수정"
                   >
-                    {formatShortDate(t.completed_at) || <span className="text-gray-300">—</span>}
+                    {t.completed_at ? (
+                      <span className="text-emerald-700 font-medium">
+                        완료 {formatShortDate(t.completed_at)}
+                      </span>
+                    ) : (
+                      <span className="text-gray-400">미완료</span>
+                    )}
                   </Cell>
                 </Row>
 
@@ -400,6 +422,7 @@ export default function TaskLedger({
             <col style={{ width: COL.no }} />
             <col style={{ width: COL.date }} />
             <col /> {/* 업무내용 — 남는 폭 전부 */}
+            <col style={{ width: COL.start }} />
             <col style={{ width: COL.due }} />
             <col style={{ width: COL.done }} />
             <col style={{ width: COL.days }} />
@@ -418,7 +441,8 @@ export default function TaskLedger({
               <Th>작성일</Th>
               <Th>업무내용</Th>
               <Th className="text-center">진행일정</Th>
-              <Th className="text-center">완료일</Th>
+              <Th className="text-center">완료계획일정</Th>
+              <Th className="text-center">완료여부</Th>
               <Th className="text-center">소요일</Th>
               <Th className="text-center">일정대비</Th>
               {showAssignee && <Th>담당자</Th>}
@@ -504,7 +528,19 @@ export default function TaskLedger({
                     )}
                   </Td>
 
-                  {/* 진행일정 (완료계획일) */}
+                  {/* 진행일정 — 언제부터 하는지 (착수일) */}
+                  <Td className="text-center text-gray-600 whitespace-nowrap">
+                    <Cell
+                      enabled={canDirect}
+                      onClick={() => setEdit({ task: t, field: "start_date" })}
+                      title="눌러서 진행일정 수정 (착수일)"
+                      className="text-center"
+                    >
+                      {formatShortDate(t.start_date) || <span className="text-gray-300">—</span>}
+                    </Cell>
+                  </Td>
+
+                  {/* 완료계획일정 — 목표 완료일 (지연 판정과 고과 수치의 기준) */}
                   <Td
                     className={cn(
                       "text-center whitespace-nowrap",
@@ -514,22 +550,31 @@ export default function TaskLedger({
                     <Cell
                       enabled={canDirect}
                       onClick={() => setEdit({ task: t, field: "due_date" })}
-                      title="눌러서 진행일정 수정"
+                      title="눌러서 완료계획일정 수정"
                       className="text-center"
                     >
                       {formatShortDate(t.due_date) || <span className="text-gray-300">—</span>}
                     </Cell>
                   </Td>
 
-                  {/* 완료일 */}
-                  <Td className="text-center text-gray-600 whitespace-nowrap">
+                  {/* 완료여부 — 끝났는지, 언제 끝냈는지 */}
+                  <Td className="text-center whitespace-nowrap">
                     <Cell
                       enabled={canTouch}
                       onClick={() => setEdit({ task: t, field: "completed_at" })}
-                      title="눌러서 완료일 수정 (실제로 끝낸 날)"
+                      title="눌러서 완료 처리 / 완료일 수정"
                       className="text-center"
                     >
-                      {formatShortDate(t.completed_at) || <span className="text-gray-300">—</span>}
+                      {t.completed_at ? (
+                        <>
+                          <span className="block text-emerald-700 font-medium">완료</span>
+                          <span className="block text-[10px] text-gray-500">
+                            {formatShortDate(t.completed_at)}
+                          </span>
+                        </>
+                      ) : (
+                        <span className="text-gray-400">미완료</span>
+                      )}
                     </Cell>
                   </Td>
 
@@ -666,7 +711,7 @@ export default function TaskLedger({
             {tasks.length === 0 && (
               <tr>
                 <td
-                  colSpan={showAssignee ? 14 : 13}
+                  colSpan={showAssignee ? 15 : 14}
                   className="px-4 py-10 text-center text-gray-400"
                 >
                   {emptyText}
@@ -767,11 +812,24 @@ function EditPopup({
     );
   }
 
+  if (field === "start_date") {
+    return (
+      <FieldPopup
+        label="진행일정"
+        hint="이 업무를 언제부터 하는지(착수일)입니다. 비워두면 지시일부터 본 것으로 봅니다."
+        kind="date"
+        value={t.start_date ?? ""}
+        onSave={(next) => patch(t.id, { start_date: next || null })}
+        onClose={onClose}
+      />
+    );
+  }
+
   if (field === "due_date") {
     return (
       <FieldPopup
-        label="진행일정 (완료계획일)"
-        hint="이 날짜가 지나면 지연으로 표시되고, 고과평가의 기한 준수 판정 기준이 됩니다."
+        label="완료계획일정"
+        hint="언제까지 끝내기로 한 날입니다. 이 날짜가 지나면 지연으로 표시되고, 소요일·일정대비·고과평가 수치가 모두 이 날을 기준으로 계산됩니다."
         kind="date"
         value={t.due_date ?? ""}
         min={createdDay}
@@ -785,11 +843,11 @@ function EditPopup({
     const done = t.effective_status === "완료";
     return (
       <FieldPopup
-        label="완료일"
+        label="완료여부"
         hint={
           done
-            ? "실제로 끝낸 날로 고치면 소요일과 일정 준수 수치에 바로 반영됩니다."
-            : "며칠 전에 끝낸 일이면 그 날짜를 넣으세요. 저장하면 완료 처리됩니다."
+            ? "실제로 끝낸 날입니다. 고치면 소요일과 일정 준수 수치에 바로 반영됩니다."
+            : "끝냈으면 끝낸 날짜를 넣고 저장하세요. 완료로 바뀝니다. 며칠 전에 끝낸 일이면 그 날짜를 넣으시면 됩니다."
         }
         kind="date"
         value={t.completed_at ? t.completed_at.slice(0, 10) : today}
