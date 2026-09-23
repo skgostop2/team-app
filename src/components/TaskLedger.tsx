@@ -438,21 +438,21 @@ export default function TaskLedger({
           </colgroup>
           <thead>
             <tr className="bg-blue-50 text-gray-700 text-xs">
-              <Th className="text-center">NO.</Th>
+              <Th>NO.</Th>
               <Th>작성일</Th>
               <Th>업무내용</Th>
-              <Th className="text-center">진행일정</Th>
-              <Th className="text-center">완료계획</Th>
-              <Th className="text-center">완료여부</Th>
-              <Th className="text-center">소요일</Th>
-              <Th className="text-center">일정대비</Th>
+              <Th>진행일정</Th>
+              <Th>완료계획</Th>
+              <Th>완료여부</Th>
+              <Th>소요일</Th>
+              <Th>일정대비</Th>
               {showAssignee && <Th>담당자</Th>}
               <Th>지시자</Th>
-              <Th className="text-center">진행률</Th>
+              <Th>진행률</Th>
               <Th>진행기록</Th>
-              <Th className="text-center">상태</Th>
+              <Th>상태</Th>
               <Th>비고</Th>
-              <Th className="text-center">이력</Th>
+              <Th>이력</Th>
             </tr>
           </thead>
           <tbody>
@@ -1051,7 +1051,7 @@ function Th({ className, children }: { className?: string; children: React.React
   return (
     <th
       className={cn(
-        "px-2 py-2.5 font-medium text-left border-b border-gray-300 border-r border-gray-200 last:border-r-0 overflow-hidden",
+        "px-2 py-2.5 font-medium text-center border-b border-gray-300 border-r border-gray-200 last:border-r-0 overflow-hidden",
         className
       )}
     >
