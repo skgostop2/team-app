@@ -606,7 +606,7 @@ export default function TaskLedger({
                       enabled={canDirect}
                       onClick={() => setEdit({ task: t, field: "start_date" })}
                       title="눌러서 진행일정 수정 (착수일)"
-                      className="text-center"
+                      align="center"
                     >
                       {formatShortDate(t.start_date) || <span className="text-gray-300">—</span>}
                     </Cell>
@@ -623,7 +623,7 @@ export default function TaskLedger({
                       enabled={canDirect}
                       onClick={() => setEdit({ task: t, field: "due_date" })}
                       title="눌러서 완료계획일정 수정"
-                      className="text-center"
+                      align="center"
                     >
                       {formatShortDate(t.due_date) || <span className="text-gray-300">—</span>}
                     </Cell>
@@ -635,7 +635,7 @@ export default function TaskLedger({
                       enabled={canTouch}
                       onClick={() => setEdit({ task: t, field: "completed_at" })}
                       title="눌러서 완료 처리 / 완료일 수정"
-                      className="text-center"
+                      align="center"
                     >
                       {t.completed_at ? (
                         <>
@@ -824,27 +824,39 @@ function Row({ label, children }: { label: string; children: React.ReactNode }) 
 }
 
 /** 누르면 수정 창이 뜨는 칸. 권한이 없으면 그냥 글자로 보인다. */
+/**
+ * 눌러서 고치는 칸.
+ *
+ * 정렬은 className 이 아니라 align 으로 받는다.
+ * cn() 은 클래스를 그냥 이어붙이기만 해서 "text-left"와 "text-center"를 같이 주면
+ * 둘이 싸우고 CSS 순서로 승부가 난다 (가운데 정렬이 안 먹는 사고가 있었다).
+ */
 function Cell({
   enabled,
   onClick,
   title,
   className,
+  align = "left",
   children,
 }: {
   enabled: boolean;
   onClick: () => void;
   title: string;
   className?: string;
+  align?: "left" | "center";
   children: React.ReactNode;
 }) {
-  if (!enabled) return <span className={className}>{children}</span>;
+  const alignClass = align === "center" ? "text-center" : "text-left";
+  if (!enabled)
+    return <span className={cn("block", alignClass, className)}>{children}</span>;
   return (
     <button
       type="button"
       onClick={onClick}
       title={title}
       className={cn(
-        "w-full text-left rounded px-1 -mx-1 hover:bg-blue-50 hover:ring-1 hover:ring-blue-200",
+        "block w-full rounded px-1 -mx-1 hover:bg-blue-50 hover:ring-1 hover:ring-blue-200",
+        alignClass,
         className
       )}
     >
