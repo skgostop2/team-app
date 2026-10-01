@@ -51,7 +51,7 @@ const COL = {
   /** 완료계획 — 목표 완료일 (소요일·일정대비 계산 기준) */
   due: 72,
   /** 완료여부 — 완료 O + 실제 완료일 */
-  done: 104,
+  done: 84,
   days: 64,
   diff: 84,
   assignee: 104,
@@ -365,7 +365,7 @@ export default function TaskLedger({
                         type="button"
                         onClick={() => completeNow(t.id)}
                         disabled={doneBusy === t.id}
-                        className="shrink-0 text-xs px-2.5 py-1 rounded-lg border border-emerald-300 text-emerald-700 bg-emerald-50 hover:bg-emerald-100 disabled:opacity-50"
+                        className="shrink-0 text-[11px] leading-none px-2 py-1 rounded border border-emerald-300 text-emerald-700 bg-emerald-50 hover:bg-emerald-100 disabled:opacity-50 whitespace-nowrap"
                       >
                         {doneBusy === t.id ? "처리 중" : "완료"}
                       </button>
@@ -649,17 +649,19 @@ export default function TaskLedger({
                       )}
                     </Cell>
 
-                    {/* 오늘 끝냈으면 버튼 하나로 */}
+                    {/* 오늘 끝냈으면 버튼 하나로. 칸을 넓혀도 버튼은 커지지 않는다 */}
                     {!t.completed_at && canTouch && (
-                      <button
-                        type="button"
-                        onClick={() => completeNow(t.id)}
-                        disabled={doneBusy === t.id}
-                        title="오늘 날짜로 완료 처리"
-                        className="mt-1 w-full text-[11px] px-1 py-1 rounded-md border border-emerald-300 text-emerald-700 bg-emerald-50 hover:bg-emerald-100 disabled:opacity-50"
-                      >
-                        {doneBusy === t.id ? "처리 중" : "완료"}
-                      </button>
+                      <div className="mt-0.5 flex justify-center">
+                        <button
+                          type="button"
+                          onClick={() => completeNow(t.id)}
+                          disabled={doneBusy === t.id}
+                          title="오늘 날짜로 완료 처리"
+                          className="text-[10px] leading-none px-2 py-1 rounded border border-emerald-300 text-emerald-700 bg-emerald-50 hover:bg-emerald-100 disabled:opacity-50 whitespace-nowrap"
+                        >
+                          {doneBusy === t.id ? "처리중" : "완료"}
+                        </button>
+                      </div>
                     )}
                   </Td>
 
