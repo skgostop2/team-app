@@ -68,6 +68,8 @@ const COL = {
 
 /** 끌어서 조절할 수 있는 칸들 (업무내용은 남는 폭을 받으므로 제외) */
 const RESIZABLE: Record<string, number> = {
+  /** 업무내용 — 0 이면 "남는 폭을 전부" (끌어서 정하면 그 폭으로 고정된다) */
+  title: 0,
   no: COL.no,
   date: COL.date,
   start: COL.start,
@@ -145,7 +147,7 @@ export default function TaskLedger({
     W.status +
     W.note +
     W.hist +
-    COL.titleMin;
+    (W.title > 0 ? W.title : COL.titleMin);
 
   const assignables = profiles.filter(isAssignable).sort(byDisplayOrder);
   const unassigned = tasks.filter((t) => !t.assignee_id).length;
@@ -482,14 +484,23 @@ export default function TaskLedger({
           "나머지 칸 합 + 업무내용 최소 폭"으로 잡는다. 이 계산을 빼먹으면
           업무내용 칸이 0으로 짜부라져 글자가 세로로 한 줄씩 떨어진다.
         */}
+        {/*
+          업무내용 폭을 직접 정하면 표 폭을 칸 합과 똑같이 고정한다.
+          그렇게 하지 않으면 브라우저가 남는 공간을 칸마다 제멋대로 나눠 주어
+          끌어서 맞춘 폭이 그대로 유지되지 않는다.
+        */}
         <table
-          className="w-full text-sm border-collapse table-fixed"
-          style={{ minWidth: tableMinWidth }}
+          className="text-sm border-collapse table-fixed"
+          style={{
+            minWidth: tableMinWidth,
+            width: W.title > 0 ? tableMinWidth : "100%",
+          }}
         >
           <colgroup>
             <col style={{ width: W.no }} />
             <col style={{ width: W.date }} />
-            <col /> {/* 업무내용 — 남는 폭 전부 */}
+            {/* 업무내용 — 끌어서 정한 폭이 있으면 그 폭, 없으면 남는 폭 전부 */}
+            {W.title > 0 ? <col style={{ width: W.title }} /> : <col />}
             <col style={{ width: W.start }} />
             <col style={{ width: W.due }} />
             <col style={{ width: W.done }} />
@@ -507,7 +518,7 @@ export default function TaskLedger({
             <tr className="bg-blue-50 text-gray-700 text-xs">
               <Th grip="no" onGrip={startDrag}>NO.</Th>
               <Th grip="date" onGrip={startDrag}>작성일</Th>
-              <Th>업무내용</Th>
+              <Th grip="title" onGrip={startDrag}>업무내용</Th>
               <Th grip="start" onGrip={startDrag}>진행일정</Th>
               <Th grip="due" onGrip={startDrag}>완료계획</Th>
               <Th grip="done" onGrip={startDrag}>완료여부</Th>
