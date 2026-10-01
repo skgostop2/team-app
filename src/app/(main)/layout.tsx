@@ -26,6 +26,17 @@ export default async function MainLayout({ children }: { children: React.ReactNo
 
   const p = profile as Profile;
 
+  // 2단계 인증을 켠 사람은 6자리 확인까지 끝나야 들어올 수 있다.
+  // 토큰의 aal 이 aal2 면 확인을 마친 것이다.
+  if (p.mfa_enabled) {
+    const {
+      data: { session },
+    } = await supabase.auth.getSession();
+    if (session && assuranceLevel(session.access_token) !== "aal2") {
+      redirect("/mfa");
+    }
+  }
+
   if (p.status !== "승인") {
     return (
       <div className="min-h-dvh flex items-center justify-center bg-gray-50 px-4">
@@ -39,6 +50,17 @@ export default async function MainLayout({ children }: { children: React.ReactNo
   }
 
   return <AppShell profile={p}>{children}</AppShell>;
+}
+
+/** 토큰 안의 aal 값을 읽는다 (서명 검증은 Supabase 가 이미 했다) */
+function assuranceLevel(accessToken: string): string | null {
+  try {
+    const body = accessToken.split(".")[1];
+    const json = JSON.parse(Buffer.from(body, "base64").toString("utf8"));
+    return typeof json.aal === "string" ? json.aal : null;
+  } catch {
+    return null;
+  }
 }
 
 function SignOutButton() {

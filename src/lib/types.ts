@@ -16,6 +16,8 @@ export interface Profile {
   last_seen_at: string;
   /** 팀장이 정한 표시 순서 */
   sort_order: number;
+  /** 2단계 인증(구글 OTP)을 켰는지 */
+  mfa_enabled: boolean;
 }
 
 export interface Task {

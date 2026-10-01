@@ -14,6 +14,7 @@ export default function TeamPage() {
   const [loading, setLoading] = useState(true);
   const [busyId, setBusyId] = useState<string | null>(null);
   const [pwTarget, setPwTarget] = useState<Profile | null>(null);
+  const [mfaBusyId, setMfaBusyId] = useState<string | null>(null);
   const [deleteTarget, setDeleteTarget] = useState<Profile | null>(null);
   const [message, setMessage] = useState<string | null>(null);
   const [showDirectorForm, setShowDirectorForm] = useState(false);
@@ -42,6 +43,32 @@ export default function TeamPage() {
   }, []);
 
   if (loading) return <p className="text-sm text-gray-400">불러오는 중...</p>;
+
+  /**
+   * 팀원의 2단계 인증을 풀어준다.
+   * 휴대폰을 바꾸거나 잃어버리면 본인은 들어올 방법이 없다.
+   */
+  async function resetMfa(p: Profile) {
+    if (!window.confirm(`${p.name}님의 2단계 인증을 해제합니다. 그 사람은 비밀번호만으로 로그인하게 됩니다.`))
+      return;
+    setMfaBusyId(p.id);
+    setMessage(null);
+    try {
+      const supabase = createClient();
+      const { data, error } = await supabase.functions.invoke("reset-mfa", {
+        body: { targetId: p.id },
+      });
+      if (error) throw error;
+      const res = data as { error?: string; removed?: number };
+      if (res?.error) throw new Error(res.error);
+      setMessage(`${p.name}님의 2단계 인증을 해제했습니다. 다시 등록하도록 안내해주세요.`);
+      await load();
+    } catch (e) {
+      setMessage(`해제하지 못했습니다: ${e instanceof Error ? e.message : String(e)}`);
+    } finally {
+      setMfaBusyId(null);
+    }
+  }
 
   if (!isManager(me)) {
     return (
@@ -238,6 +265,8 @@ export default function TeamPage() {
               busy={busyId === p.id}
               onSaveTeamName={saveTeamName}
               onChangePassword={() => setPwTarget(p)}
+              onResetMfa={() => resetMfa(p)}
+              mfaBusy={mfaBusyId === p.id}
               onDelete={() => setDeleteTarget(p)}
             />
           ))}
@@ -555,12 +584,16 @@ function MemberRow({
   busy,
   onSaveTeamName,
   onChangePassword,
+  onResetMfa,
+  mfaBusy,
   onDelete,
 }: {
   profile: Profile;
   busy: boolean;
   onSaveTeamName: (p: Profile, teamName: string) => void;
   onChangePassword: () => void;
+  onResetMfa: () => void;
+  mfaBusy: boolean;
   onDelete: () => void;
 }) {
   const [editing, setEditing] = useState(false);
@@ -618,6 +651,16 @@ function MemberRow({
         >
           비밀번호 변경
         </button>
+        {profile.mfa_enabled && (
+          <button
+            onClick={onResetMfa}
+            disabled={mfaBusy}
+            title="휴대폰을 바꿨거나 잃어버린 팀원에게"
+            className="text-xs px-3 py-1.5 rounded-lg border border-amber-300 text-amber-700 bg-amber-50 hover:bg-amber-100 disabled:opacity-50"
+          >
+            {mfaBusy ? "해제 중..." : "OTP 해제"}
+          </button>
+        )}
         <button
           onClick={onDelete}
           disabled={busy}
