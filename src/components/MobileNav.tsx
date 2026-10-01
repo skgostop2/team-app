@@ -19,8 +19,9 @@ export default function MobileNav({ isLead }: { isLead: boolean }) {
     : [
         { href: "/dashboard", label: "홈", icon: "🏠" },
         { href: "/tasks", label: "내업무", icon: "📋" },
+        { href: "/assign", label: "등록", icon: "✍️" },
         { href: "/notices", label: "공지", icon: "📢" },
-        { href: "/logout", label: "로그아웃", icon: "🚪" },
+        { href: "/logout", label: "나가기", icon: "🚪" },
       ];
 
   return (

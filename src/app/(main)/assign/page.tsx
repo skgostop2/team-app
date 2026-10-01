@@ -48,22 +48,27 @@ export default function AssignPage() {
     const mine = profile as Profile | null;
     setMe(mine);
 
-    if (!mine || !isManager(mine)) {
+    if (!mine || mine.status !== "승인") {
       setDenied(true);
       setLoading(false);
       return;
     }
 
+    const lead = isManager(mine);
+
     const list = (all ?? []) as Profile[];
     setMembers(list.filter(isAssignable).sort(byDisplayOrder));
     setNames(Object.fromEntries(list.map((p) => [p.id, p.name])));
 
-    const { data: bs } = await supabase
-      .from("assign_batches")
-      .select("id, content, task_count, created_at, created_by")
-      .order("created_at", { ascending: false })
-      .limit(20);
-    setBatches((bs ?? []) as Batch[]);
+    // 지시 원문 보관은 팀장·실장 자료다. 팀원은 불러오지 않는다.
+    if (lead) {
+      const { data: bs } = await supabase
+        .from("assign_batches")
+        .select("id, content, task_count, created_at, created_by")
+        .order("created_at", { ascending: false })
+        .limit(20);
+      setBatches((bs ?? []) as Batch[]);
+    }
     setLoading(false);
   }
 
@@ -76,19 +81,26 @@ export default function AssignPage() {
   if (denied)
     return (
       <div className="bg-white rounded-xl border border-gray-200 p-6">
-        <p className="text-sm font-medium text-gray-700">업무지시는 팀장·실장만 쓸 수 있습니다.</p>
+        <p className="text-sm font-medium text-gray-700">사용할 수 없는 계정입니다.</p>
       </div>
     );
 
+  const lead = isManager(me);
+
   return (
     <div className="space-y-5">
-      <PrintHeader title="업무지시 내역" subtitle={me?.team_name ?? ""} />
+      <PrintHeader
+        title={lead ? "업무지시 내역" : "내 업무 등록"}
+        subtitle={me?.team_name ?? ""}
+      />
 
       <div className="no-print flex items-start justify-between gap-3 flex-wrap">
         <div>
-          <h1 className="text-xl font-bold text-gray-900">업무지시</h1>
+          <h1 className="text-xl font-bold text-gray-900">{lead ? "업무지시" : "내 업무 등록"}</h1>
           <p className="text-sm text-gray-500 mt-0.5 break-keep">
-            지시 내용을 한꺼번에 붙여넣으면 이름과 기한을 찾아 담당자별 업무로 만듭니다.
+            {lead
+              ? "지시 내용을 한꺼번에 붙여넣으면 이름과 기한을 찾아 담당자별 업무로 만듭니다."
+              : "할 일을 편하게 적어 붙여넣으면 건별로 나눠 내 업무로 등록합니다. 기한도 찾아 넣습니다."}
           </p>
         </div>
         <PrintButton label="지시내역 인쇄" />
@@ -107,14 +119,20 @@ export default function AssignPage() {
             createdBy={me.id}
             instructorDefault={me.name}
             layout="page"
+            mode={lead ? "assign" : "self"}
             onDone={(n) => {
-              setMsg(`${n}건을 지시 등록했습니다. 담당자 화면에 새 업무로 표시됩니다.`);
+              setMsg(
+                lead
+                  ? `${n}건을 지시 등록했습니다. 담당자 화면에 새 업무로 표시됩니다.`
+                  : `${n}건을 내 업무로 등록했습니다.`
+              );
               load();
             }}
           />
         )}
       </div>
 
+      {lead && (
       <div className="bg-white rounded-xl border border-gray-200 print-block">
         <div className="flex items-baseline justify-between gap-3 px-4 py-3 border-b border-gray-200 flex-wrap">
           <h2 className="text-base font-bold text-gray-900">지시 원문 보관</h2>
@@ -161,6 +179,7 @@ export default function AssignPage() {
           );
         })}
       </div>
+      )}
     </div>
   );
 }

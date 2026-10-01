@@ -20,6 +20,7 @@ export default function QuickAssignForm({
   createdBy,
   instructorDefault,
   layout = "modal",
+  mode = "assign",
   onDone,
 }: {
   members: Profile[];
@@ -27,6 +28,11 @@ export default function QuickAssignForm({
   instructorDefault?: string | null;
   /** page = 좌우로 넓게, modal = 위아래로 */
   layout?: "page" | "modal";
+  /**
+   * assign = 팀장이 남에게 지시 (담당자를 고르고, 지시 원문을 보관한다)
+   * self   = 팀원이 자기 업무를 등록 (담당자는 본인 고정, 지시 관련은 없다)
+   */
+  mode?: "assign" | "self";
   onDone: (count: number) => void;
 }) {
   const [text, setText] = useState("");
@@ -52,8 +58,16 @@ export default function QuickAssignForm({
     [text, memberList, picked]
   );
 
-  const toAdd = rows.filter((r) => !dropped[r.raw]);
-  const missing = toAdd.filter((r) => !r.assigneeId).length;
+  const self = mode === "self";
+
+  // 자기 업무 등록에서는 글에 누구 이름이 적혀 있든 본인 것으로 넣는다.
+  // 남에게 일을 넘기는 것은 지시이고, 그건 팀장 몫이다.
+  const shaped = self
+    ? rows.map((r) => ({ ...r, assigneeId: createdBy, deputyIds: [], warnings: [] }))
+    : rows;
+
+  const toAdd = shaped.filter((r) => !dropped[r.raw]);
+  const missing = self ? 0 : toAdd.filter((r) => !r.assigneeId).length;
   const wide = layout === "page";
 
   async function save() {
@@ -67,20 +81,22 @@ export default function QuickAssignForm({
     try {
       const supabase = createClient();
 
-      // 지시 원문을 먼저 남긴다. 원문 보관이 안 돼도 업무 등록은 진행한다.
+      // 지시 원문은 지시일 때만 남긴다. 원문 보관이 안 돼도 업무 등록은 진행한다.
       let batchId: string | null = null;
-      const { data: batch, error: batchErr } = await supabase
-        .from("assign_batches")
-        .insert({ content: text, created_by: createdBy, task_count: toAdd.length })
-        .select("id")
-        .single();
-      if (batchErr)
-        setWarn(`지시 원문 보관은 실패했습니다 (${batchErr.message}). 업무는 등록합니다.`);
-      else batchId = (batch as { id: string }).id;
+      if (!self) {
+        const { data: batch, error: batchErr } = await supabase
+          .from("assign_batches")
+          .insert({ content: text, created_by: createdBy, task_count: toAdd.length })
+          .select("id")
+          .single();
+        if (batchErr)
+          setWarn(`지시 원문 보관은 실패했습니다 (${batchErr.message}). 업무는 등록합니다.`);
+        else batchId = (batch as { id: string }).id;
+      }
 
       const payload = toAdd.map((r) => ({
         ...toQuickInsert(r, createdBy, {
-          instructor: instructor.trim() || null,
+          instructor: self ? null : instructor.trim() || null,
           dueDate: dueDate || null,
         }),
         ...(batchId ? { batch_id: batchId } : {}),
@@ -133,17 +149,19 @@ export default function QuickAssignForm({
         </p>
       )}
 
-      {rows.length > 0 && (
+      {shaped.length > 0 && (
         <>
           <div className="flex items-baseline justify-between mb-1.5">
-            <p className="text-sm font-semibold text-gray-700">정리된 업무 {toAdd.length}건</p>
+            <p className="text-sm font-semibold text-gray-700">
+              {self ? "등록할 내 업무" : "정리된 업무"} {toAdd.length}건
+            </p>
             {missing > 0 && (
               <p className="text-xs text-amber-700 font-medium">담당자 없음 {missing}건</p>
             )}
           </div>
 
           <div className="border border-gray-200 rounded-lg overflow-hidden">
-            {rows.map((r) => {
+            {shaped.map((r) => {
               const out = !!dropped[r.raw];
               const hasWarn = r.warnings.length > 0;
               const deputies = r.deputyIds
@@ -180,29 +198,32 @@ export default function QuickAssignForm({
                         </p>
                       )}
                     </div>
-                    <select
-                      value={r.assigneeId ?? ""}
-                      onChange={(e) => setPicked((p) => ({ ...p, [r.raw]: e.target.value }))}
-                      className={`shrink-0 w-28 md:w-32 rounded-lg border px-2 py-1.5 text-sm ${
-                        r.assigneeId
-                          ? "border-gray-300 text-gray-900"
-                          : "border-amber-400 text-amber-700 bg-amber-50"
-                      }`}
-                    >
-                      <option value="">담당자</option>
-                      {members.map((m) => (
-                        <option key={m.id} value={m.id}>
-                          {m.name}
-                        </option>
-                      ))}
-                    </select>
+                    {!self && (
+                      <select
+                        value={r.assigneeId ?? ""}
+                        onChange={(e) => setPicked((p) => ({ ...p, [r.raw]: e.target.value }))}
+                        className={`shrink-0 w-28 md:w-32 rounded-lg border px-2 py-1.5 text-sm ${
+                          r.assigneeId
+                            ? "border-gray-300 text-gray-900"
+                            : "border-amber-400 text-amber-700 bg-amber-50"
+                        }`}
+                      >
+                        <option value="">담당자</option>
+                        {members.map((m) => (
+                          <option key={m.id} value={m.id}>
+                            {m.name}
+                          </option>
+                        ))}
+                      </select>
+                    )}
                   </div>
                 </div>
               );
             })}
           </div>
 
-          <div className="grid grid-cols-2 gap-2 mt-3">
+          <div className={self ? "mt-3" : "grid grid-cols-2 gap-2 mt-3"}>
+            {!self && (
             <label className="text-xs text-gray-500">
               지시자 (전체 공통)
               <input
@@ -212,6 +233,7 @@ export default function QuickAssignForm({
                 className="w-full rounded-lg border border-gray-300 px-2.5 py-2 text-sm text-gray-900 mt-1"
               />
             </label>
+            )}
             <label className="text-xs text-gray-500">
               완료계획일정 (기한 못 읽은 건만)
               <input
@@ -291,13 +313,17 @@ export default function QuickAssignForm({
           {saving
             ? "등록 중..."
             : toAdd.length > 0
-              ? `${toAdd.length}건 지시 등록`
+              ? self
+                ? `${toAdd.length}건 내 업무 등록`
+                : `${toAdd.length}건 지시 등록`
               : text.trim()
                 ? "읽을 업무가 없습니다"
                 : "글을 붙여넣어 주세요"}
         </button>
         <p className="text-xs text-gray-400 mt-2 text-center break-keep">
-          등록하면 각 담당자 화면에 새 업무로 뜨고, 확인을 눌러야 신규 표시가 없어집니다.
+          {self
+            ? "등록하면 내 업무 목록에 바로 들어가고, 팀장 화면에도 팀원추가 업무로 표시됩니다."
+            : "등록하면 각 담당자 화면에 새 업무로 뜨고, 확인을 눌러야 신규 표시가 없어집니다."}
         </p>
       </div>
     </div>
