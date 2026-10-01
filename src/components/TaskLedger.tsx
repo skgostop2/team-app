@@ -2,6 +2,7 @@
 
 import Link from "next/link";
 import { useState } from "react";
+import { useColumnWidths } from "@/lib/useColumnWidths";
 import type { Profile, TaskWithEffectiveStatus } from "@/lib/types";
 import { formatShortDate, formatIsoDate, cn } from "@/lib/utils";
 import { isAssignable, byDisplayOrder } from "@/lib/roles";
@@ -50,20 +51,38 @@ const COL = {
   /** 완료계획 — 목표 완료일 (소요일·일정대비 계산 기준) */
   due: 72,
   /** 완료여부 — 완료 O + 실제 완료일 */
-  done: 76,
-  days: 58,
-  diff: 72,
-  assignee: 112,
+  done: 104,
+  days: 64,
+  diff: 84,
+  assignee: 104,
   instructor: 64,
   progress: 84,
-  log: 118,
-  status: 56,
+  log: 96,
+  status: 64,
   note: 80,
   hist: 48,
   /** 업무내용이 이 폭보다 좁아지면 글자가 한 자씩 끊긴다.
       나머지 칸을 줄여 이 칸에 몰아준다 — 표에서 실제로 읽는 것은 여기다. */
   titleMin: 340,
 } as const;
+
+/** 끌어서 조절할 수 있는 칸들 (업무내용은 남는 폭을 받으므로 제외) */
+const RESIZABLE: Record<string, number> = {
+  no: COL.no,
+  date: COL.date,
+  start: COL.start,
+  due: COL.due,
+  done: COL.done,
+  days: COL.days,
+  diff: COL.diff,
+  assignee: COL.assignee,
+  instructor: COL.instructor,
+  progress: COL.progress,
+  log: COL.log,
+  status: COL.status,
+  note: COL.note,
+  hist: COL.hist,
+};
 
 export default function TaskLedger({
   tasks,
@@ -98,26 +117,35 @@ export default function TaskLedger({
   const [edit, setEdit] = useState<EditTarget | null>(null);
 
   // 나머지 칸 합 + 업무내용 최소 폭 = 표 최소 폭
-  const tableMinWidth =
-    COL.no +
-    COL.date +
-    COL.start +
-    COL.due +
-    COL.done +
-    COL.days +
-    COL.diff +
-    (showAssignee ? COL.assignee : 0) +
-    COL.instructor +
-    COL.progress +
-    COL.log +
-    COL.status +
-    COL.note +
-    COL.hist +
-    COL.titleMin;
+
 
   const [detailId, setDetailId] = useState<string | null>(null);
   const [logTask, setLogTask] = useState<TaskWithEffectiveStatus | null>(null);
   const [doneBusy, setDoneBusy] = useState<string | null>(null);
+
+  // 칸 폭은 쓰는 사람이 끌어서 정한다 (이 브라우저에만 저장된다)
+  const { widths: W, startDrag, reset: resetWidths, changed: widthsChanged } = useColumnWidths(
+    "task-ledger-widths",
+    RESIZABLE
+  );
+
+  // 나머지 칸 합 + 업무내용 최소 폭 = 표 최소 폭
+  const tableMinWidth =
+    W.no +
+    W.date +
+    W.start +
+    W.due +
+    W.done +
+    W.days +
+    W.diff +
+    (showAssignee ? W.assignee : 0) +
+    W.instructor +
+    W.progress +
+    W.log +
+    W.status +
+    W.note +
+    W.hist +
+    COL.titleMin;
 
   const assignables = profiles.filter(isAssignable).sort(byDisplayOrder);
   const unassigned = tasks.filter((t) => !t.assignee_id).length;
@@ -159,6 +187,15 @@ export default function TaskLedger({
       <div className="flex items-baseline justify-between gap-3 px-4 py-3 border-b border-gray-200 flex-wrap">
         <h2 className="text-base font-bold text-gray-900">{title}</h2>
         <p className="text-xs text-gray-400">
+          {widthsChanged && (
+            <button
+              onClick={resetWidths}
+              className="no-print mr-2 underline hover:text-gray-600"
+              title="칸 폭을 처음 상태로"
+            >
+              칸 폭 초기화
+            </button>
+          )}
           출력일: {today} &nbsp;|&nbsp; 총 {tasks.length}건
           {canAssign && unassigned > 0 && (
             <span className="text-amber-600 font-medium"> · 담당자 미지정 {unassigned}건</span>
@@ -450,39 +487,43 @@ export default function TaskLedger({
           style={{ minWidth: tableMinWidth }}
         >
           <colgroup>
-            <col style={{ width: COL.no }} />
-            <col style={{ width: COL.date }} />
+            <col style={{ width: W.no }} />
+            <col style={{ width: W.date }} />
             <col /> {/* 업무내용 — 남는 폭 전부 */}
-            <col style={{ width: COL.start }} />
-            <col style={{ width: COL.due }} />
-            <col style={{ width: COL.done }} />
-            <col style={{ width: COL.days }} />
-            <col style={{ width: COL.diff }} />
-            {showAssignee && <col style={{ width: COL.assignee }} />}
-            <col style={{ width: COL.instructor }} />
-            <col style={{ width: COL.progress }} />
-            <col style={{ width: COL.log }} />
-            <col style={{ width: COL.status }} />
-            <col style={{ width: COL.note }} />
-            <col style={{ width: COL.hist }} />
+            <col style={{ width: W.start }} />
+            <col style={{ width: W.due }} />
+            <col style={{ width: W.done }} />
+            <col style={{ width: W.days }} />
+            <col style={{ width: W.diff }} />
+            {showAssignee && <col style={{ width: W.assignee }} />}
+            <col style={{ width: W.instructor }} />
+            <col style={{ width: W.progress }} />
+            <col style={{ width: W.log }} />
+            <col style={{ width: W.status }} />
+            <col style={{ width: W.note }} />
+            <col style={{ width: W.hist }} />
           </colgroup>
           <thead>
             <tr className="bg-blue-50 text-gray-700 text-xs">
-              <Th>NO.</Th>
-              <Th>작성일</Th>
+              <Th grip="no" onGrip={startDrag}>NO.</Th>
+              <Th grip="date" onGrip={startDrag}>작성일</Th>
               <Th>업무내용</Th>
-              <Th>진행일정</Th>
-              <Th>완료계획</Th>
-              <Th>완료여부</Th>
-              <Th>소요일</Th>
-              <Th>일정대비</Th>
-              {showAssignee && <Th>담당자</Th>}
-              <Th>지시자</Th>
-              <Th>진행률</Th>
-              <Th>진행기록</Th>
-              <Th>상태</Th>
-              <Th>비고</Th>
-              <Th>이력</Th>
+              <Th grip="start" onGrip={startDrag}>진행일정</Th>
+              <Th grip="due" onGrip={startDrag}>완료계획</Th>
+              <Th grip="done" onGrip={startDrag}>완료여부</Th>
+              <Th grip="days" onGrip={startDrag}>소요일</Th>
+              <Th grip="diff" onGrip={startDrag}>일정대비</Th>
+              {showAssignee && (
+                <Th grip="assignee" onGrip={startDrag}>
+                  담당자
+                </Th>
+              )}
+              <Th grip="instructor" onGrip={startDrag}>지시자</Th>
+              <Th grip="progress" onGrip={startDrag}>진행률</Th>
+              <Th grip="log" onGrip={startDrag}>진행기록</Th>
+              <Th grip="status" onGrip={startDrag}>상태</Th>
+              <Th grip="note" onGrip={startDrag}>비고</Th>
+              <Th grip="hist" onGrip={startDrag}>이력</Th>
             </tr>
           </thead>
           <tbody>
@@ -1125,15 +1166,33 @@ function AssigneePicker({
   );
 }
 
-function Th({ className, children }: { className?: string; children: React.ReactNode }) {
+function Th({
+  className,
+  children,
+  grip,
+  onGrip,
+}: {
+  className?: string;
+  children: React.ReactNode;
+  /** 이 칸의 폭 이름 — 주면 오른쪽 경계를 끌어 폭을 조절할 수 있다 */
+  grip?: string;
+  onGrip?: (key: string, e: React.PointerEvent) => void;
+}) {
   return (
     <th
       className={cn(
-        "px-2 py-2.5 font-medium text-center border-b border-gray-300 border-r border-gray-200 last:border-r-0 overflow-hidden",
+        "relative px-2 py-2.5 font-medium text-center border-b border-gray-300 border-r border-gray-200 last:border-r-0 overflow-hidden",
         className
       )}
     >
       {children}
+      {grip && onGrip && (
+        <span
+          onPointerDown={(e) => onGrip(grip, e)}
+          title="끌어서 칸 폭 조절"
+          className="absolute top-0 right-0 h-full w-2 cursor-col-resize hover:bg-blue-300/60"
+        />
+      )}
     </th>
   );
 }
