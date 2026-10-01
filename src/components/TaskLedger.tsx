@@ -1,5 +1,6 @@
 "use client";
 
+import Link from "next/link";
 import { useState } from "react";
 import type { Profile, TaskWithEffectiveStatus } from "@/lib/types";
 import { formatShortDate, formatIsoDate, cn } from "@/lib/utils";
@@ -116,6 +117,7 @@ export default function TaskLedger({
 
   const [detailId, setDetailId] = useState<string | null>(null);
   const [logTask, setLogTask] = useState<TaskWithEffectiveStatus | null>(null);
+  const [doneBusy, setDoneBusy] = useState<string | null>(null);
 
   const assignables = profiles.filter(isAssignable).sort(byDisplayOrder);
   const unassigned = tasks.filter((t) => !t.assignee_id).length;
@@ -128,6 +130,21 @@ export default function TaskLedger({
     if (error) return error.message;
     onChanged?.();
     return null;
+  }
+
+  /**
+   * 오늘 날짜로 바로 완료 처리.
+   *
+   * 끝낸 날이 오늘이 아니면 완료여부 칸을 눌러 날짜를 고치면 된다.
+   * 대부분은 "오늘 끝냈다"라서 버튼 하나로 끝나게 둔다.
+   */
+  async function completeNow(id: string) {
+    const iso = noon(today);
+    if (!iso) return;
+    setDoneBusy(id);
+    const err = await patch(id, { status: "완료", progress: 100, completed_at: iso });
+    setDoneBusy(null);
+    if (err) window.alert(`완료 처리하지 못했습니다: ${err}`);
   }
 
   /** 날짜만 받아 그 날 정오로 저장한다 (시간대 때문에 하루 밀리는 것 방지) */
@@ -292,19 +309,31 @@ export default function TaskLedger({
                 </Row>
 
                 <Row label="완료여부">
-                  <Cell
-                    enabled={canTouch}
-                    onClick={() => setEdit({ task: t, field: "completed_at" })}
-                    title="눌러서 완료 처리 / 완료일 수정"
-                  >
-                    {t.completed_at ? (
-                      <span className="text-emerald-700 font-medium">
-                        완료 {formatShortDate(t.completed_at)}
-                      </span>
-                    ) : (
-                      <span className="text-gray-400">미완료</span>
+                  <div className="flex items-center gap-2">
+                    <Cell
+                      enabled={canTouch}
+                      onClick={() => setEdit({ task: t, field: "completed_at" })}
+                      title="눌러서 완료 처리 / 완료일 수정"
+                    >
+                      {t.completed_at ? (
+                        <span className="text-emerald-700 font-medium">
+                          완료 {formatShortDate(t.completed_at)}
+                        </span>
+                      ) : (
+                        <span className="text-gray-400">미완료</span>
+                      )}
+                    </Cell>
+                    {!t.completed_at && canTouch && (
+                      <button
+                        type="button"
+                        onClick={() => completeNow(t.id)}
+                        disabled={doneBusy === t.id}
+                        className="shrink-0 text-xs px-2.5 py-1 rounded-lg border border-emerald-300 text-emerald-700 bg-emerald-50 hover:bg-emerald-100 disabled:opacity-50"
+                      >
+                        {doneBusy === t.id ? "처리 중" : "완료"}
+                      </button>
                     )}
-                  </Cell>
+                  </div>
                 </Row>
 
                 <Row label="소요일">
@@ -331,6 +360,7 @@ export default function TaskLedger({
                           options={assignables}
                           fallback={assignee}
                           onDone={onAssigned}
+                          linkNames={canAssign}
                         />
                       ) : (
                         <span className="text-gray-700 break-keep">
@@ -577,6 +607,19 @@ export default function TaskLedger({
                         <span className="text-gray-400">미완료</span>
                       )}
                     </Cell>
+
+                    {/* 오늘 끝냈으면 버튼 하나로 */}
+                    {!t.completed_at && canTouch && (
+                      <button
+                        type="button"
+                        onClick={() => completeNow(t.id)}
+                        disabled={doneBusy === t.id}
+                        title="오늘 날짜로 완료 처리"
+                        className="mt-1 w-full text-[11px] px-1 py-1 rounded-md border border-emerald-300 text-emerald-700 bg-emerald-50 hover:bg-emerald-100 disabled:opacity-50"
+                      >
+                        {doneBusy === t.id ? "처리 중" : "완료"}
+                      </button>
+                    )}
                   </Td>
 
                   {/* 지시일부터 걸린 일수 */}
@@ -603,6 +646,7 @@ export default function TaskLedger({
                           options={assignables}
                           fallback={assignee}
                           onDone={onAssigned}
+                          linkNames={canAssign}
                         />
                       ) : (
                         <>
@@ -958,6 +1002,7 @@ function AssigneePicker({
   options,
   fallback,
   onDone,
+  linkNames = false,
 }: {
   taskId: string;
   current: string | null;
@@ -965,6 +1010,8 @@ function AssigneePicker({
   options: Profile[];
   fallback?: Profile;
   onDone?: () => void;
+  /** 이름을 누르면 그 팀원 화면으로 간다 (팀장·실장만) */
+  linkNames?: boolean;
 }) {
   const [saving, setSaving] = useState(false);
   const [error, setError] = useState<string | null>(null);
@@ -1002,19 +1049,50 @@ function AssigneePicker({
     onDone?.();
   }
 
+  const checkedPeople = checked
+    .map((id) => list.find((p) => p.id === id))
+    .filter(Boolean) as Profile[];
+
   return (
     <div className="space-y-1">
-      <button
-        type="button"
-        onClick={() => setOpen((v) => !v)}
-        disabled={saving}
-        className={cn(
-          "w-full text-left rounded-md border px-2 py-1.5 text-sm bg-white disabled:opacity-50 break-keep",
-          checked.length ? "border-gray-300 text-gray-800" : "border-amber-300 text-amber-700"
-        )}
-      >
-        {checkedNames || "미지정 — 눌러서 체크"}
-      </button>
+      {linkNames && checkedPeople.length > 0 ? (
+        /* 이름을 누르면 그 팀원 화면으로, 연필을 누르면 담당자 바꾸기 */
+        <div className="flex items-start gap-1">
+          <div className="min-w-0 flex-1 flex flex-wrap gap-x-1 gap-y-0.5">
+            {checkedPeople.map((p) => (
+              <Link
+                key={p.id}
+                href={`/tasks?as=${p.id}`}
+                title={`${p.name} 님 업무 화면 보기`}
+                className="text-sm text-blue-700 hover:underline break-keep"
+              >
+                {p.name}
+              </Link>
+            ))}
+          </div>
+          <button
+            type="button"
+            onClick={() => setOpen((v) => !v)}
+            disabled={saving}
+            title="담당자 바꾸기"
+            className="shrink-0 text-xs px-1.5 py-0.5 rounded border border-gray-300 text-gray-500 hover:bg-gray-50 disabled:opacity-50"
+          >
+            ✎
+          </button>
+        </div>
+      ) : (
+        <button
+          type="button"
+          onClick={() => setOpen((v) => !v)}
+          disabled={saving}
+          className={cn(
+            "w-full text-left rounded-md border px-2 py-1.5 text-sm bg-white disabled:opacity-50 break-keep",
+            checked.length ? "border-gray-300 text-gray-800" : "border-amber-300 text-amber-700"
+          )}
+        >
+          {checkedNames || "미지정 — 눌러서 체크"}
+        </button>
+      )}
 
       {open && (
         <div className="rounded-md border border-gray-200 bg-white p-2 space-y-1 max-h-44 overflow-y-auto">
