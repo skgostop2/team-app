@@ -15,6 +15,8 @@ export default function TeamPage() {
   const [busyId, setBusyId] = useState<string | null>(null);
   const [pwTarget, setPwTarget] = useState<Profile | null>(null);
   const [mfaBusyId, setMfaBusyId] = useState<string | null>(null);
+  const [requireMfa, setRequireMfa] = useState(true);
+  const [togglingMfa, setTogglingMfa] = useState(false);
   const [deleteTarget, setDeleteTarget] = useState<Profile | null>(null);
   const [message, setMessage] = useState<string | null>(null);
   const [showDirectorForm, setShowDirectorForm] = useState(false);
@@ -28,13 +30,15 @@ export default function TeamPage() {
     } = await supabase.auth.getUser();
     if (!user) return;
 
-    const [{ data: profile }, { data: all }] = await Promise.all([
+    const [{ data: profile }, { data: all }, { data: setting }] = await Promise.all([
       supabase.from("profiles").select("*").eq("id", user.id).single(),
       supabase.from("profiles").select("*").order("sort_order"),
+      supabase.from("team_settings").select("value").eq("key", "require_mfa").maybeSingle(),
     ]);
 
     setMe(profile as Profile);
     setProfiles((all ?? []) as Profile[]);
+    setRequireMfa((setting as { value: boolean } | null)?.value !== false);
     setLoading(false);
   }
 
@@ -43,6 +47,26 @@ export default function TeamPage() {
   }, []);
 
   if (loading) return <p className="text-sm text-gray-400">불러오는 중...</p>;
+
+  /** OTP 를 필수로 둘지 — 잠겨서 아무도 못 들어오는 상황을 막는 스위치 */
+  async function toggleRequireMfa(next: boolean) {
+    setTogglingMfa(true);
+    const supabase = createClient();
+    const { error } = await supabase
+      .from("team_settings")
+      .upsert({ key: "require_mfa", value: next }, { onConflict: "key" });
+    setTogglingMfa(false);
+    if (error) {
+      setMessage(`설정을 바꾸지 못했습니다: ${error.message}`);
+      return;
+    }
+    setRequireMfa(next);
+    setMessage(
+      next
+        ? "이제 처음 로그인하는 사람은 OTP 등록을 마쳐야 들어옵니다."
+        : "OTP 없이도 들어올 수 있습니다. 등록 화면은 그대로 쓸 수 있습니다."
+    );
+  }
 
   /**
    * 팀원의 2단계 인증을 풀어준다.
@@ -307,6 +331,30 @@ export default function TeamPage() {
             await load();
           }}
         />
+      )}
+
+      {isTeamLead(me) && (
+        <div className="bg-white rounded-xl border border-gray-200 p-4">
+          <div className="flex items-start justify-between gap-3 flex-wrap">
+            <div className="min-w-0">
+              <h2 className="text-base font-bold text-gray-900">2단계 인증(OTP) 필수</h2>
+              <p className="text-xs text-gray-500 mt-0.5 break-keep">
+                켜면 처음 로그인하는 사람이 휴대폰 인증앱을 등록해야 들어옵니다. 누가 못 들어오는
+                일이 생기면 잠깐 꺼서 풀 수 있습니다.
+              </p>
+            </div>
+            <label className="flex items-center gap-2 text-sm text-gray-700 shrink-0 cursor-pointer">
+              <input
+                type="checkbox"
+                checked={requireMfa}
+                disabled={togglingMfa}
+                onChange={(e) => toggleRequireMfa(e.target.checked)}
+                className="w-4 h-4"
+              />
+              필수로 두기
+            </label>
+          </div>
+        </div>
       )}
 
       {/* 삭제 비밀번호는 팀장만 바꾼다 */}
@@ -651,6 +699,11 @@ function MemberRow({
         >
           비밀번호 변경
         </button>
+        {!profile.password_changed && (
+          <span className="text-xs px-2 py-1.5 rounded-lg bg-amber-50 border border-amber-200 text-amber-700">
+            첫 로그인 전 (비번 1234)
+          </span>
+        )}
         {profile.mfa_enabled && (
           <button
             onClick={onResetMfa}

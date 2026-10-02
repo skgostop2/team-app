@@ -1,6 +1,6 @@
 "use client";
 
-import { useState } from "react";
+import { useEffect, useState } from "react";
 import { useRouter } from "next/navigation";
 import Link from "next/link";
 import { createClient } from "@/lib/supabase/client";
@@ -11,6 +11,27 @@ export default function LoginPage() {
   const [password, setPassword] = useState("");
   const [error, setError] = useState<string | null>(null);
   const [loading, setLoading] = useState(false);
+  /** 아이디·비번 저장 — 이 기기(브라우저)에만 남는다 */
+  const [saveId, setSaveId] = useState(false);
+  const [savePw, setSavePw] = useState(false);
+
+  // 저장해 둔 값이 있으면 채워 넣는다
+  useEffect(() => {
+    try {
+      const id = localStorage.getItem("login-email");
+      const pw = localStorage.getItem("login-password");
+      if (id) {
+        setEmail(id);
+        setSaveId(true);
+      }
+      if (pw) {
+        setPassword(pw);
+        setSavePw(true);
+      }
+    } catch {
+      // 저장소를 못 써도 로그인은 그대로 된다
+    }
+  }, []);
 
   async function handleSubmit(e: React.FormEvent) {
     e.preventDefault();
@@ -24,6 +45,16 @@ export default function LoginPage() {
       setError("이메일 또는 비밀번호가 올바르지 않습니다.");
       setLoading(false);
       return;
+    }
+
+    // 체크한 것만 남기고, 푼 것은 지운다
+    try {
+      if (saveId) localStorage.setItem("login-email", email);
+      else localStorage.removeItem("login-email");
+      if (savePw) localStorage.setItem("login-password", password);
+      else localStorage.removeItem("login-password");
+    } catch {
+      // 저장 실패해도 로그인은 끝난 상태다
     }
 
     router.push("/dashboard");
@@ -59,6 +90,32 @@ export default function LoginPage() {
               placeholder="••••••••"
             />
           </div>
+
+          <div className="flex items-center gap-4 pt-1">
+            <label className="flex items-center gap-1.5 text-sm text-gray-600 cursor-pointer">
+              <input
+                type="checkbox"
+                checked={saveId}
+                onChange={(e) => setSaveId(e.target.checked)}
+                className="w-4 h-4"
+              />
+              아이디 저장
+            </label>
+            <label className="flex items-center gap-1.5 text-sm text-gray-600 cursor-pointer">
+              <input
+                type="checkbox"
+                checked={savePw}
+                onChange={(e) => setSavePw(e.target.checked)}
+                className="w-4 h-4"
+              />
+              비밀번호 저장
+            </label>
+          </div>
+          {savePw && (
+            <p className="text-xs text-amber-700 break-keep">
+              이 컴퓨터를 쓰는 사람은 누구나 로그인됩니다. 공용 PC 에서는 체크하지 마세요.
+            </p>
+          )}
 
           {error && <p className="text-sm text-red-600">{error}</p>}
 
