@@ -4,6 +4,7 @@ import { useCallback, useEffect, useState } from "react";
 import { useRouter } from "next/navigation";
 import { createClient } from "@/lib/supabase/client";
 import { startEnroll, finishEnroll, verifiedFactorId, type EnrollStart } from "@/lib/mfa";
+import { rememberThisDevice } from "@/lib/trustedDevice";
 
 /**
  * 첫 로그인 절차.
@@ -84,11 +85,14 @@ export default function OnboardingPage() {
     setBusy(true);
     setError(null);
     const err = await finishEnroll(enroll.factorId, code);
-    setBusy(false);
     if (err) {
+      setBusy(false);
       setError(err);
       return;
     }
+    // 등록한 기기는 30일 동안 묻지 않는다
+    await rememberThisDevice();
+    setBusy(false);
     setEnroll(null);
     setCode("");
     await decide();

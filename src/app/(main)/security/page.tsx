@@ -3,6 +3,12 @@
 import { useEffect, useState } from "react";
 import { createClient } from "@/lib/supabase/client";
 import { startEnroll, finishEnroll, disableMfa, verifiedFactorId, type EnrollStart } from "@/lib/mfa";
+import {
+  listDevices,
+  forgetThisDevice,
+  forgetAllDevices,
+  type TrustedDevice,
+} from "@/lib/trustedDevice";
 
 /**
  * 2단계 인증 설정 — 구글 OTP 등록.
@@ -18,9 +24,11 @@ export default function SecurityPage() {
   const [error, setError] = useState<string | null>(null);
   const [done, setDone] = useState<string | null>(null);
   const [showSecret, setShowSecret] = useState(false);
+  const [devices, setDevices] = useState<TrustedDevice[]>([]);
 
   useEffect(() => {
     verifiedFactorId().then((id) => setOn(!!id));
+    listDevices().then(setDevices);
   }, []);
 
   async function begin() {
@@ -189,6 +197,59 @@ export default function SecurityPage() {
         )}
 
         {!enroll && error && <p className="text-sm text-red-600 mt-3 break-keep">{error}</p>}
+      </div>
+
+      <div className="bg-white rounded-xl border border-gray-200 p-4">
+        <div className="flex items-start justify-between gap-3 flex-wrap mb-2">
+          <div>
+            <h2 className="text-base font-bold text-gray-900">30일 기억 중인 기기</h2>
+            <p className="text-xs text-gray-500 mt-0.5 break-keep">
+              여기 있는 기기에서는 로그인할 때 6자리를 묻지 않습니다. 30일이 지나면 저절로
+              풀립니다.
+            </p>
+          </div>
+          {devices.length > 0 && (
+            <button
+              onClick={async () => {
+                if (!window.confirm("모든 기기에서 기억을 끊습니다. 다음 로그인부터 전부 6자리를 묻습니다.")) return;
+                await forgetAllDevices();
+                setDevices(await listDevices());
+                setDone("모든 기기의 기억을 끊었습니다.");
+              }}
+              className="text-xs px-3 py-2 rounded-lg border border-red-200 text-red-600 hover:bg-red-50 shrink-0"
+            >
+              전부 끊기
+            </button>
+          )}
+        </div>
+
+        {devices.length === 0 ? (
+          <p className="text-sm text-gray-400">기억 중인 기기가 없습니다.</p>
+        ) : (
+          <ul className="divide-y divide-gray-100 border border-gray-200 rounded-lg">
+            {devices.map((d) => (
+              <li key={d.id} className="px-3 py-2.5 flex items-center justify-between gap-3">
+                <div className="min-w-0">
+                  <p className="text-sm text-gray-800">{d.label ?? "기기"}</p>
+                  <p className="text-[11px] text-gray-400">
+                    {d.created_at.slice(0, 10)} 등록 · {d.expires_at.slice(0, 10)} 까지
+                  </p>
+                </div>
+              </li>
+            ))}
+          </ul>
+        )}
+
+        <button
+          onClick={async () => {
+            await forgetThisDevice();
+            setDevices(await listDevices());
+            setDone("이 기기의 기억을 끊었습니다. 다음 로그인부터 6자리를 묻습니다.");
+          }}
+          className="text-xs mt-2 px-3 py-2 rounded-lg border border-gray-300 text-gray-600 hover:bg-gray-50"
+        >
+          이 기기만 끊기
+        </button>
       </div>
 
       <div className="bg-white rounded-xl border border-dashed border-gray-300 p-4">

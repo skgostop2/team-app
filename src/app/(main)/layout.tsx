@@ -1,6 +1,7 @@
 import { redirect } from "next/navigation";
 import { createClient } from "@/lib/supabase/server";
 import AppShell from "@/components/AppShell";
+import { isTrustedDevice } from "@/lib/trustedDeviceServer";
 import type { Profile } from "@/lib/types";
 
 export default async function MainLayout({ children }: { children: React.ReactNode }) {
@@ -48,7 +49,9 @@ export default async function MainLayout({ children }: { children: React.ReactNo
       data: { session },
     } = await supabase.auth.getSession();
     if (session && assuranceLevel(session.access_token) !== "aal2") {
-      redirect("/mfa");
+      // 30일 기억해 둔 기기면 다시 묻지 않는다
+      const trusted = await isTrustedDevice(supabase, p.id);
+      if (!trusted) redirect("/mfa");
     }
   }
 

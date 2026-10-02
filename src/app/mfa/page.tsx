@@ -4,6 +4,7 @@ import { useEffect, useState } from "react";
 import { useRouter } from "next/navigation";
 import { createClient } from "@/lib/supabase/client";
 import { verifyAtLogin } from "@/lib/mfa";
+import { rememberThisDevice } from "@/lib/trustedDevice";
 
 /**
  * 로그인 두 번째 단계 — 휴대폰 앱의 6자리 숫자.
@@ -17,6 +18,8 @@ export default function MfaPage() {
   const [error, setError] = useState<string | null>(null);
   const [busy, setBusy] = useState(false);
   const [email, setEmail] = useState<string | null>(null);
+  /** 이 기기를 30일 기억할지 */
+  const [remember, setRemember] = useState(true);
 
   useEffect(() => {
     const supabase = createClient();
@@ -35,12 +38,17 @@ export default function MfaPage() {
     setBusy(true);
     setError(null);
     const err = await verifyAtLogin(code);
-    setBusy(false);
     if (err) {
+      setBusy(false);
       setError(err);
       setCode("");
       return;
     }
+
+    // 체크했으면 이 기기를 30일 기억한다. 실패해도 로그인은 끝난 상태다.
+    if (remember) await rememberThisDevice();
+    setBusy(false);
+
     router.replace("/dashboard");
     router.refresh();
   }
@@ -75,6 +83,19 @@ export default function MfaPage() {
             placeholder="000000"
             className="w-full rounded-lg border border-gray-300 px-3 py-3 text-center text-2xl tracking-[0.4em] font-mono"
           />
+
+          <label className="flex items-center gap-2 text-sm text-gray-700 cursor-pointer">
+            <input
+              type="checkbox"
+              checked={remember}
+              onChange={(e) => setRemember(e.target.checked)}
+              className="w-4 h-4"
+            />
+            이 기기는 30일 동안 묻지 않기
+          </label>
+          <p className="text-xs text-gray-400 break-keep -mt-2">
+            본인 PC·휴대폰에서만 체크하세요. 공용 PC 에서는 풀어두시는 게 좋습니다.
+          </p>
 
           {error && <p className="text-sm text-red-600 break-keep">{error}</p>}
 
