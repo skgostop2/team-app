@@ -11,7 +11,15 @@ import { createClient } from "@/lib/supabase/client";
  * 쿠키라서 서버가 화면을 그리기 전에 바로 확인할 수 있고,
  * 해시만 저장하므로 DB 를 들여다봐도 남의 기기로 들어갈 수 없다.
  */
-export const TRUST_COOKIE = "td";
+/**
+ * 쿠키 이름은 사람마다 다르다.
+ *
+ * 한 PC 를 여러 명이 돌려 쓰면 이름이 같을 때 서로 덮어써서,
+ * 마지막에 로그인한 사람만 기억이 유지된다 ("30일 눌렀는데 또 묻는다"의 원인).
+ */
+export function trustCookieName(userId: string): string {
+  return `td_${userId.slice(0, 8)}`;
+}
 
 /** 고를 수 있는 기간 — 공용 PC 면 "기억 안 함"을 고르면 된다 */
 export const TRUST_CHOICES = [
@@ -77,19 +85,25 @@ export async function rememberThisDevice(days = TRUST_DEFAULT_DAYS): Promise<str
   });
   if (error) return `기기를 기억하지 못했습니다: ${error.message}`;
 
-  // 쿠키는 서버도 읽는다. 30일 뒤 자동으로 사라진다.
-  document.cookie = `${TRUST_COOKIE}=${token}; path=/; max-age=${days * 24 * 60 * 60}; samesite=lax${
-    location.protocol === "https:" ? "; secure" : ""
-  }`;
+  // 쿠키는 서버도 읽는다. 정한 기간이 지나면 자동으로 사라진다.
+  document.cookie = `${trustCookieName(user.id)}=${token}; path=/; max-age=${
+    days * 24 * 60 * 60
+  }; samesite=lax${location.protocol === "https:" ? "; secure" : ""}`;
   return null;
 }
 
 /** 이 기기 기억을 끊는다 */
 export async function forgetThisDevice(): Promise<void> {
-  const token = readCookie(TRUST_COOKIE);
-  document.cookie = `${TRUST_COOKIE}=; path=/; max-age=0`;
-  if (!token) return;
   const supabase = createClient();
+  const {
+    data: { user },
+  } = await supabase.auth.getUser();
+  if (!user) return;
+
+  const name = trustCookieName(user.id);
+  const token = readCookie(name);
+  document.cookie = `${name}=; path=/; max-age=0`;
+  if (!token) return;
   await supabase.from("trusted_devices").delete().eq("token_hash", await sha256Hex(token));
 }
 
@@ -99,8 +113,9 @@ export async function forgetAllDevices(): Promise<void> {
   const {
     data: { user },
   } = await supabase.auth.getUser();
-  document.cookie = `${TRUST_COOKIE}=; path=/; max-age=0`;
-  if (user) await supabase.from("trusted_devices").delete().eq("user_id", user.id);
+  if (!user) return;
+  document.cookie = `${trustCookieName(user.id)}=; path=/; max-age=0`;
+  await supabase.from("trusted_devices").delete().eq("user_id", user.id);
 }
 
 export function readCookie(name: string): string | null {

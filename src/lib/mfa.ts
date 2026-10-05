@@ -37,9 +37,15 @@ export async function startEnroll(): Promise<{ data: EnrollStart | null; error: 
     if (f.status === "unverified") await supabase.auth.mfa.unenroll({ factorId: f.id });
   }
 
+  // 휴대폰 앱에 여러 개가 쌓여도 어느 것이 내 것인지 알 수 있게 메일을 넣는다
+  const {
+    data: { user },
+  } = await supabase.auth.getUser();
+  const label = user?.email ? `업무관리 (${user.email})` : "업무관리";
+
   const { data, error } = await supabase.auth.mfa.enroll({
     factorType: "totp",
-    friendlyName: `업무관리 ${new Date().toISOString().slice(0, 10)}`,
+    friendlyName: `${label} ${Date.now().toString().slice(-5)}`,
   });
   if (error || !data) return { data: null, error: error?.message ?? "등록을 시작하지 못했습니다." };
 
@@ -58,7 +64,15 @@ export async function finishEnroll(factorId: string, code: string): Promise<stri
   const {
     data: { user },
   } = await supabase.auth.getUser();
-  if (user) await supabase.from("profiles").update({ mfa_enabled: true }).eq("id", user.id);
+  if (!user) return "로그인이 풀렸습니다. 다시 로그인해주세요.";
+
+  // 여기서 저장이 실패하면 "인증수단은 등록됐는데 켜진 표시는 없는" 어긋난 상태가 된다.
+  // 그 상태로 두면 화면이 계속 등록을 요구하면서 들어가지도 못하게 된다. 반드시 알린다.
+  const { error: saveErr } = await supabase
+    .from("profiles")
+    .update({ mfa_enabled: true })
+    .eq("id", user.id);
+  if (saveErr) return `등록은 됐지만 저장에 실패했습니다. 다시 눌러주세요: ${saveErr.message}`;
   return null;
 }
 
@@ -87,7 +101,13 @@ export async function disableMfa(): Promise<string | null> {
   const {
     data: { user },
   } = await supabase.auth.getUser();
-  if (user) await supabase.from("profiles").update({ mfa_enabled: false }).eq("id", user.id);
+  if (!user) return "로그인이 풀렸습니다.";
+
+  const { error: saveErr } = await supabase
+    .from("profiles")
+    .update({ mfa_enabled: false })
+    .eq("id", user.id);
+  if (saveErr) return `꺼졌지만 저장에 실패했습니다. 다시 눌러주세요: ${saveErr.message}`;
   return null;
 }
 

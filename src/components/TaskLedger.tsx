@@ -11,6 +11,7 @@ import StatusBadge from "@/components/StatusBadge";
 import FieldPopup from "@/components/FieldPopup";
 import TaskEditModal from "@/components/TaskEditModal";
 import ProgressLogModal from "@/components/ProgressLogModal";
+import DeleteLock from "@/components/DeleteLock";
 
 /**
  * 업무 진행 현황 — 메모 프로그램과 같은 대장(臺帳) 양식.
@@ -60,7 +61,7 @@ const COL = {
   log: 96,
   status: 64,
   note: 80,
-  hist: 48,
+  hist: 56,
   /** 업무내용이 이 폭보다 좁아지면 글자가 한 자씩 끊긴다.
       나머지 칸을 줄여 이 칸에 몰아준다 — 표에서 실제로 읽는 것은 여기다. */
   titleMin: 340,
@@ -98,6 +99,7 @@ export default function TaskLedger({
   handedOverIds,
   onChanged,
   canEdit = false,
+  canDelete = false,
 }: {
   tasks: TaskWithEffectiveStatus[];
   profiles: Profile[];
@@ -115,6 +117,8 @@ export default function TaskLedger({
   onChanged?: () => void;
   /** 칸을 눌러 고칠 수 있게 할지 (false 면 읽기 전용) */
   canEdit?: boolean;
+  /** 표에서 바로 지울 수 있게 할지 (팀장만 — 서버에서도 팀장만 지워진다) */
+  canDelete?: boolean;
 }) {
   const [edit, setEdit] = useState<EditTarget | null>(null);
 
@@ -124,6 +128,8 @@ export default function TaskLedger({
   const [detailId, setDetailId] = useState<string | null>(null);
   const [logTask, setLogTask] = useState<TaskWithEffectiveStatus | null>(null);
   const [doneBusy, setDoneBusy] = useState<string | null>(null);
+  /** 지우려고 비밀번호를 묻고 있는 업무 */
+  const [askDelete, setAskDelete] = useState<TaskWithEffectiveStatus | null>(null);
 
   // 칸 폭은 쓰는 사람이 끌어서 정한다 (이 브라우저에만 저장된다)
   const { widths: W, startDrag, reset: resetWidths, changed: widthsChanged } = useColumnWidths(
@@ -241,6 +247,30 @@ export default function TaskLedger({
           taskId={detailId}
           onClose={() => setDetailId(null)}
           onChanged={() => onChanged?.()}
+        />
+      )}
+
+      {askDelete && (
+        <DeleteLock
+          title={askDelete.title}
+          onClose={() => setAskDelete(null)}
+          onConfirm={async () => {
+            const supabase = createClient();
+            const id = askDelete.id;
+            const { error } = await supabase.from("tasks").delete().eq("id", id);
+            if (error) return `삭제하지 못했습니다: ${error.message}`;
+
+            // 권한이 없으면 오류 없이 0건만 지워진다 — 정말 사라졌는지 다시 본다
+            const { data: still } = await supabase
+              .from("tasks")
+              .select("id")
+              .eq("id", id)
+              .maybeSingle();
+            if (still) return "삭제 권한이 없습니다. 팀장만 지울 수 있습니다.";
+
+            onChanged?.();
+            return null;
+          }}
         />
       )}
 
@@ -461,12 +491,22 @@ export default function TaskLedger({
                 </Cell>
               </div>
 
-              <button
-                onClick={() => setDetailId(t.id)}
-                className="mt-3 w-full text-xs px-3 py-2 rounded-lg border border-gray-300 text-gray-600"
-              >
-                변경 이력 보기
-              </button>
+              <div className="mt-3 flex gap-2">
+                <button
+                  onClick={() => setDetailId(t.id)}
+                  className="flex-1 text-xs px-3 py-2 rounded-lg border border-gray-300 text-gray-600"
+                >
+                  변경 이력 보기
+                </button>
+                {canDelete && (
+                  <button
+                    onClick={() => setAskDelete(t)}
+                    className="shrink-0 text-xs px-3 py-2 rounded-lg border border-red-200 text-red-600"
+                  >
+                    삭제
+                  </button>
+                )}
+              </div>
             </div>
           );
         })}
@@ -793,15 +833,26 @@ export default function TaskLedger({
                     </Cell>
                   </Td>
 
-                  {/* 이력 — 변경 이력과 삭제는 여기 */}
+                  {/* 이력 — 변경 이력 보기와 삭제 */}
                   <Td className="text-center">
-                    <button
-                      onClick={() => setDetailId(t.id)}
-                      title="변경 이력과 전체 내용 보기"
-                      className="text-xs px-2 py-1 rounded border border-gray-300 text-gray-500 hover:bg-gray-50"
-                    >
-                      보기
-                    </button>
+                    <div className="flex flex-col items-center gap-1">
+                      <button
+                        onClick={() => setDetailId(t.id)}
+                        title="변경 이력과 전체 내용 보기"
+                        className="text-xs px-2 py-1 rounded border border-gray-300 text-gray-500 hover:bg-gray-50"
+                      >
+                        보기
+                      </button>
+                      {canDelete && (
+                        <button
+                          onClick={() => setAskDelete(t)}
+                          title="이 업무 삭제 (비밀번호를 묻습니다)"
+                          className="no-print text-[10px] leading-none px-2 py-1 rounded border border-red-200 text-red-600 hover:bg-red-50"
+                        >
+                          삭제
+                        </button>
+                      )}
+                    </div>
                   </Td>
                 </tr>
               );
@@ -1083,18 +1134,26 @@ function AssigneePicker({
   const [error, setError] = useState<string | null>(null);
   const [open, setOpen] = useState(false);
 
-  const checked = [current, ...deputies].filter(Boolean) as string[];
+  const fromProps = [current, ...deputies].filter(Boolean) as string[];
 
+  /**
+   * 화면에 보이는 체크 상태는 따로 들고 있는다.
+   *
+   * 예전에는 props 에서 매번 다시 계산했다. 그래서 한 명을 체크하고
+   * 화면이 새로 불러오기 전에 두 번째 사람을 체크하면 첫 번째가 조용히 풀렸다.
+   * (연달아 두 명 넣을 때 한 명만 들어가던 사고)
+   */
+  const [local, setLocal] = useState<string[] | null>(null);
+  const checked = local ?? fromProps;
+
+  // 목록에는 지금 담당으로 걸려 있는 사람도 반드시 넣는다.
+  // 퇴사·대기 상태라 고를 수 없는 사람이 담당이면, 목록에 없어서 체크를 풀 수가 없었다.
   const list =
     fallback && !options.some((o) => o.id === fallback.id) ? [...options, fallback] : options;
 
-  const checkedNames = checked
-    .map((id) => list.find((p) => p.id === id)?.name)
-    .filter(Boolean)
-    .join(", ");
-
   async function toggle(id: string) {
     const next = checked.includes(id) ? checked.filter((c) => c !== id) : [...checked, id];
+    setLocal(next); // 누른 즉시 화면에 반영 — 연달아 눌러도 앞의 선택이 안 사라진다
     setSaving(true);
     setError(null);
 
@@ -1109,6 +1168,7 @@ function AssigneePicker({
     const { error: err } = await supabase.from("tasks").update(patch).eq("id", taskId);
     setSaving(false);
     if (err) {
+      setLocal(null); // 저장이 안 됐으면 화면도 원래대로 되돌린다
       setError("저장 실패");
       return;
     }
@@ -1118,6 +1178,8 @@ function AssigneePicker({
   const checkedPeople = checked
     .map((id) => list.find((p) => p.id === id))
     .filter(Boolean) as Profile[];
+
+  const checkedNames = checkedPeople.map((p) => p.name).join(", ");
 
   return (
     <div className="space-y-1">
@@ -1162,23 +1224,38 @@ function AssigneePicker({
 
       {open && (
         <div className="rounded-md border border-gray-200 bg-white p-2 space-y-1 max-h-44 overflow-y-auto">
-          {options.map((p) => (
-            <label key={p.id} className="flex items-center gap-2 text-xs cursor-pointer py-0.5">
-              <input
-                type="checkbox"
-                checked={checked.includes(p.id)}
-                disabled={saving}
-                onChange={() => toggle(p.id)}
-                className="w-4 h-4"
-              />
-              <span className="break-keep">
-                {p.name}
-                {p.position ? ` ${p.position}` : ""}
-                {p.status === "가입대기" && <span className="text-amber-600"> (가입대기)</span>}
-              </span>
-            </label>
-          ))}
-          {options.length === 0 && (
+          <p className="text-[11px] text-gray-400 break-keep pb-0.5">
+            맨 위에 체크한 사람이 담당, 나머지는 참여입니다.
+          </p>
+          {list.map((p) => {
+            const at = checked.indexOf(p.id);
+            return (
+              <label key={p.id} className="flex items-center gap-2 text-xs cursor-pointer py-0.5">
+                <input
+                  type="checkbox"
+                  checked={at >= 0}
+                  disabled={saving}
+                  onChange={() => toggle(p.id)}
+                  className="w-4 h-4"
+                />
+                <span className="break-keep">
+                  {p.name}
+                  {p.position ? ` ${p.position}` : ""}
+                  {at === 0 && <span className="text-blue-600"> (담당)</span>}
+                  {at > 0 && <span className="text-gray-400"> (참여)</span>}
+                  {p.status === "가입대기" && <span className="text-amber-600"> (가입대기)</span>}
+                </span>
+              </label>
+            );
+          })}
+          {/* 담당을 풀면 다음 사람이 담당이 된다 — 모르고 바꾸는 일이 없게 미리 알려준다 */}
+          {checked.length > 1 && (
+            <p className="text-[11px] text-amber-700 break-keep pt-0.5 border-t border-gray-100">
+              담당({checkedPeople[0]?.name})을 체크 해제하면 {checkedPeople[1]?.name} 님이 담당이
+              되고, 확인 여부는 다시 받습니다.
+            </p>
+          )}
+          {list.length === 0 && (
             <p className="text-[11px] text-gray-400">
               등록된 인원이 없습니다. 팀원관리에서 먼저 등록하세요.
             </p>

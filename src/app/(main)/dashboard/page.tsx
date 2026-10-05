@@ -6,7 +6,7 @@ import { useSearchParams } from "next/navigation";
 import { createClient } from "@/lib/supabase/client";
 import { formatElapsed, isLongInactive, cn } from "@/lib/utils";
 import type { Profile, TaskWithEffectiveStatus } from "@/lib/types";
-import { isManager, isAssignable, byDisplayOrder } from "@/lib/roles";
+import { isManager, isTeamLead, isAssignable, byDisplayOrder } from "@/lib/roles";
 import TaskLedger from "@/components/TaskLedger";
 import ViewAsBanner from "@/components/ViewAsBanner";
 import PrintButton from "@/components/PrintButton";
@@ -256,6 +256,7 @@ export default function DashboardPage() {
         onAssigned={load}
         viewerId={subjectId}
         canEdit={!viewingAs}
+        canDelete={isTeamLead(me) && !viewingAs}
         onChanged={load}
         emptyText={canSeeTeam ? "등록된 업무가 없습니다." : "배정된 업무가 없습니다."}
       />

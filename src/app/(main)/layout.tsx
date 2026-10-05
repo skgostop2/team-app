@@ -27,8 +27,23 @@ export default async function MainLayout({ children }: { children: React.ReactNo
 
   const p = profile as Profile;
 
-  // 첫 로그인 절차가 안 끝났으면 들여보내지 않는다 (OTP 등록 → 비밀번호 변경).
-  // 처음 비밀번호가 1234 로 모두 같으므로 이것이 실질적인 첫 관문이다.
+  // 순서가 중요하다.
+  //
+  // OTP 를 이미 켠 사람은 "6자리 확인"을 무엇보다 먼저 통과해야 한다.
+  // 이걸 뒤로 미루면 처음 비밀번호(1234)를 아는 사람이 남의 계정으로 들어와
+  // 비밀번호 변경 화면까지 가버린다 — OTP 를 켠 의미가 없어진다.
+  if (p.mfa_enabled) {
+    const {
+      data: { session },
+    } = await supabase.auth.getSession();
+    if (session && assuranceLevel(session.access_token) !== "aal2") {
+      // 기억해 둔 기기면 다시 묻지 않는다
+      const trusted = await isTrustedDevice(supabase, p.id);
+      if (!trusted) redirect("/mfa");
+    }
+  }
+
+  // 그다음에 첫 로그인 절차(OTP 등록 → 비밀번호 변경)가 남았는지 본다.
   if (p.status === "승인") {
     const { data: setting } = await supabase
       .from("team_settings")
@@ -39,19 +54,6 @@ export default async function MainLayout({ children }: { children: React.ReactNo
 
     if ((requireMfa && !p.mfa_enabled) || !p.password_changed) {
       redirect("/onboarding");
-    }
-  }
-
-  // 2단계 인증을 켠 사람은 6자리 확인까지 끝나야 들어올 수 있다.
-  // 토큰의 aal 이 aal2 면 확인을 마친 것이다.
-  if (p.mfa_enabled) {
-    const {
-      data: { session },
-    } = await supabase.auth.getSession();
-    if (session && assuranceLevel(session.access_token) !== "aal2") {
-      // 30일 기억해 둔 기기면 다시 묻지 않는다
-      const trusted = await isTrustedDevice(supabase, p.id);
-      if (!trusted) redirect("/mfa");
     }
   }
 

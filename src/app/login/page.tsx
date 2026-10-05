@@ -42,7 +42,16 @@ export default function LoginPage() {
     const { error } = await supabase.auth.signInWithPassword({ email, password });
 
     if (error) {
-      setError("이메일 또는 비밀번호가 올바르지 않습니다.");
+      // 저장해 둔 옛 비밀번호가 남아 있으면 계속 같은 실패를 반복한다.
+      // (팀장이 비밀번호를 바꿔준 경우가 그렇다) 지우고 칸도 비운다.
+      try {
+        localStorage.removeItem("login-password");
+      } catch {
+        // 못 지워도 아래 안내는 뜬다
+      }
+      setPassword("");
+      setSavePw(false);
+      setError("이메일 또는 비밀번호가 올바르지 않습니다. 저장해 둔 비밀번호는 지웠습니다.");
       setLoading(false);
       return;
     }

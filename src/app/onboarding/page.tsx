@@ -53,6 +53,17 @@ export default function OnboardingPage() {
     setName(p?.name ?? "");
 
     const hasFactor = !!(await verifiedFactorId());
+
+    // 인증수단은 등록돼 있는데 켜진 표시가 없으면(저장이 한 번 실패한 경우) 여기서 바로잡는다.
+    // 안 그러면 레이아웃과 이 화면이 서로 떠넘기며 무한히 튕긴다.
+    if (hasFactor && p && !p.mfa_enabled) {
+      const { error: healErr } = await supabase
+        .from("profiles")
+        .update({ mfa_enabled: true })
+        .eq("id", user.id);
+      if (!healErr) p.mfa_enabled = true;
+    }
+
     if (need && !hasFactor) {
       setStep("otp");
       return;
@@ -190,6 +201,10 @@ export default function OnboardingPage() {
               ) : (
                 <>
                   <p className="text-sm text-gray-700 mb-2">앱으로 아래 QR 을 찍으세요</p>
+                  <p className="text-xs text-amber-700 mb-2 break-keep">
+                    앱에 전에 만들다 만 &quot;업무관리&quot; 항목이 있으면 지우고 이 QR 을 찍으세요.
+                    옛 항목의 숫자는 맞지 않습니다.
+                  </p>
                   <div className="flex justify-center border border-gray-200 rounded-xl p-3 w-fit mx-auto">
                     {/* eslint-disable-next-line @next/next/no-img-element */}
                     <img src={enroll.qr} alt="2단계 인증 QR" width={190} height={190} />
@@ -281,7 +296,7 @@ export default function OnboardingPage() {
                 {busy ? "바꾸는 중..." : "바꾸고 시작하기"}
               </button>
               <p className="text-xs text-gray-400 mt-2 break-keep">
-                잊어버리면 팀장이 다시 1234 로 돌려줄 수 있습니다.
+                잊어버리면 팀장이 새 비밀번호로 바꿔줄 수 있습니다.
               </p>
             </form>
           )}

@@ -4,7 +4,7 @@ import { useEffect, useMemo, useState } from "react";
 import { useSearchParams } from "next/navigation";
 import { createClient } from "@/lib/supabase/client";
 import type { Profile, TaskAssigneeLog, TaskWithEffectiveStatus } from "@/lib/types";
-import { isManager, isAssignable } from "@/lib/roles";
+import { isManager, isTeamLead, isAssignable } from "@/lib/roles";
 import TaskLedger from "@/components/TaskLedger";
 import ViewAsBanner from "@/components/ViewAsBanner";
 import NewTaskModal from "@/components/NewTaskModal";
@@ -207,6 +207,7 @@ export default function TasksPage() {
         viewerId={viewingAs ? viewingAs.id : me?.id}
         handedOverIds={viewingAs ? undefined : handedOverIds}
         canEdit={!viewingAs}
+        canDelete={isTeamLead(me) && !viewingAs}
         onChanged={load}
         emptyText="표시할 업무가 없습니다."
       />

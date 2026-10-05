@@ -72,10 +72,15 @@ export function useColumnWidths(storageKey: string, base: Record<string, number>
         const w = Math.min(maxOf(d.key), Math.max(MIN, d.startW + (ev.clientX - d.startX)));
         setWidths((prev) => ({ ...prev, [d.key]: Math.round(w) }));
       };
+      // 끌기를 끝낼 때 — 손을 뗐을 때만이 아니라, 창을 벗어나거나
+      // 전화가 와서 끌기가 취소돼도 반드시 여기를 지나게 한다.
+      // 안 그러면 화면 전체 커서가 ↔ 로 굳고 글자를 선택할 수 없게 된다.
       const up = () => {
         drag.current = null;
         window.removeEventListener("pointermove", move);
         window.removeEventListener("pointerup", up);
+        window.removeEventListener("pointercancel", up);
+        window.removeEventListener("blur", up);
         setWidths((prev) => {
           save(prev);
           return prev;
@@ -88,6 +93,8 @@ export function useColumnWidths(storageKey: string, base: Record<string, number>
       document.body.style.userSelect = "none";
       window.addEventListener("pointermove", move);
       window.addEventListener("pointerup", up);
+      window.addEventListener("pointercancel", up);
+      window.addEventListener("blur", up);
     },
     [widths, base, save]
   );
