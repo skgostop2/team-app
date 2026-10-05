@@ -12,7 +12,17 @@ import { createClient } from "@/lib/supabase/client";
  * 해시만 저장하므로 DB 를 들여다봐도 남의 기기로 들어갈 수 없다.
  */
 export const TRUST_COOKIE = "td";
-const DAYS = 30;
+
+/** 고를 수 있는 기간 — 공용 PC 면 "기억 안 함"을 고르면 된다 */
+export const TRUST_CHOICES = [
+  { days: 0, label: "기억 안 함" },
+  { days: 7, label: "7일" },
+  { days: 30, label: "30일" },
+  { days: 90, label: "90일" },
+] as const;
+
+/** 기본값 */
+export const TRUST_DEFAULT_DAYS = 30;
 
 async function sha256Hex(text: string): Promise<string> {
   const buf = await crypto.subtle.digest("SHA-256", new TextEncoder().encode(text));
@@ -43,8 +53,12 @@ function deviceLabel(): string {
   return `${os} · ${br}`;
 }
 
-/** 이 기기를 30일간 기억한다 */
-export async function rememberThisDevice(): Promise<string | null> {
+/**
+ * 이 기기를 정한 기간만큼 기억한다.
+ * days = 0 이면 기억하지 않는다 (공용 PC 용).
+ */
+export async function rememberThisDevice(days = TRUST_DEFAULT_DAYS): Promise<string | null> {
+  if (days <= 0) return null;
   const supabase = createClient();
   const {
     data: { user },
@@ -53,7 +67,7 @@ export async function rememberThisDevice(): Promise<string | null> {
 
   const token = crypto.randomUUID() + crypto.randomUUID();
   const hash = await sha256Hex(token);
-  const expires = new Date(Date.now() + DAYS * 24 * 60 * 60 * 1000);
+  const expires = new Date(Date.now() + days * 24 * 60 * 60 * 1000);
 
   const { error } = await supabase.from("trusted_devices").insert({
     user_id: user.id,
@@ -64,7 +78,7 @@ export async function rememberThisDevice(): Promise<string | null> {
   if (error) return `기기를 기억하지 못했습니다: ${error.message}`;
 
   // 쿠키는 서버도 읽는다. 30일 뒤 자동으로 사라진다.
-  document.cookie = `${TRUST_COOKIE}=${token}; path=/; max-age=${DAYS * 24 * 60 * 60}; samesite=lax${
+  document.cookie = `${TRUST_COOKIE}=${token}; path=/; max-age=${days * 24 * 60 * 60}; samesite=lax${
     location.protocol === "https:" ? "; secure" : ""
   }`;
   return null;

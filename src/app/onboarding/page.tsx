@@ -4,7 +4,7 @@ import { useCallback, useEffect, useState } from "react";
 import { useRouter } from "next/navigation";
 import { createClient } from "@/lib/supabase/client";
 import { startEnroll, finishEnroll, verifiedFactorId, type EnrollStart } from "@/lib/mfa";
-import { rememberThisDevice } from "@/lib/trustedDevice";
+import { rememberThisDevice, TRUST_CHOICES, TRUST_DEFAULT_DAYS } from "@/lib/trustedDevice";
 
 /**
  * 첫 로그인 절차.
@@ -28,6 +28,8 @@ export default function OnboardingPage() {
   const [error, setError] = useState<string | null>(null);
   const [showSecret, setShowSecret] = useState(false);
   const [name, setName] = useState("");
+  /** 등록한 기기를 며칠 기억할지 */
+  const [trustDays, setTrustDays] = useState<number>(TRUST_DEFAULT_DAYS);
 
   /** 지금 뭐가 남았는지 보고 그 단계로 보낸다 */
   const decide = useCallback(async () => {
@@ -90,8 +92,8 @@ export default function OnboardingPage() {
       setError(err);
       return;
     }
-    // 등록한 기기는 30일 동안 묻지 않는다
-    await rememberThisDevice();
+    // 등록한 기기는 고른 기간만큼 묻지 않는다
+    await rememberThisDevice(trustDays);
     setBusy(false);
     setEnroll(null);
     setCode("");
@@ -207,6 +209,25 @@ export default function OnboardingPage() {
 
                   <form onSubmit={confirmOtp} className="mt-5">
                     <p className="text-sm text-gray-700 mb-2">앱에 뜬 6자리를 넣으세요</p>
+                    <div className="mb-3">
+                      <p className="text-xs text-gray-500 mb-1">이 기기에서 다시 묻지 않을 기간</p>
+                      <div className="grid grid-cols-4 gap-1.5">
+                        {TRUST_CHOICES.map((c) => (
+                          <button
+                            key={c.days}
+                            type="button"
+                            onClick={() => setTrustDays(c.days)}
+                            className={`rounded-lg border py-1.5 text-xs font-medium ${
+                              trustDays === c.days
+                                ? "border-blue-600 bg-blue-50 text-blue-700"
+                                : "border-gray-300 text-gray-600 hover:bg-gray-50"
+                            }`}
+                          >
+                            {c.label}
+                          </button>
+                        ))}
+                      </div>
+                    </div>
                     <input
                       autoFocus
                       inputMode="numeric"

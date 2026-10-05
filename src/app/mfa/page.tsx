@@ -4,7 +4,7 @@ import { useEffect, useState } from "react";
 import { useRouter } from "next/navigation";
 import { createClient } from "@/lib/supabase/client";
 import { verifyAtLogin } from "@/lib/mfa";
-import { rememberThisDevice } from "@/lib/trustedDevice";
+import { rememberThisDevice, TRUST_CHOICES, TRUST_DEFAULT_DAYS } from "@/lib/trustedDevice";
 
 /**
  * 로그인 두 번째 단계 — 휴대폰 앱의 6자리 숫자.
@@ -18,8 +18,8 @@ export default function MfaPage() {
   const [error, setError] = useState<string | null>(null);
   const [busy, setBusy] = useState(false);
   const [email, setEmail] = useState<string | null>(null);
-  /** 이 기기를 30일 기억할지 */
-  const [remember, setRemember] = useState(true);
+  /** 이 기기를 며칠 기억할지 (0 = 기억 안 함) */
+  const [trustDays, setTrustDays] = useState<number>(TRUST_DEFAULT_DAYS);
 
   useEffect(() => {
     const supabase = createClient();
@@ -45,8 +45,8 @@ export default function MfaPage() {
       return;
     }
 
-    // 체크했으면 이 기기를 30일 기억한다. 실패해도 로그인은 끝난 상태다.
-    if (remember) await rememberThisDevice();
+    // 고른 기간만큼 이 기기를 기억한다. 실패해도 로그인은 끝난 상태다.
+    await rememberThisDevice(trustDays);
     setBusy(false);
 
     router.replace("/dashboard");
@@ -84,18 +84,30 @@ export default function MfaPage() {
             className="w-full rounded-lg border border-gray-300 px-3 py-3 text-center text-2xl tracking-[0.4em] font-mono"
           />
 
-          <label className="flex items-center gap-2 text-sm text-gray-700 cursor-pointer">
-            <input
-              type="checkbox"
-              checked={remember}
-              onChange={(e) => setRemember(e.target.checked)}
-              className="w-4 h-4"
-            />
-            이 기기는 30일 동안 묻지 않기
-          </label>
-          <p className="text-xs text-gray-400 break-keep -mt-2">
-            본인 PC·휴대폰에서만 체크하세요. 공용 PC 에서는 풀어두시는 게 좋습니다.
-          </p>
+          <div>
+            <p className="text-sm text-gray-700 mb-1.5">이 기기에서 다시 묻지 않을 기간</p>
+            <div className="grid grid-cols-4 gap-1.5">
+              {TRUST_CHOICES.map((c) => (
+                <button
+                  key={c.days}
+                  type="button"
+                  onClick={() => setTrustDays(c.days)}
+                  className={`rounded-lg border py-2 text-xs font-medium ${
+                    trustDays === c.days
+                      ? "border-blue-600 bg-blue-50 text-blue-700"
+                      : "border-gray-300 text-gray-600 hover:bg-gray-50"
+                  }`}
+                >
+                  {c.label}
+                </button>
+              ))}
+            </div>
+            <p className="text-xs text-gray-400 mt-1.5 break-keep">
+              {trustDays === 0
+                ? "들어올 때마다 6자리를 묻습니다. 공용 PC 에 알맞습니다."
+                : `이 기기에서는 ${trustDays}일 동안 6자리를 묻지 않습니다. 본인 PC·휴대폰에만 쓰세요.`}
+            </p>
+          </div>
 
           {error && <p className="text-sm text-red-600 break-keep">{error}</p>}
 
