@@ -5,6 +5,7 @@ import { usePathname } from "next/navigation";
 import type { Profile } from "@/lib/types";
 import { cn } from "@/lib/utils";
 import { isManager, isTeamLead } from "@/lib/roles";
+import ThemeToggle from "@/components/ThemeToggle";
 
 const NAV = [
   { href: "/dashboard", leadLabel: "전체 대시보드", memberLabel: "내 현황", access: "all" },
@@ -54,6 +55,10 @@ export default function Sidebar({ profile }: { profile: Profile }) {
           );
         })}
       </nav>
+
+      <div className="px-3 py-2.5 border-t border-gray-100">
+        <ThemeToggle compact />
+      </div>
 
       <div className="p-2 border-t border-gray-100">
         <Link
