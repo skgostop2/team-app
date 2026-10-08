@@ -6,7 +6,15 @@ import { useSearchParams } from "next/navigation";
 import { createClient } from "@/lib/supabase/client";
 import { formatElapsed, isLongInactive, cn } from "@/lib/utils";
 import type { Profile, TaskWithEffectiveStatus } from "@/lib/types";
-import { isManager, isTeamLead, isAssignable, byDisplayOrder } from "@/lib/roles";
+import {
+  isManager,
+  isTeamLead,
+  isAssignable,
+  isGroupLead,
+  canDirect,
+  assignableBy,
+  byDisplayOrder,
+} from "@/lib/roles";
 import TaskLedger from "@/components/TaskLedger";
 import ViewAsBanner from "@/components/ViewAsBanner";
 import PrintButton from "@/components/PrintButton";
@@ -54,7 +62,8 @@ export default function DashboardPage() {
     load();
   }, []);
 
-  const isLead = isManager(me);
+  // 팀장·실장은 팀 전체, 그룹장은 자기 그룹. 보이는 범위는 서버(RLS)가 정한다.
+  const isLead = canDirect(me);
   const viewingAs = isLead && asId ? profiles.find((p) => p.id === asId) : undefined;
 
   // 팀장이 공개를 켜두면 팀원도 팀 전체 현황을 본다.
@@ -86,8 +95,9 @@ export default function DashboardPage() {
 
   const byMember = useMemo(() => {
     // 현재 재직 중인 인원 + 가입 전 미리 등록해 둔 인원 (미리 배정한 업무를 보기 위해)
-    return profiles
-      .filter(isAssignable)
+    // 그룹장 화면에는 자기 그룹 사람만 줄로 세운다 (남의 그룹은 업무가 비어 보일 뿐이라 혼란스럽다)
+    const rows = isGroupLead(me) ? assignableBy(me, profiles) : profiles.filter(isAssignable);
+    return rows
       .map((p) => {
         const mine = tasks.filter((t) => isOn(t, p.id));
         const s = summarize(mine);

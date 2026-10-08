@@ -12,6 +12,12 @@ const NAV = [
   { href: "/tasks", leadLabel: "업무관리", memberLabel: "내 업무", access: "all" },
   { href: "/assign", leadLabel: "업무지시", memberLabel: "내 업무 등록", access: "all" },
   { href: "/calendar", leadLabel: "달력", memberLabel: "달력", access: "all" },
+  {
+    href: "/reports",
+    leadLabel: "신규 업무 진행 보고",
+    memberLabel: "신규 업무 진행 보고",
+    access: "manager",
+  },
   { href: "/notices", leadLabel: "공지사항", memberLabel: "공지사항", access: "all" },
   { href: "/notes", leadLabel: "내 메모장", memberLabel: "내 메모장", access: "all" },
   { href: "/security", leadLabel: "2단계 인증", memberLabel: "2단계 인증", access: "all" },

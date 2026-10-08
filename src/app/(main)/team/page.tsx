@@ -4,9 +4,10 @@ import { useEffect, useState } from "react";
 import { createClient } from "@/lib/supabase/client";
 import { callEdgeFunction } from "@/lib/edge";
 import { formatElapsed, formatDate, isLongInactive } from "@/lib/utils";
-import type { Profile } from "@/lib/types";
+import type { Group, Profile } from "@/lib/types";
 import { isManager, isTeamLead, byDisplayOrder } from "@/lib/roles";
 import DeletePasswordSetting from "@/components/DeletePasswordSetting";
+import GroupManager from "@/components/GroupManager";
 
 export default function TeamPage() {
   const [me, setMe] = useState<Profile | null>(null);
@@ -22,6 +23,7 @@ export default function TeamPage() {
   const [showDirectorForm, setShowDirectorForm] = useState(false);
   const [showPreForm, setShowPreForm] = useState(false);
   const [editTarget, setEditTarget] = useState<Profile | null>(null);
+  const [groups, setGroups] = useState<Group[]>([]);
 
   async function load() {
     const supabase = createClient();
@@ -30,14 +32,16 @@ export default function TeamPage() {
     } = await supabase.auth.getUser();
     if (!user) return;
 
-    const [{ data: profile }, { data: all }, { data: setting }] = await Promise.all([
+    const [{ data: profile }, { data: all }, { data: setting }, { data: gs }] = await Promise.all([
       supabase.from("profiles").select("*").eq("id", user.id).single(),
       supabase.from("profiles").select("*").order("sort_order"),
       supabase.from("team_settings").select("value").eq("key", "require_mfa").maybeSingle(),
+      supabase.from("groups").select("*").order("sort_order"),
     ]);
 
     setMe(profile as Profile);
     setProfiles((all ?? []) as Profile[]);
+    setGroups((gs ?? []) as Group[]);
     setRequireMfa((setting as { value: boolean } | null)?.value !== false);
     setLoading(false);
   }
@@ -111,10 +115,10 @@ export default function TeamPage() {
   }
 
   const members = profiles
-    .filter((p) => p.role === "팀원" && p.status === "승인")
+    .filter((p) => (p.role === "팀원" || p.role === "그룹장") && p.status === "승인")
     .sort(byDisplayOrder);
   const pending = profiles
-    .filter((p) => p.role === "팀원" && p.status === "가입대기")
+    .filter((p) => (p.role === "팀원" || p.role === "그룹장") && p.status === "가입대기")
     .sort(byDisplayOrder);
   const directors = profiles.filter((p) => p.role === "실장" && p.status !== "삭제");
   const deleted = profiles.filter((p) => p.status === "삭제");
@@ -320,6 +324,8 @@ export default function TeamPage() {
           </div>
         </section>
       )}
+
+      <GroupManager groups={groups} profiles={profiles} onChanged={load} />
 
       {editTarget && (
         <EditPreRegisteredModal

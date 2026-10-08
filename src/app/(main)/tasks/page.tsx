@@ -4,7 +4,7 @@ import { useEffect, useMemo, useState } from "react";
 import { useSearchParams } from "next/navigation";
 import { createClient } from "@/lib/supabase/client";
 import type { Profile, TaskAssigneeLog, TaskWithEffectiveStatus } from "@/lib/types";
-import { isManager, isTeamLead, isAssignable } from "@/lib/roles";
+import { isManager, isTeamLead, isAssignable, canDirect, assignableBy } from "@/lib/roles";
 import TaskLedger from "@/components/TaskLedger";
 import ViewAsBanner from "@/components/ViewAsBanner";
 import NewTaskModal from "@/components/NewTaskModal";
@@ -60,7 +60,10 @@ export default function TasksPage() {
     load();
   }, []);
 
-  const isLead = isManager(me);
+  // 팀장·실장은 팀 전체, 그룹장은 자기 그룹.
+  // 어느 쪽이든 "남의 업무를 보고 맡기는 사람"이라 화면 구성이 같다.
+  // 실제로 보이는 범위는 서버(RLS)가 정한다.
+  const isLead = canDirect(me);
   const viewingAs = isLead && asId ? profiles.find((p) => p.id === asId) : undefined;
 
   const visibleTasks = useMemo(() => {
@@ -104,7 +107,7 @@ export default function TasksPage() {
       {viewingAs && (
         <ViewAsBanner
           current={viewingAs}
-          members={profiles.filter(isAssignable)}
+          members={assignableBy(me, profiles)}
           unconfirmed={unconfirmed}
           basePath="/tasks"
         />
@@ -220,7 +223,7 @@ export default function TasksPage() {
 
       {showQuick && me && (
         <QuickAddModal
-          members={profiles.filter(isAssignable)}
+          members={assignableBy(me, profiles)}
           createdBy={me.id}
           instructorDefault={me.name}
           onClose={() => setShowQuick(false)}
@@ -234,7 +237,7 @@ export default function TasksPage() {
 
       {showImport && me && (
         <ImportTasksModal
-          members={profiles.filter(isAssignable)}
+          members={assignableBy(me, profiles)}
           createdBy={me.id}
           onClose={() => setShowImport(false)}
           onDone={async (count) => {
@@ -247,7 +250,7 @@ export default function TasksPage() {
 
       {showNewModal && (
         <NewTaskModal
-          profiles={profiles.filter(isAssignable)}
+          profiles={assignableBy(me, profiles)}
           defaultInstructor={me?.name ?? ""}
           selfMode={!isLead}
           selfId={me?.id}

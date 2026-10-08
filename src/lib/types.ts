@@ -1,6 +1,6 @@
 // 데이터베이스 테이블 타입 (수동 정의 - migration.sql 과 동기화 유지)
 
-export type Role = "실장" | "팀장" | "팀원";
+export type Role = "실장" | "팀장" | "그룹장" | "팀원";
 export type ProfileStatus = "대기" | "가입대기" | "승인" | "비활성" | "삭제";
 export type TaskStatus = "대기" | "진행중" | "완료" | "지연";
 
@@ -12,6 +12,8 @@ export interface Profile {
   status: ProfileStatus;
   team_name: string | null;
   position: string | null;
+  /** 소속 그룹 (그룹장과 그 그룹 팀원이 같은 값을 가진다) */
+  group_id: string | null;
   created_at: string;
   last_seen_at: string;
   /** 팀장이 정한 표시 순서 */
@@ -44,6 +46,17 @@ export interface Task {
   completed_at: string | null;
   created_at: string;
   updated_at: string;
+  /** 팀장이 이 업무를 확인한 시각 — 비어 있으면 "신규 업무 진행 보고"에 뜬다 */
+  lead_ack_at: string | null;
+  lead_ack_by: string | null;
+}
+
+/** 그룹 — 팀장 아래 그룹장, 그 아래 팀원 */
+export interface Group {
+  id: string;
+  name: string;
+  sort_order: number;
+  created_at: string;
 }
 
 export interface TaskWithEffectiveStatus extends Task {

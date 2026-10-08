@@ -3,7 +3,7 @@
 import { useEffect, useState } from "react";
 import { createClient } from "@/lib/supabase/client";
 import type { Profile } from "@/lib/types";
-import { isManager, isAssignable, byDisplayOrder } from "@/lib/roles";
+import { isManager, canDirect, assignableBy, byDisplayOrder } from "@/lib/roles";
 import QuickAssignForm from "@/components/QuickAssignForm";
 import PrintButton from "@/components/PrintButton";
 import PrintHeader from "@/components/PrintHeader";
@@ -57,7 +57,8 @@ export default function AssignPage() {
     const lead = isManager(mine);
 
     const list = (all ?? []) as Profile[];
-    setMembers(list.filter(isAssignable).sort(byDisplayOrder));
+    // 그룹장은 자기 그룹 사람만 고를 수 있다 (서버에서도 같은 규칙으로 막힌다)
+    setMembers(assignableBy(mine, list).sort(byDisplayOrder));
     setNames(Object.fromEntries(list.map((p) => [p.id, p.name])));
 
     // 지시 원문 보관은 팀장·실장 자료다. 팀원은 불러오지 않는다.
@@ -85,7 +86,9 @@ export default function AssignPage() {
       </div>
     );
 
-  const lead = isManager(me);
+  // 팀장·실장은 팀 전체에, 그룹장은 자기 그룹에 지시한다
+  const lead = canDirect(me);
+  const groupLeadOnly = lead && !isManager(me);
 
   return (
     <div className="space-y-5">
@@ -99,7 +102,9 @@ export default function AssignPage() {
           <h1 className="text-xl font-bold text-gray-900">{lead ? "업무지시" : "내 업무 등록"}</h1>
           <p className="text-sm text-gray-500 mt-0.5 break-keep">
             {lead
-              ? "지시 내용을 한꺼번에 붙여넣으면 이름과 기한을 찾아 담당자별 업무로 만듭니다."
+              ? groupLeadOnly
+                ? "지시 내용을 붙여넣으면 이름과 기한을 찾아 업무로 만듭니다. 우리 그룹 사람만 고를 수 있고, 등록하면 팀장에게 보고로 올라갑니다."
+                : "지시 내용을 한꺼번에 붙여넣으면 이름과 기한을 찾아 담당자별 업무로 만듭니다."
               : "할 일을 편하게 적어 붙여넣으면 건별로 나눠 내 업무로 등록합니다. 기한도 찾아 넣습니다."}
           </p>
         </div>
