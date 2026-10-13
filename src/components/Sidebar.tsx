@@ -12,6 +12,7 @@ const NAV = [
   { href: "/tasks", leadLabel: "업무관리", memberLabel: "내 업무", access: "all" },
   { href: "/assign", leadLabel: "업무지시", memberLabel: "내 업무 등록", access: "all" },
   { href: "/calendar", leadLabel: "달력", memberLabel: "달력", access: "all" },
+  { href: "/weekly", leadLabel: "주간 계획대비 실적", memberLabel: "내 주간 실적", access: "all" },
   {
     href: "/reports",
     leadLabel: "신규 업무 진행 보고",
