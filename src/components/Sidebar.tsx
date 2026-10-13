@@ -24,6 +24,7 @@ const NAV = [
   { href: "/security", leadLabel: "2단계 인증", memberLabel: "2단계 인증", access: "all" },
   { href: "/team", leadLabel: "팀원관리", memberLabel: "팀원관리", access: "manager" },
   { href: "/evaluation", leadLabel: "고과평가", memberLabel: "고과평가", access: "teamLead" },
+  { href: "/help", leadLabel: "사용방법", memberLabel: "사용방법", access: "all" },
 ] as const;
 
 export default function Sidebar({ profile }: { profile: Profile }) {
