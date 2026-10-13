@@ -130,8 +130,8 @@ export default function TeamPage() {
       <div>
         <h1 className="text-xl font-bold text-gray-900">팀원관리</h1>
         <p className="text-sm text-gray-500 mt-0.5">
-          가입한 팀원은 바로 이용할 수 있습니다. 아직 가입 전인 사람도 미리 등록해 두면 업무를
-          배정할 수 있습니다. 우리 팀원이 아닌 계정은 삭제하세요.
+          그룹 편성·그룹장 지정·직책은 아래 <b>그룹</b>에서 바로 바꿉니다. 가입 전인 사람도 미리
+          등록해 두면 업무를 배정할 수 있고, 우리 팀원이 아닌 계정은 삭제하세요.
         </p>
       </div>
 
@@ -140,6 +140,9 @@ export default function TeamPage() {
           {message}
         </div>
       )}
+
+      {/* 그룹 편성이 제일 자주 손대는 것이라 맨 위에 둔다 */}
+      <GroupManager groups={groups} profiles={profiles} onChanged={load} />
 
       <section>
         <div className="flex items-center justify-between mb-3">
@@ -324,8 +327,6 @@ export default function TeamPage() {
           </div>
         </section>
       )}
-
-      <GroupManager groups={groups} profiles={profiles} onChanged={load} />
 
       {editTarget && (
         <EditPreRegisteredModal

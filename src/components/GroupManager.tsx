@@ -99,6 +99,20 @@ export default function GroupManager({
     });
   }
 
+  /** 직책(호칭) 바꾸기 — 책임·매니저·상무처럼 부르는 이름 */
+  async function setPosition(p: Profile, position: string) {
+    const next = position.trim();
+    if ((p.position ?? "") === next) return;
+    const supabase = createClient();
+    await run(async () => {
+      const { error } = await supabase
+        .from("profiles")
+        .update({ position: next || null })
+        .eq("id", p.id);
+      return { error };
+    });
+  }
+
   /** 역할 바꾸기 (그룹장 ↔ 팀원) */
   async function setRole(p: Profile, role: Role) {
     if (role === "그룹장" && !p.group_id) {
@@ -220,6 +234,7 @@ export default function GroupManager({
                     busy={busy}
                     onMove={moveTo}
                     onRole={setRole}
+                    onPosition={setPosition}
                   />
                 ))}
                 {inGroup.length === 0 && (
@@ -254,6 +269,7 @@ export default function GroupManager({
               busy={busy}
               onMove={moveTo}
               onRole={setRole}
+              onPosition={setPosition}
             />
           ))}
           {unassigned.length === 0 && (
@@ -271,18 +287,36 @@ function PersonRow({
   busy,
   onMove,
   onRole,
+  onPosition,
 }: {
   person: Profile;
   groups: Group[];
   busy: boolean;
   onMove: (p: Profile, groupId: string | null) => void;
   onRole: (p: Profile, role: Role) => void;
+  onPosition: (p: Profile, position: string) => void;
 }) {
   const isLead = person.role === "그룹장";
+  const [pos, setPos] = useState(person.position ?? "");
+
   return (
     <li className="px-4 py-2.5 flex items-center gap-2 flex-wrap">
       <span className="font-medium text-gray-900 break-keep">{person.name}</span>
-      {person.position && <span className="text-xs text-gray-400">{person.position}</span>}
+
+      {/* 직책은 호칭이다 (책임·매니저·상무). 역할(권한)과는 따로 둔다. */}
+      <input
+        value={pos}
+        onChange={(e) => setPos(e.target.value)}
+        onBlur={() => onPosition(person, pos)}
+        onKeyDown={(e) => {
+          if (e.key === "Enter") (e.target as HTMLInputElement).blur();
+        }}
+        disabled={busy}
+        placeholder="직책"
+        title="직책 — 책임, 매니저, 상무 등"
+        className="w-20 rounded-md border border-gray-200 px-2 py-0.5 text-xs bg-white disabled:opacity-50"
+      />
+
       {person.status === "가입대기" && (
         <span className="text-[11px] text-amber-600">가입 전</span>
       )}
