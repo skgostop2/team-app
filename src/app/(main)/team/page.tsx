@@ -8,6 +8,7 @@ import type { Group, Profile } from "@/lib/types";
 import { isManager, isTeamLead, byDisplayOrder } from "@/lib/roles";
 import DeletePasswordSetting from "@/components/DeletePasswordSetting";
 import GroupManager from "@/components/GroupManager";
+import MemberStatus from "@/components/MemberStatus";
 
 export default function TeamPage() {
   const [me, setMe] = useState<Profile | null>(null);
@@ -141,7 +142,10 @@ export default function TeamPage() {
         </div>
       )}
 
-      {/* 그룹 편성이 제일 자주 손대는 것이라 맨 위에 둔다 */}
+      {/* 배포 초기에는 "누가 아직 안 들어왔나"가 제일 궁금하다 */}
+      <MemberStatus profiles={profiles} groups={groups} />
+
+      {/* 그룹 편성이 제일 자주 손대는 것이라 그 다음 */}
       <GroupManager groups={groups} profiles={profiles} onChanged={load} />
 
       <section>
