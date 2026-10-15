@@ -1,7 +1,7 @@
 "use client";
 
 import Link from "next/link";
-import { useState } from "react";
+import { Fragment, useMemo, useState } from "react";
 import { useColumnWidths } from "@/lib/useColumnWidths";
 import type { Profile, TaskWithEffectiveStatus } from "@/lib/types";
 import { formatShortDate, formatIsoDate, cn } from "@/lib/utils";
@@ -46,7 +46,7 @@ type EditTarget = {
  */
 const COL = {
   no: 36,
-  date: 88,
+  date: 100,
   /** 진행일정 — 착수일 */
   start: 68,
   /** 완료계획 — 목표 완료일 (소요일·일정대비 계산 기준) */
@@ -57,11 +57,11 @@ const COL = {
   diff: 84,
   assignee: 104,
   instructor: 64,
-  progress: 84,
+  progress: 100,
   log: 96,
-  status: 64,
+  status: 76,
   note: 80,
-  hist: 56,
+  hist: 64,
   /** 업무내용이 이 폭보다 좁아지면 글자가 한 자씩 끊긴다.
       나머지 칸을 줄여 이 칸에 몰아준다 — 표에서 실제로 읽는 것은 여기다. */
   titleMin: 340,
@@ -130,6 +130,31 @@ export default function TaskLedger({
   const [doneBusy, setDoneBusy] = useState<string | null>(null);
   /** 지우려고 비밀번호를 묻고 있는 업무 */
   const [askDelete, setAskDelete] = useState<TaskWithEffectiveStatus | null>(null);
+
+  /**
+   * 받은 일과 스스로 챙기는 일은 성격이 다르다. 섞여 있으면 머리가 복잡하므로
+   * 같은 표 안에서 띠로 나눈다 — 위가 지시, 아래가 직접 등록.
+   * 한쪽만 있으면 띠를 띄우지 않는다 (쓸데없이 줄만 는다).
+   */
+  const sections = useMemo(() => {
+    const directed = tasks.filter((t) => t.source !== "팀원추가");
+    const own = tasks.filter((t) => t.source === "팀원추가");
+    const out: { key: string; label: string; items: TaskWithEffectiveStatus[] }[] = [];
+    if (directed.length) {
+      out.push({ key: "directed", label: canAssign ? "지시 업무" : "지시받은 업무", items: directed });
+    }
+    if (own.length) {
+      out.push({
+        key: "own",
+        label: canAssign ? "팀원이 등록한 업무" : "내가 등록한 업무",
+        items: own,
+      });
+    }
+    return out;
+  }, [tasks, canAssign]);
+
+  /** 띠를 띄울지 (한 묶음뿐이면 굳이 안 띄운다) */
+  const banded = sections.length > 1;
 
   // 칸 폭은 쓰는 사람이 끌어서 정한다 (이 브라우저에만 저장된다)
   const { widths: W, startDrag, reset: resetWidths, changed: widthsChanged } = useColumnWidths(
@@ -276,7 +301,14 @@ export default function TaskLedger({
 
       {/* 폰 — 표는 칸이 좁아 못 쓰므로 한 건씩 위아래로 펼쳐서 보여준다 */}
       <div className="md:hidden print-hide divide-y divide-gray-200">
-        {tasks.map((t, i) => {
+        {sections.map((sec) => (
+        <Fragment key={sec.key}>
+        {banded && (
+          <div className="px-3 py-1.5 bg-gray-50 text-xs font-semibold text-gray-500">
+            {sec.label} <span className="font-normal text-gray-400">{sec.items.length}건</span>
+          </div>
+        )}
+        {sec.items.map((t, i) => {
           const assignee = profiles.find((p) => p.id === t.assignee_id);
           const deputies = (t.deputy_ids ?? [])
             .map((id) => profiles.find((p) => p.id === id))
@@ -510,6 +542,8 @@ export default function TaskLedger({
             </div>
           );
         })}
+        </Fragment>
+        ))}
 
         {tasks.length === 0 && (
           <p className="px-4 py-10 text-center text-gray-400 text-sm">{emptyText}</p>
@@ -578,7 +612,20 @@ export default function TaskLedger({
             </tr>
           </thead>
           <tbody>
-            {tasks.map((t, i) => {
+            {sections.map((sec) => (
+            <Fragment key={sec.key}>
+            {banded && (
+              <tr className="bg-gray-50">
+                <td
+                  colSpan={showAssignee ? 15 : 14}
+                  className="px-3 py-1.5 text-xs font-semibold text-gray-500 border-y border-gray-200"
+                >
+                  {sec.label}{" "}
+                  <span className="font-normal text-gray-400">{sec.items.length}건</span>
+                </td>
+              </tr>
+            )}
+            {sec.items.map((t, i) => {
               const assignee = profiles.find((p) => p.id === t.assignee_id);
               const deputies = (t.deputy_ids ?? [])
                 .map((id) => profiles.find((p) => p.id === id))
@@ -788,7 +835,9 @@ export default function TaskLedger({
                         <div className="flex-1 h-1.5 rounded-full bg-gray-100 overflow-hidden min-w-[40px]">
                           <div className="h-full bg-blue-500" style={{ width: `${t.progress}%` }} />
                         </div>
-                        <span className="text-xs text-gray-500 w-8 text-right">{t.progress}%</span>
+                        <span className="text-xs text-gray-500 w-10 shrink-0 text-right whitespace-nowrap">
+                          {t.progress}%
+                        </span>
                       </div>
                     </Cell>
                   </Td>
@@ -857,6 +906,8 @@ export default function TaskLedger({
                 </tr>
               );
             })}
+            </Fragment>
+            ))}
 
             {tasks.length === 0 && (
               <tr>
