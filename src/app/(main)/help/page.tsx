@@ -4,7 +4,7 @@ import { useEffect, useState } from "react";
 import Link from "next/link";
 import { createClient } from "@/lib/supabase/client";
 import type { Profile } from "@/lib/types";
-import { isGroupLead, isManager, isTeamLead } from "@/lib/roles";
+import { isGroupLead, isManager } from "@/lib/roles";
 import { cn } from "@/lib/utils";
 import PrintButton from "@/components/PrintButton";
 import PrintHeader from "@/components/PrintHeader";
@@ -45,7 +45,6 @@ export default function HelpPage() {
 
   const lead = isManager(me);
   const gLead = isGroupLead(me);
-  const teamLead = isTeamLead(me);
 
   /** 이 사람에게 해당하는 내용인가 */
   const mine = (who: Who) =>
@@ -119,6 +118,10 @@ export default function HelpPage() {
           휴대폰을 바꾸셨거나 인증 앱을 지워서 6자리가 안 맞으면, 팀장에게 말씀하세요. 팀장이
           팀원관리에서 <b>OTP 해제</b>를 눌러주면 처음부터 다시 등록할 수 있습니다.
         </Tip>
+        <p className="mt-2 text-sm text-gray-500 break-keep">
+          알아두실 점 — 팀장은 <b>팀원관리</b> 화면에서 각자의 <b>마지막 접속 시간</b>과 OTP·비밀번호
+          설정을 끝냈는지를 봅니다. 무엇을 보고 있었는지는 남지 않고, 언제 들어왔는지만 남습니다.
+        </p>
       </Section>
 
       {/* 팀원 — 매일 쓰는 것 */}
@@ -229,12 +232,20 @@ export default function HelpPage() {
             · <b>팀원관리 → 그룹</b> 에서 그룹을 만들고 이름을 정하고, 사람을 넣고,{" "}
             <b>그룹장으로</b> 버튼으로 역할을 바꿉니다. 역할을 바꾸는 순간 권한이 생깁니다.
           </li>
-          {teamLead && (
-            <li>
-              · <b>삭제</b>는 팀장만 할 수 있고 비밀번호를 묻습니다. 지워도 누가 언제 무엇을 지웠는지
-              따로 남습니다.
-            </li>
-          )}
+          <li>
+            · <b>팀원관리 → 팀원 현황</b> 에서 누가 가입 준비(OTP·비밀번호)를 끝냈는지,{" "}
+            <b>마지막으로 언제 들어왔는지</b>가 보입니다. 배포 첫 주에 누가 아직 안 들어왔는지
+            여기서 확인하세요.
+          </li>
+          <li>
+            · <b>삭제</b> — 팀장은 모든 업무를, 팀원은 자기가 담당이거나 직접 올린 업무만 지울 수
+            있습니다. 팀장이 지울 때는 비밀번호를 묻습니다.
+          </li>
+          <li>
+            · <b>업무관리 맨 아래 「지워진 업무」</b> — 팀원이 지시받은 업무를 지워도 여기 남습니다.
+            누가 언제 무엇을 지웠는지 보이고, <b>되살리기</b>로 되돌릴 수 있습니다. 다만 그 업무의
+            진행기록·변경이력은 함께 지워져 돌아오지 않습니다.
+          </li>
         </ul>
       </Section>
 

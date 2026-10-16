@@ -6,6 +6,7 @@ import { createClient } from "@/lib/supabase/client";
 import type { Profile, TaskAssigneeLog, TaskWithEffectiveStatus } from "@/lib/types";
 import { isManager, isTeamLead, isAssignable, canDirect, assignableBy } from "@/lib/roles";
 import TaskLedger from "@/components/TaskLedger";
+import DeletedTasks from "@/components/DeletedTasks";
 import ViewAsBanner from "@/components/ViewAsBanner";
 import NewTaskModal from "@/components/NewTaskModal";
 import ImportTasksModal from "@/components/ImportTasksModal";
@@ -214,6 +215,9 @@ export default function TasksPage() {
         onChanged={load}
         emptyText="표시할 업무가 없습니다."
       />
+
+      {/* 지워진 업무 — 팀원이 지시받은 업무를 지워도 여기 남는다 */}
+      {isManager(me) && !viewingAs && <DeletedTasks profiles={profiles} />}
 
       {importMsg && (
         <div className="rounded-xl bg-emerald-50 border border-emerald-200 px-4 py-3 text-sm text-emerald-700">
