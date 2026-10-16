@@ -1,7 +1,7 @@
 "use client";
 
 import Link from "next/link";
-import { Fragment, useMemo, useState } from "react";
+import { Fragment, useEffect, useMemo, useRef, useState } from "react";
 import { useColumnWidths } from "@/lib/useColumnWidths";
 import type { Profile, TaskWithEffectiveStatus } from "@/lib/types";
 import { formatShortDate, formatIsoDate, cn } from "@/lib/utils";
@@ -57,7 +57,7 @@ const COL = {
   diff: 84,
   assignee: 104,
   instructor: 64,
-  progress: 100,
+  progress: 120,
   log: 96,
   status: 76,
   note: 80,
@@ -169,6 +169,18 @@ export default function TaskLedger({
 
   /** 팀장만 비밀번호를 묻는다 (팀원은 그 비밀번호를 모른다) */
   const askPassword = canDelete;
+
+  /** 지울 수 없는 줄에는 왜 못 지우는지 적어 둔다 (버튼이 있다 없다 하면 고장처럼 보인다) */
+  const noDeleteWhy = !canEdit
+    ? "보기 전용 화면입니다"
+    : "담당자이거나 직접 등록한 업무만 지울 수 있습니다";
+
+  /** 진행률을 바로 저장한다 — 100%면 완료, 0%면 대기 (팝업과 같은 규칙) */
+  function saveProgress(id: string, v: number): Promise<string | null> {
+    const n = Math.max(0, Math.min(100, Math.round(v)));
+    const status = n >= 100 ? "완료" : n > 0 ? "진행중" : "대기";
+    return patch(id, { progress: n, status });
+  }
 
   // 칸 폭은 쓰는 사람이 끌어서 정한다 (이 브라우저에만 저장된다)
   const { widths: W, startDrag, reset: resetWidths, changed: widthsChanged } = useColumnWidths(
@@ -386,20 +398,13 @@ export default function TaskLedger({
               )}
 
               <div className="mt-2.5">
-                <Cell
+                <ProgressControl
+                  big
+                  value={t.progress}
                   enabled={canTouch}
-                  onClick={() => setEdit({ task: t, field: "progress" })}
-                  title="눌러서 진행률 수정"
-                >
-                  <div className="flex items-center gap-2">
-                    <div className="flex-1 h-2 rounded-full bg-gray-100 overflow-hidden">
-                      <div className="h-full bg-blue-500" style={{ width: `${t.progress}%` }} />
-                    </div>
-                    <span className="text-sm font-medium text-gray-700 w-10 text-right">
-                      {t.progress}%
-                    </span>
-                  </div>
-                </Cell>
+                  onCommit={(v) => saveProgress(t.id, v)}
+                  onOpen={() => setEdit({ task: t, field: "progress" })}
+                />
               </div>
 
               <dl className="mt-2.5 grid grid-cols-2 gap-x-3 gap-y-1.5 text-sm">
@@ -545,14 +550,19 @@ export default function TaskLedger({
                 >
                   변경 이력 보기
                 </button>
-                {mayDelete(t) && (
-                  <button
-                    onClick={() => setAskDelete(t)}
-                    className="shrink-0 text-xs px-3 py-2 rounded-lg border border-red-200 text-red-600"
-                  >
-                    삭제
-                  </button>
-                )}
+                <button
+                  onClick={() => setAskDelete(t)}
+                  disabled={!mayDelete(t)}
+                  title={mayDelete(t) ? "이 업무 삭제" : noDeleteWhy}
+                  className={cn(
+                    "shrink-0 text-xs px-3 py-2 rounded-lg border",
+                    mayDelete(t)
+                      ? "border-red-200 text-red-600"
+                      : "border-gray-200 text-gray-300"
+                  )}
+                >
+                  삭제
+                </button>
               </div>
             </div>
           );
@@ -839,22 +849,14 @@ export default function TaskLedger({
                     </Cell>
                   </Td>
 
-                  {/* 진행률 */}
+                  {/* 진행률 — 표에서 바로 끌어서 맞춘다 */}
                   <Td>
-                    <Cell
+                    <ProgressControl
+                      value={t.progress}
                       enabled={canTouch}
-                      onClick={() => setEdit({ task: t, field: "progress" })}
-                      title="눌러서 진행률 수정"
-                    >
-                      <div className="flex items-center gap-2">
-                        <div className="flex-1 h-1.5 rounded-full bg-gray-100 overflow-hidden min-w-[40px]">
-                          <div className="h-full bg-blue-500" style={{ width: `${t.progress}%` }} />
-                        </div>
-                        <span className="text-xs text-gray-500 w-10 shrink-0 text-right whitespace-nowrap">
-                          {t.progress}%
-                        </span>
-                      </div>
-                    </Cell>
+                      onCommit={(v) => saveProgress(t.id, v)}
+                      onOpen={() => setEdit({ task: t, field: "progress" })}
+                    />
                   </Td>
 
                   {/* 진행기록 — 마지막 기록이 보이고, 누르면 전체가 뜬다 */}
@@ -907,15 +909,25 @@ export default function TaskLedger({
                       >
                         보기
                       </button>
-                      {mayDelete(t) && (
-                        <button
-                          onClick={() => setAskDelete(t)}
-                          title="이 업무 삭제 (비밀번호를 묻습니다)"
-                          className="no-print text-[10px] leading-none px-2 py-1 rounded border border-red-200 text-red-600 hover:bg-red-50"
-                        >
-                          삭제
-                        </button>
-                      )}
+                      <button
+                        onClick={() => setAskDelete(t)}
+                        disabled={!mayDelete(t)}
+                        title={
+                          !mayDelete(t)
+                            ? noDeleteWhy
+                            : askPassword
+                              ? "이 업무 삭제 (비밀번호를 묻습니다)"
+                              : "이 업무 삭제"
+                        }
+                        className={cn(
+                          "no-print text-[10px] leading-none px-2 py-1 rounded border",
+                          mayDelete(t)
+                            ? "border-red-200 text-red-600 hover:bg-red-50"
+                            : "border-gray-200 text-gray-300 cursor-not-allowed"
+                        )}
+                      >
+                        삭제
+                      </button>
                     </div>
                   </Td>
                 </tr>
@@ -937,6 +949,120 @@ export default function TaskLedger({
           </tbody>
         </table>
       </div>
+    </div>
+  );
+}
+
+/**
+ * 진행률 — 표에서 바로 끌어서 맞춘다.
+ *
+ * 손을 떼는 순간 한 번만 저장한다. 끄는 동안 계속 저장하면 이력이
+ * 수십 줄로 지저분해지고 화면도 느려진다.
+ *
+ * 100% 까지 밀면 완료로 바뀐다 — 창에서 고치던 것과 같은 규칙이다.
+ * 숫자를 누르면 예전처럼 창이 떠서 0·25·50·75·100 으로도 찍을 수 있다.
+ */
+function ProgressControl({
+  value,
+  enabled,
+  onCommit,
+  onOpen,
+  big = false,
+}: {
+  value: number;
+  enabled: boolean;
+  onCommit: (v: number) => Promise<string | null>;
+  onOpen: () => void;
+  /** 폰 화면 — 손가락으로 잡을 수 있게 굵게 */
+  big?: boolean;
+}) {
+  const [draft, setDraft] = useState(value);
+  const [busy, setBusy] = useState(false);
+  /** 밖에서 값이 바뀐 것과 내가 끌고 있는 것을 구분한다 */
+  const seen = useRef(value);
+  /** 같은 값을 두 번 보내지 않는다 (손 뗄 때와 칸을 벗어날 때가 겹친다) */
+  const sent = useRef(value);
+
+  useEffect(() => {
+    if (value !== seen.current) {
+      seen.current = value;
+      sent.current = value;
+      setDraft(value);
+    }
+  }, [value]);
+
+  async function commit(v: number) {
+    if (v === sent.current) return;
+    sent.current = v;
+    setBusy(true);
+    const err = await onCommit(v);
+    setBusy(false);
+    if (err) {
+      sent.current = value;
+      setDraft(value);
+      window.alert(`진행률을 저장하지 못했습니다: ${err}`);
+    }
+  }
+
+  if (!enabled) {
+    return (
+      <div className="flex items-center gap-2">
+        <div
+          className={cn(
+            "flex-1 rounded-full bg-gray-100 overflow-hidden min-w-[40px]",
+            big ? "h-2" : "h-1.5"
+          )}
+        >
+          <div className="h-full bg-blue-500" style={{ width: `${value}%` }} />
+        </div>
+        <span
+          className={cn(
+            "shrink-0 text-right whitespace-nowrap w-10",
+            big ? "text-sm font-medium text-gray-700" : "text-xs text-gray-500"
+          )}
+        >
+          {value}%
+        </span>
+      </div>
+    );
+  }
+
+  return (
+    <div className="flex items-center gap-1.5">
+      <input
+        type="range"
+        min={0}
+        max={100}
+        step={5}
+        value={draft}
+        disabled={busy}
+        onChange={(e) => setDraft(Number(e.target.value))}
+        onPointerUp={() => commit(draft)}
+        onKeyUp={() => commit(draft)}
+        onBlur={() => commit(draft)}
+        title="끌어서 진행률 조절 — 손을 떼면 저장됩니다"
+        aria-label="진행률"
+        className={cn(
+          "no-print flex-1 min-w-[44px] accent-blue-600 cursor-pointer disabled:opacity-50",
+          big ? "h-5" : "h-4"
+        )}
+      />
+      {/* 인쇄할 때는 막대가 안 나오므로 칸이 비지 않게 띠를 하나 더 둔다 */}
+      <div className="hidden print:block flex-1 h-1.5 rounded-full bg-gray-100 overflow-hidden">
+        <div className="h-full bg-blue-500" style={{ width: `${draft}%` }} />
+      </div>
+      <button
+        type="button"
+        onClick={onOpen}
+        title="눌러서 숫자로 입력"
+        className={cn(
+          "shrink-0 text-right whitespace-nowrap w-10 rounded hover:bg-blue-50",
+          big ? "text-sm font-medium text-gray-700" : "text-xs text-gray-500",
+          busy && "opacity-40"
+        )}
+      >
+        {draft}%
+      </button>
     </div>
   );
 }

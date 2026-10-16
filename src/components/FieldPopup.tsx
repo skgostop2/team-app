@@ -13,6 +13,47 @@ import { cn } from "@/lib/utils";
  */
 export type FieldKind = "text" | "textarea" | "date" | "progress";
 
+const WEEKDAY = ["일", "월", "화", "수", "목", "금", "토"] as const;
+
+/** "2026-10-20" → "2026년 10월 20일 (화)" */
+function koreanDate(key: string): string {
+  const [y, m, d] = key.split("-").map(Number);
+  if (!y || !m || !d) return key;
+  const w = WEEKDAY[new Date(y, m - 1, d).getDay()];
+  return `${y}년 ${m}월 ${d}일 (${w})`;
+}
+
+function iso(d: Date): string {
+  return `${d.getFullYear()}-${String(d.getMonth() + 1).padStart(2, "0")}-${String(
+    d.getDate()
+  ).padStart(2, "0")}`;
+}
+
+/** 자주 고르는 날짜 — 오늘, 내일, 이번 주 금요일, 다음 주 금요일 */
+function quickDates(): { label: string; value: string }[] {
+  const t = new Date();
+  const today = new Date(t.getFullYear(), t.getMonth(), t.getDate());
+
+  const tomorrow = new Date(today);
+  tomorrow.setDate(today.getDate() + 1);
+
+  // 금요일(5)까지 남은 날. 토·일이면 다음 주 금요일로 간다.
+  const dow = today.getDay();
+  const toFri = dow === 0 ? 5 : dow <= 5 ? 5 - dow : 6;
+  const fri = new Date(today);
+  fri.setDate(today.getDate() + toFri);
+
+  const nextFri = new Date(fri);
+  nextFri.setDate(fri.getDate() + 7);
+
+  return [
+    { label: "오늘", value: iso(today) },
+    { label: "내일", value: iso(tomorrow) },
+    { label: "이번 주 금요일", value: iso(fri) },
+    { label: "다음 주 금요일", value: iso(nextFri) },
+  ];
+}
+
 export default function FieldPopup({
   label,
   hint,
@@ -131,15 +172,42 @@ export default function FieldPopup({
               onChange={(e) => setDraft(e.target.value)}
               className="w-full rounded-lg border border-gray-300 px-3 py-2.5 text-base"
             />
-            {draft && (
-              <button
-                type="button"
-                onClick={() => setDraft("")}
-                className="text-xs text-gray-500 underline"
-              >
-                날짜 비우기
-              </button>
-            )}
+
+            {/*
+              브라우저가 날짜를 10/20/2026 처럼 미국식으로 보여준다.
+              월과 일이 뒤바뀐 것처럼 읽혀 헷갈리므로, 고른 날짜를 한글로 크게 다시 적는다.
+            */}
+            <p className="text-base font-bold text-gray-900">
+              {draft ? koreanDate(draft) : <span className="text-gray-400 font-normal">날짜 없음</span>}
+            </p>
+
+            {/* 자주 쓰는 날짜는 눌러서 한 번에 */}
+            <div className="flex gap-1.5 flex-wrap">
+              {quickDates().map((q) => (
+                <button
+                  key={q.label}
+                  type="button"
+                  onClick={() => setDraft(q.value)}
+                  className={cn(
+                    "text-xs px-2.5 py-1.5 rounded-lg border",
+                    draft === q.value
+                      ? "bg-gray-900 text-white border-gray-900"
+                      : "border-gray-300 text-gray-600 hover:bg-gray-50"
+                  )}
+                >
+                  {q.label}
+                </button>
+              ))}
+              {draft && (
+                <button
+                  type="button"
+                  onClick={() => setDraft("")}
+                  className="text-xs px-2.5 py-1.5 rounded-lg border border-gray-300 text-gray-500 hover:bg-gray-50"
+                >
+                  비우기
+                </button>
+              )}
+            </div>
           </div>
         )}
 
