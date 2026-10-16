@@ -19,11 +19,18 @@ export default function DeleteLock({
   title,
   onConfirm,
   onClose,
+  requirePassword = true,
 }: {
   /** 지울 대상 이름 — 무엇을 지우는지 눈으로 확인하게 한다 */
   title: string;
   onConfirm: () => Promise<string | null>;
   onClose: () => void;
+  /**
+   * 비밀번호를 물을지.
+   * 팀장에게만 묻는다 — 팀원은 그 비밀번호를 모르고, 자기 업무를 지우는 데
+   * 남의 잠금번호를 넣으라고 할 수는 없다. 팀원에게는 확인만 받는다.
+   */
+  requirePassword?: boolean;
 }) {
   const [code, setCode] = useState("");
   const [error, setError] = useState<string | null>(null);
@@ -33,10 +40,12 @@ export default function DeleteLock({
     setBusy(true);
     setError(null);
     try {
-      const check = await checkPassword(code);
-      if (!check.ok) {
-        setError(check.reason ?? "비밀번호가 맞지 않습니다.");
-        return;
+      if (requirePassword) {
+        const check = await checkPassword(code);
+        if (!check.ok) {
+          setError(check.reason ?? "비밀번호가 맞지 않습니다.");
+          return;
+        }
       }
       const err = await onConfirm();
       if (err) {
@@ -63,6 +72,7 @@ export default function DeleteLock({
           (언제 누가 무엇을 지웠는지는 따로 남습니다)
         </p>
 
+        {requirePassword && (
         <label className="block text-xs text-gray-500 mt-4">
           삭제 비밀번호
           <input
@@ -78,6 +88,7 @@ export default function DeleteLock({
             className="w-full rounded-lg border border-gray-300 px-3 py-2.5 text-base tracking-widest text-center mt-1"
           />
         </label>
+        )}
 
         {error && <p className="text-sm text-red-600 mt-2">{error}</p>}
 
@@ -91,7 +102,7 @@ export default function DeleteLock({
           </button>
           <button
             onClick={run}
-            disabled={busy || code.length === 0}
+            disabled={busy || (requirePassword && code.length === 0)}
             className="flex-1 rounded-lg bg-red-600 text-white py-2.5 font-medium hover:bg-red-700 disabled:opacity-50"
           >
             {busy ? "삭제 중..." : "삭제"}

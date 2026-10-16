@@ -156,6 +156,20 @@ export default function TaskLedger({
   /** 띠를 띄울지 (한 묶음뿐이면 굳이 안 띄운다) */
   const banded = sections.length > 1;
 
+  /**
+   * 이 업무를 지울 수 있는가.
+   * 팀장은 전부, 그 외에는 자기가 담당이거나 자기가 올린 것만.
+   * 서버(RLS)도 같은 규칙으로 막으니 화면만 뚫어도 저장이 안 된다.
+   */
+  function mayDelete(t: TaskWithEffectiveStatus): boolean {
+    if (canDelete) return true;
+    if (!canEdit || !viewerId) return false;
+    return t.assignee_id === viewerId || t.created_by === viewerId;
+  }
+
+  /** 팀장만 비밀번호를 묻는다 (팀원은 그 비밀번호를 모른다) */
+  const askPassword = canDelete;
+
   // 칸 폭은 쓰는 사람이 끌어서 정한다 (이 브라우저에만 저장된다)
   const { widths: W, startDrag, reset: resetWidths, changed: widthsChanged } = useColumnWidths(
     "task-ledger-widths",
@@ -277,6 +291,7 @@ export default function TaskLedger({
 
       {askDelete && (
         <DeleteLock
+          requirePassword={askPassword}
           title={askDelete.title}
           onClose={() => setAskDelete(null)}
           onConfirm={async () => {
@@ -530,7 +545,7 @@ export default function TaskLedger({
                 >
                   변경 이력 보기
                 </button>
-                {canDelete && (
+                {mayDelete(t) && (
                   <button
                     onClick={() => setAskDelete(t)}
                     className="shrink-0 text-xs px-3 py-2 rounded-lg border border-red-200 text-red-600"
@@ -892,7 +907,7 @@ export default function TaskLedger({
                       >
                         보기
                       </button>
-                      {canDelete && (
+                      {mayDelete(t) && (
                         <button
                           onClick={() => setAskDelete(t)}
                           title="이 업무 삭제 (비밀번호를 묻습니다)"

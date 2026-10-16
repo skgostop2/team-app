@@ -16,6 +16,23 @@ const MAX = 480;
 const MAX_BY_KEY: Record<string, number> = { title: 1600 };
 const maxOf = (key: string) => MAX_BY_KEY[key] ?? MAX;
 
+/**
+ * 칸마다의 최소 폭.
+ *
+ * 안에 버튼이나 글자가 들어가는 칸은 어느 아래로는 내려가면 안 된다.
+ * 예전에 저장해 둔 폭이 지금 들어가는 내용보다 좁으면 버튼이 잘려서
+ * "버튼이 없다"로 보인다 — 불러올 때 끌어올린다.
+ */
+const MIN_BY_KEY: Record<string, number> = {
+  hist: 64,
+  status: 76,
+  progress: 100,
+  date: 100,
+  done: 84,
+  assignee: 96,
+};
+const minOf = (key: string) => MIN_BY_KEY[key] ?? MIN;
+
 export function useColumnWidths(storageKey: string, base: Record<string, number>) {
   const [widths, setWidths] = useState<Record<string, number>>(base);
   const [ready, setReady] = useState(false);
@@ -30,7 +47,9 @@ export function useColumnWidths(storageKey: string, base: Record<string, number>
         const merged = { ...base };
         for (const k of Object.keys(base)) {
           const v = saved[k];
-          if (typeof v === "number" && v >= 0 && v <= maxOf(k)) merged[k] = Math.round(v);
+          if (typeof v !== "number" || v < 0 || v > maxOf(k)) continue;
+          // 0 은 "남는 폭을 전부"라는 뜻이라 그대로 둔다
+          merged[k] = v === 0 ? 0 : Math.max(Math.round(v), minOf(k));
         }
         setWidths(merged);
       }
@@ -69,7 +88,7 @@ export function useColumnWidths(storageKey: string, base: Record<string, number>
       const move = (ev: PointerEvent) => {
         const d = drag.current;
         if (!d) return;
-        const w = Math.min(maxOf(d.key), Math.max(MIN, d.startW + (ev.clientX - d.startX)));
+        const w = Math.min(maxOf(d.key), Math.max(minOf(d.key), d.startW + (ev.clientX - d.startX)));
         setWidths((prev) => ({ ...prev, [d.key]: Math.round(w) }));
       };
       // 끌기를 끝낼 때 — 손을 뗐을 때만이 아니라, 창을 벗어나거나

@@ -266,7 +266,7 @@ export default function DashboardPage() {
         onAssigned={load}
         viewerId={subjectId}
         canEdit={!viewingAs}
-        canDelete={isTeamLead(me) && !viewingAs}
+        canDelete={isTeamLead(me)}
         onChanged={load}
         emptyText={canSeeTeam ? "등록된 업무가 없습니다." : "배정된 업무가 없습니다."}
       />

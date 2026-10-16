@@ -210,7 +210,7 @@ export default function TasksPage() {
         viewerId={viewingAs ? viewingAs.id : me?.id}
         handedOverIds={viewingAs ? undefined : handedOverIds}
         canEdit={!viewingAs}
-        canDelete={isTeamLead(me) && !viewingAs}
+        canDelete={isTeamLead(me)}
         onChanged={load}
         emptyText="표시할 업무가 없습니다."
       />
