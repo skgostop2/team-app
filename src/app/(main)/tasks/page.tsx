@@ -4,7 +4,7 @@ import { useEffect, useMemo, useState } from "react";
 import { useSearchParams } from "next/navigation";
 import { createClient } from "@/lib/supabase/client";
 import type { Profile, TaskAssigneeLog, TaskWithEffectiveStatus } from "@/lib/types";
-import { isManager, isTeamLead, isAssignable, canDirect, assignableBy } from "@/lib/roles";
+import { isManager, isTeamLead, canDirect, assignableBy } from "@/lib/roles";
 import TaskLedger from "@/components/TaskLedger";
 import DeletedTasks from "@/components/DeletedTasks";
 import ViewAsBanner from "@/components/ViewAsBanner";
@@ -86,12 +86,30 @@ export default function TasksPage() {
         ? tasks
         : // 내 업무 + 미지정 + 팀원이 스스로 올린 업무 (팀장이 놓치지 않게)
           tasks.filter((t) => mine(t) || !t.assignee_id || t.source === "팀원추가")
-      : // RLS 가 이미 "내 업무 + 참여 + 인계한 업무"만 내려주므로 그대로 보여준다
-        tasks;
+      : // 팀원 화면.
+        // 평소에는 RLS 가 "내 업무 + 참여 + 인계한 업무"만 내려준다.
+        // 팀장이 「팀 현황 공개」를 켜면 같은 그룹 사람 업무까지 내려오므로,
+        // 기본은 내 것만 보여주고 전체는 버튼으로 본다 (내 표가 남의 일로 덮이지 않게).
+        showAll
+        ? tasks
+        : tasks.filter((t) => mine(t) || handedOverIds.has(t.id));
     if (hideDone) list = list.filter((t) => t.effective_status !== "완료");
     if (onlyMemberAdded) list = list.filter((t) => t.source === "팀원추가");
     return list;
-  }, [tasks, isLead, showAll, hideDone, onlyMemberAdded, me?.id, viewingAs]);
+  }, [tasks, isLead, showAll, hideDone, onlyMemberAdded, me?.id, viewingAs, handedOverIds]);
+
+  /** 팀원 화면에 남의 업무가 내려와 있는가 (팀장이 공개를 켜 둔 경우) */
+  const othersVisible = useMemo(
+    () =>
+      !isLead &&
+      tasks.some(
+        (t) =>
+          t.assignee_id !== me?.id &&
+          !(t.deputy_ids ?? []).includes(me?.id ?? "") &&
+          !handedOverIds.has(t.id)
+      ),
+    [tasks, isLead, me?.id, handedOverIds]
+  );
 
   // 팀원이 스스로 올린 업무가 몇 건인지 (팀장이 바로 알아볼 수 있게)
   const memberAddedCount = useMemo(
@@ -175,7 +193,7 @@ export default function TasksPage() {
               엑셀 가져오기
             </button>
           )}
-          {isLead && !viewingAs && (
+          {(isLead || othersVisible) && !viewingAs && (
             <button
               onClick={() => setShowAll((v) => !v)}
               className="text-xs px-3 py-2 rounded-lg border border-gray-300 text-gray-600 hover:bg-gray-50 bg-white"

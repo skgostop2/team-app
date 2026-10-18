@@ -7,7 +7,6 @@ import { createClient } from "@/lib/supabase/client";
 import { formatElapsed, isLongInactive, cn } from "@/lib/utils";
 import type { Profile, TaskWithEffectiveStatus } from "@/lib/types";
 import {
-  isManager,
   isTeamLead,
   isAssignable,
   isGroupLead,
@@ -82,15 +81,35 @@ export default function DashboardPage() {
   const stats = useMemo(() => summarize(scopedTasks), [scopedTasks]);
   const myStats = useMemo(() => summarize(myTasks), [myTasks]);
 
+  /**
+   * 팀 현황 공개 켜기/끄기 — 팀장만 누를 수 있다.
+   *
+   * 켜면 같은 그룹 팀원끼리 서로의 업무가 보인다. 무심코 켜면
+   * "왜 남의 업무가 내 화면에 뜨냐"가 되므로 켤 때는 한 번 묻는다.
+   * 저장이 막히면 켜진 척하지 않고 원래대로 돌린다.
+   */
   async function toggleShare(next: boolean) {
+    if (next) {
+      const ok = window.confirm(
+        "팀 현황을 팀원에게 공개합니다.\n\n" +
+          "켜면 같은 그룹 팀원끼리 서로의 업무가 보입니다.\n" +
+          "끄면 각자 자기 업무만 봅니다.\n\n" +
+          "켜시겠습니까?"
+      );
+      if (!ok) return;
+    }
     setTogglingShare(true);
     const supabase = createClient();
-    await supabase
+    const { error } = await supabase
       .from("team_settings")
       .update({ value: next, updated_at: new Date().toISOString() })
       .eq("key", "share_progress_with_members");
-    setShared(next);
     setTogglingShare(false);
+    if (error) {
+      window.alert(`설정을 바꾸지 못했습니다: ${error.message}`);
+      return;
+    }
+    setShared(next);
   }
 
   const byMember = useMemo(() => {
@@ -200,8 +219,12 @@ export default function DashboardPage() {
 
         <div className="flex items-center gap-2 flex-wrap">
         <PrintButton />
-        {isLead && !viewingAs && (
-          <label className="flex items-center gap-2 text-xs text-gray-600 bg-white border border-gray-200 rounded-lg px-3 py-2 cursor-pointer">
+        {/* 공개 범위는 팀장 한 사람만 쥔다 (실장·그룹장 화면에는 아예 안 보인다) */}
+        {isTeamLead(me) && !viewingAs && (
+          <label
+            className="flex items-center gap-2 text-xs text-gray-600 bg-white border border-gray-200 rounded-lg px-3 py-2 cursor-pointer"
+            title="켜면 같은 그룹 팀원끼리 서로의 업무가 보입니다"
+          >
             <input
               type="checkbox"
               checked={shared}
