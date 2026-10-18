@@ -164,16 +164,20 @@ export default function TaskLedger({
   function mayDelete(t: TaskWithEffectiveStatus): boolean {
     if (canDelete) return true;
     if (!canEdit || !viewerId) return false;
-    return t.assignee_id === viewerId || t.created_by === viewerId;
+    // 지시받은 업무는 지울 수 없다 — 지시는 지시한 사람의 기록이다.
+    // 맡기 어려운 업무는 지우는 게 아니라 담당 변경이나 취소로 처리한다.
+    return t.source === "팀원추가" && t.created_by === viewerId;
   }
 
   /** 팀장만 비밀번호를 묻는다 (팀원은 그 비밀번호를 모른다) */
   const askPassword = canDelete;
 
   /** 지울 수 없는 줄에는 왜 못 지우는지 적어 둔다 (버튼이 있다 없다 하면 고장처럼 보인다) */
-  const noDeleteWhy = !canEdit
-    ? "보기 전용 화면입니다"
-    : "담당자이거나 직접 등록한 업무만 지울 수 있습니다";
+  function noDeleteWhy(t: TaskWithEffectiveStatus): string {
+    if (!canEdit) return "보기 전용 화면입니다";
+    if (t.source !== "팀원추가") return "지시받은 업무는 팀장만 지울 수 있습니다";
+    return "직접 등록한 업무만 지울 수 있습니다";
+  }
 
   /** 진행률을 바로 저장한다 — 100%면 완료, 0%면 대기 (팝업과 같은 규칙) */
   function saveProgress(id: string, v: number): Promise<string | null> {
@@ -553,7 +557,7 @@ export default function TaskLedger({
                 <button
                   onClick={() => setAskDelete(t)}
                   disabled={!mayDelete(t)}
-                  title={mayDelete(t) ? "이 업무 삭제" : noDeleteWhy}
+                  title={mayDelete(t) ? "이 업무 삭제" : noDeleteWhy(t)}
                   className={cn(
                     "shrink-0 text-xs px-3 py-2 rounded-lg border",
                     mayDelete(t)
@@ -914,7 +918,7 @@ export default function TaskLedger({
                         disabled={!mayDelete(t)}
                         title={
                           !mayDelete(t)
-                            ? noDeleteWhy
+                            ? noDeleteWhy(t)
                             : askPassword
                               ? "이 업무 삭제 (비밀번호를 묻습니다)"
                               : "이 업무 삭제"
