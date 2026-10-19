@@ -364,3 +364,13 @@ html[data-theme="sf"] .bg-black\/50 {
 .print-only {
   display: none;
 }
+
+/* 표 머리줄 — 따라 내려오는 칸은 배경이 비치면 안 된다.
+   밝은 테마의 .bg-blue-50 은 불투명하지만 어두운 테마에서는 반투명이라
+   줄 글자가 머리줄 위로 비쳐 보인다. 그래서 머리줄만 따로 칠한다. */
+.ledger-head {
+  background-color: #eff6ff;
+}
+html[data-theme="sf"] .ledger-head {
+  background-color: #16233b;
+}

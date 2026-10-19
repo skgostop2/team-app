@@ -125,6 +125,31 @@ export default function TaskLedger({
   // 나머지 칸 합 + 업무내용 최소 폭 = 표 최소 폭
 
 
+  /**
+   * 칸을 줄여서 보기.
+   *
+   * 각자 PC 해상도가 달라 어떤 사람은 표가 다 들어가고 어떤 사람은 잘린다.
+   * 평소 잘 안 보는 칸(작성일·소요일·일정대비·지시자·비고)을 접으면
+   * 가로로 밀 일이 없어진다. 선택은 그 브라우저에만 저장된다.
+   */
+  const [compact, setCompact] = useState(false);
+  useEffect(() => {
+    try {
+      setCompact(localStorage.getItem("task-ledger-compact") === "1");
+    } catch {
+      // 저장소를 막아둔 브라우저면 그냥 전체 보기로 둔다
+    }
+  }, []);
+  function toggleCompact() {
+    setCompact((v) => {
+      const next = !v;
+      try {
+        localStorage.setItem("task-ledger-compact", next ? "1" : "0");
+      } catch {}
+      return next;
+    });
+  }
+
   const [detailId, setDetailId] = useState<string | null>(null);
   const [logTask, setLogTask] = useState<TaskWithEffectiveStatus | null>(null);
   const [doneBusy, setDoneBusy] = useState<string | null>(null);
@@ -192,21 +217,35 @@ export default function TaskLedger({
     RESIZABLE
   );
 
+  /** 지금 화면에 세울 칸 (간단히 보기면 몇 칸을 접는다) */
+  const col = {
+    date: !compact,
+    days: !compact,
+    diff: !compact,
+    instructor: !compact,
+    note: !compact,
+    assignee: showAssignee,
+  };
+
+  /** 띠(구분줄)가 표 전체를 가로지르게 하려면 지금 세워진 칸 수가 필요하다 */
+  const colCount =
+    9 + [col.date, col.days, col.diff, col.instructor, col.note, col.assignee].filter(Boolean).length;
+
   // 나머지 칸 합 + 업무내용 최소 폭 = 표 최소 폭
   const tableMinWidth =
     W.no +
-    W.date +
+    (col.date ? W.date : 0) +
     W.start +
     W.due +
     W.done +
-    W.days +
-    W.diff +
-    (showAssignee ? W.assignee : 0) +
-    W.instructor +
+    (col.days ? W.days : 0) +
+    (col.diff ? W.diff : 0) +
+    (col.assignee ? W.assignee : 0) +
+    (col.instructor ? W.instructor : 0) +
     W.progress +
     W.log +
     W.status +
-    W.note +
+    (col.note ? W.note : 0) +
     W.hist +
     (W.title > 0 ? W.title : COL.titleMin);
 
@@ -250,6 +289,17 @@ export default function TaskLedger({
       <div className="flex items-baseline justify-between gap-3 px-4 py-3 border-b border-gray-200 flex-wrap">
         <h2 className="text-base font-bold text-gray-900">{title}</h2>
         <p className="text-xs text-gray-400">
+          <button
+            onClick={toggleCompact}
+            className="no-print hidden md:inline-block mr-2 px-2 py-1 rounded border border-gray-300 text-gray-600 hover:bg-gray-50"
+            title={
+              compact
+                ? "작성일·소요일·일정대비·지시자·비고 칸을 다시 펼칩니다"
+                : "평소 잘 안 보는 칸을 접어 표를 화면 안에 넣습니다"
+            }
+          >
+            {compact ? "모든 칸 보기" : "간단히 보기"}
+          </button>
           {widthsChanged && (
             <button
               onClick={resetWidths}
@@ -268,6 +318,9 @@ export default function TaskLedger({
               고칠 칸을 누르면 그 자리에서 수정 창이 뜹니다
             </span>
           )}
+          <span className="no-print hidden md:block text-gray-400">
+            표가 화면보다 넓으면 <b className="font-medium">Shift + 마우스 휠</b> 로 좌우로 밉니다
+          </span>
         </p>
       </div>
 
@@ -580,7 +633,7 @@ export default function TaskLedger({
       </div>
 
       {/* PC — 메모 양식 그대로의 표 */}
-      <div className="hidden md:block print-show print-table overflow-x-auto">
+      <div className="hidden md:block print-show print-table overflow-auto max-h-[calc(100dvh-13rem)] print:max-h-none print:overflow-visible">
         {/*
           칸 폭은 colgroup 한 곳에서만 정한다.
           업무내용만 폭을 비워 남는 폭을 전부 받게 하고, 표의 최소 폭은
@@ -601,43 +654,54 @@ export default function TaskLedger({
         >
           <colgroup>
             <col style={{ width: W.no }} />
-            <col style={{ width: W.date }} />
+            {col.date && <col style={{ width: W.date }} />}
             {/* 업무내용 — 끌어서 정한 폭이 있으면 그 폭, 없으면 남는 폭 전부 */}
             {W.title > 0 ? <col style={{ width: W.title }} /> : <col />}
             <col style={{ width: W.start }} />
             <col style={{ width: W.due }} />
             <col style={{ width: W.done }} />
-            <col style={{ width: W.days }} />
-            <col style={{ width: W.diff }} />
-            {showAssignee && <col style={{ width: W.assignee }} />}
-            <col style={{ width: W.instructor }} />
+            {col.days && <col style={{ width: W.days }} />}
+            {col.diff && <col style={{ width: W.diff }} />}
+            {col.assignee && <col style={{ width: W.assignee }} />}
+            {col.instructor && <col style={{ width: W.instructor }} />}
             <col style={{ width: W.progress }} />
             <col style={{ width: W.log }} />
             <col style={{ width: W.status }} />
-            <col style={{ width: W.note }} />
+            {col.note && <col style={{ width: W.note }} />}
             <col style={{ width: W.hist }} />
           </colgroup>
           <thead>
+            {/* 머리줄은 따라 내려온다 — 스크롤해도 어느 칸인지 보인다 */}
             <tr className="bg-blue-50 text-gray-700 text-xs">
-              <Th grip="no" onGrip={startDrag}>NO.</Th>
-              <Th grip="date" onGrip={startDrag}>작성일</Th>
-              <Th grip="title" onGrip={startDrag}>업무내용</Th>
-              <Th grip="start" onGrip={startDrag}>진행일정</Th>
-              <Th grip="due" onGrip={startDrag}>완료계획</Th>
-              <Th grip="done" onGrip={startDrag}>완료여부</Th>
-              <Th grip="days" onGrip={startDrag}>소요일</Th>
-              <Th grip="diff" onGrip={startDrag}>일정대비</Th>
-              {showAssignee && (
-                <Th grip="assignee" onGrip={startDrag}>
+              <Th grip="no" onGrip={startDrag} stick>NO.</Th>
+              {col.date && (
+                <Th grip="date" onGrip={startDrag} stick>작성일</Th>
+              )}
+              <Th grip="title" onGrip={startDrag} stick>업무내용</Th>
+              <Th grip="start" onGrip={startDrag} stick>진행일정</Th>
+              <Th grip="due" onGrip={startDrag} stick>완료계획</Th>
+              <Th grip="done" onGrip={startDrag} stick>완료여부</Th>
+              {col.days && (
+                <Th grip="days" onGrip={startDrag} stick>소요일</Th>
+              )}
+              {col.diff && (
+                <Th grip="diff" onGrip={startDrag} stick>일정대비</Th>
+              )}
+              {col.assignee && (
+                <Th grip="assignee" onGrip={startDrag} stick>
                   담당자
                 </Th>
               )}
-              <Th grip="instructor" onGrip={startDrag}>지시자</Th>
-              <Th grip="progress" onGrip={startDrag}>진행률</Th>
-              <Th grip="log" onGrip={startDrag}>진행기록</Th>
-              <Th grip="status" onGrip={startDrag}>상태</Th>
-              <Th grip="note" onGrip={startDrag}>비고</Th>
-              <Th grip="hist" onGrip={startDrag}>이력</Th>
+              {col.instructor && (
+                <Th grip="instructor" onGrip={startDrag} stick>지시자</Th>
+              )}
+              <Th grip="progress" onGrip={startDrag} stick>진행률</Th>
+              <Th grip="log" onGrip={startDrag} stick>진행기록</Th>
+              <Th grip="status" onGrip={startDrag} stick>상태</Th>
+              {col.note && (
+                <Th grip="note" onGrip={startDrag} stick>비고</Th>
+              )}
+              <Th grip="hist" onGrip={startDrag} stick>이력</Th>
             </tr>
           </thead>
           <tbody>
@@ -646,7 +710,7 @@ export default function TaskLedger({
             {banded && (
               <tr className="bg-gray-50">
                 <td
-                  colSpan={showAssignee ? 15 : 14}
+                  colSpan={colCount}
                   className="px-3 py-1.5 text-xs font-semibold text-gray-500 border-y border-gray-200"
                 >
                   {sec.label}{" "}
@@ -688,7 +752,9 @@ export default function TaskLedger({
                   )}
                 >
                   <Td className="text-center text-gray-500">{i + 1}</Td>
-                  <Td className="text-gray-600 whitespace-nowrap">{formatIsoDate(t.created_at)}</Td>
+                  {col.date && (
+                    <Td className="text-gray-600 whitespace-nowrap">{formatIsoDate(t.created_at)}</Td>
+                  )}
 
                   {/* 업무내용 — 제목과 상세내용이 각각 자기 창으로 열린다 */}
                   <Td>
@@ -793,20 +859,24 @@ export default function TaskLedger({
                   </Td>
 
                   {/* 지시일부터 걸린 일수 */}
-                  <Td className="text-center text-gray-600 whitespace-nowrap">
-                    {t.elapsed_days != null
-                      ? t.effective_status === "완료"
-                        ? `${t.elapsed_days}일`
-                        : `${t.elapsed_days}일째`
-                      : ""}
-                  </Td>
+                  {col.days && (
+                    <Td className="text-center text-gray-600 whitespace-nowrap">
+                      {t.elapsed_days != null
+                        ? t.effective_status === "완료"
+                          ? `${t.elapsed_days}일`
+                          : `${t.elapsed_days}일째`
+                        : ""}
+                    </Td>
+                  )}
 
                   {/* 완료계획일 대비 */}
-                  <Td className="text-center whitespace-nowrap">
-                    <ScheduleDiff task={t} />
-                  </Td>
+                  {col.diff && (
+                    <Td className="text-center whitespace-nowrap">
+                      <ScheduleDiff task={t} />
+                    </Td>
+                  )}
 
-                  {showAssignee && (
+                  {col.assignee && (
                     <Td className="text-gray-600">
                       {canTouch ? (
                         <AssigneePicker
@@ -842,16 +912,18 @@ export default function TaskLedger({
                   )}
 
                   {/* 지시자 */}
-                  <Td className="text-gray-600">
-                    <Cell
-                      enabled={canEdit && canAssign}
-                      onClick={() => setEdit({ task: t, field: "instructor" })}
-                      title="눌러서 지시자 수정"
-                    >
-                      {t.instructor ||
-                      (canEdit && canAssign ? <span className="text-gray-300">＋</span> : "")}
-                    </Cell>
-                  </Td>
+                  {col.instructor && (
+                    <Td className="text-gray-600">
+                      <Cell
+                        enabled={canEdit && canAssign}
+                        onClick={() => setEdit({ task: t, field: "instructor" })}
+                        title="눌러서 지시자 수정"
+                      >
+                        {t.instructor ||
+                        (canEdit && canAssign ? <span className="text-gray-300">＋</span> : "")}
+                      </Cell>
+                    </Td>
+                  )}
 
                   {/* 진행률 — 표에서 바로 끌어서 맞춘다 */}
                   <Td>
@@ -892,16 +964,18 @@ export default function TaskLedger({
                   </Td>
 
                   {/* 비고 */}
-                  <Td className="text-gray-500 text-xs">
-                    <Cell
-                      enabled={canTouch}
-                      onClick={() => setEdit({ task: t, field: "note" })}
-                      title="눌러서 비고 수정"
-                      className="block whitespace-pre-wrap line-clamp-3 break-keep"
-                    >
-                      {t.note || (canTouch ? <span className="text-gray-300">＋ 메모</span> : "")}
-                    </Cell>
-                  </Td>
+                  {col.note && (
+                    <Td className="text-gray-500 text-xs">
+                      <Cell
+                        enabled={canTouch}
+                        onClick={() => setEdit({ task: t, field: "note" })}
+                        title="눌러서 비고 수정"
+                        className="block whitespace-pre-wrap line-clamp-3 break-keep"
+                      >
+                        {t.note || (canTouch ? <span className="text-gray-300">＋ 메모</span> : "")}
+                      </Cell>
+                    </Td>
+                  )}
 
                   {/* 이력 — 변경 이력 보기와 삭제 */}
                   <Td className="text-center">
@@ -943,7 +1017,7 @@ export default function TaskLedger({
             {tasks.length === 0 && (
               <tr>
                 <td
-                  colSpan={showAssignee ? 15 : 14}
+                  colSpan={colCount}
                   className="px-4 py-10 text-center text-gray-400"
                 >
                   {emptyText}
@@ -1469,17 +1543,21 @@ function Th({
   children,
   grip,
   onGrip,
+  stick = false,
 }: {
   className?: string;
   children: React.ReactNode;
   /** 이 칸의 폭 이름 — 주면 오른쪽 경계를 끌어 폭을 조절할 수 있다 */
   grip?: string;
   onGrip?: (key: string, e: React.PointerEvent) => void;
+  /** 표를 내려도 머리줄이 따라오게 할지 (배경을 칠해야 줄이 비쳐 보이지 않는다) */
+  stick?: boolean;
 }) {
   return (
     <th
       className={cn(
         "relative px-2 py-2.5 font-medium text-center border-b border-gray-300 border-r border-gray-200 last:border-r-0 overflow-hidden",
+        stick && "sticky top-0 z-30 ledger-head print:static print:bg-transparent",
         className
       )}
     >
