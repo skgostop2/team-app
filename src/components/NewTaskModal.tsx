@@ -2,6 +2,7 @@
 
 import { useState } from "react";
 import { createClient } from "@/lib/supabase/client";
+import { checkDue } from "@/lib/dateCheck";
 import type { Profile } from "@/lib/types";
 import { confirmDiscard, useUnsavedChanges } from "@/lib/useUnsavedChanges";
 
@@ -27,6 +28,11 @@ export default function NewTaskModal({
   const [instructor, setInstructor] = useState(defaultInstructor);
   const [note, setNote] = useState("");
   const [dueDate, setDueDate] = useState("");
+  /*
+    적은 날짜가 말이 되는지 본다. 새 업무는 막지 않고 묻기만 한다 —
+    지난 업무를 뒤늦게 올리는 경우가 있어서다. 연도를 잘못 친 것만 눈에 띄면 된다.
+  */
+  const dateVerdict = checkDue(dueDate);
   const [error, setError] = useState<string | null>(null);
   const [saving, setSaving] = useState(false);
 
@@ -159,6 +165,20 @@ export default function NewTaskModal({
               onChange={(e) => setDueDate(e.target.value)}
               className="w-full rounded-lg border border-gray-300 px-3 py-2.5 text-base focus:outline-none focus:ring-2 focus:ring-blue-500"
             />
+            {dueDate && (
+              <p className="text-sm font-medium text-gray-800 mt-1">{koreanDate(dueDate)}</p>
+            )}
+            {dateVerdict && (
+              <p
+                className={
+                  dateVerdict.block
+                    ? "text-sm text-red-700 bg-red-50 border border-red-200 rounded-lg px-3 py-2 mt-1 break-keep"
+                    : "text-sm text-amber-800 bg-amber-50 border border-amber-200 rounded-lg px-3 py-2 mt-1 break-keep"
+                }
+              >
+                {dateVerdict.block ?? dateVerdict.warn}
+              </p>
+            )}
           </div>
           <div>
             <label className="block text-sm font-medium text-gray-700 mb-1">비고</label>
@@ -182,7 +202,7 @@ export default function NewTaskModal({
             </button>
             <button
               type="submit"
-              disabled={saving}
+              disabled={saving || !!dateVerdict?.block}
               className="flex-1 rounded-lg bg-blue-600 text-white py-2.5 font-medium hover:bg-blue-700 disabled:opacity-50"
             >
               {saving ? "등록 중..." : selfMode ? "추가" : "등록"}
@@ -192,4 +212,13 @@ export default function NewTaskModal({
       </div>
     </div>
   );
+}
+
+const WEEKDAY = ["일", "월", "화", "수", "목", "금", "토"] as const;
+
+/** "2026-10-20" → "2026년 10월 20일 (화)" — 브라우저가 미국식으로 보여주는 것을 다시 적는다 */
+function koreanDate(key: string): string {
+  const [y, m, d] = key.split("-").map(Number);
+  if (!y || !m || !d) return key;
+  return `${y}년 ${m}월 ${d}일 (${WEEKDAY[new Date(y, m - 1, d).getDay()]})`;
 }

@@ -2,6 +2,7 @@
 
 import { useEffect, useRef, useState } from "react";
 import { cn } from "@/lib/utils";
+import type { DateVerdict } from "@/lib/dateCheck";
 
 /**
  * 칸 하나만 고치는 작은 창.
@@ -65,6 +66,7 @@ export default function FieldPopup({
   onSave,
   onClose,
   extraAction,
+  check,
 }: {
   label: string;
   hint?: string;
@@ -78,6 +80,8 @@ export default function FieldPopup({
   onClose: () => void;
   /** 창 안에 넣을 추가 버튼 (예: 완료 취소) */
   extraAction?: { label: string; run: () => Promise<string | null>; danger?: boolean };
+  /** 적은 값이 말이 되는지 — 막을 것과 물어볼 것을 돌려준다 */
+  check?: (value: string) => DateVerdict;
 }) {
   const [draft, setDraft] = useState(value);
   const [saving, setSaving] = useState(false);
@@ -91,7 +95,12 @@ export default function FieldPopup({
 
   const dirty = draft !== value;
 
+  /** 오타로 보이는 값인지 (막을 것 / 묻기만 할 것) */
+  const verdict = check ? check(draft) : null;
+  const blocked = !!verdict?.block;
+
   async function commit() {
+    if (blocked) return;
     setSaving(true);
     setError(null);
     const err = await onSave(draft);
@@ -181,6 +190,19 @@ export default function FieldPopup({
               {draft ? koreanDate(draft) : <span className="text-gray-400 font-normal">날짜 없음</span>}
             </p>
 
+            {verdict && (
+              <p
+                className={cn(
+                  "text-sm break-keep rounded-lg px-3 py-2",
+                  verdict.block
+                    ? "bg-red-50 border border-red-200 text-red-700"
+                    : "bg-amber-50 border border-amber-200 text-amber-800"
+                )}
+              >
+                {verdict.block ?? verdict.warn}
+              </p>
+            )}
+
             {/* 자주 쓰는 날짜는 눌러서 한 번에 */}
             <div className="flex gap-1.5 flex-wrap">
               {quickDates().map((q) => (
@@ -259,7 +281,8 @@ export default function FieldPopup({
           </button>
           <button
             onClick={commit}
-            disabled={saving || !dirty}
+            disabled={saving || !dirty || blocked}
+            title={verdict?.block ?? undefined}
             className="flex-1 rounded-lg bg-blue-600 text-white py-2.5 font-medium hover:bg-blue-700 disabled:opacity-50"
           >
             {saving ? "저장 중..." : "저장"}

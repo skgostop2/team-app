@@ -6,6 +6,7 @@ import { useColumnWidths } from "@/lib/useColumnWidths";
 import type { Profile, TaskWithEffectiveStatus } from "@/lib/types";
 import { formatShortDate, formatIsoDate, cn } from "@/lib/utils";
 import { isAssignable, byDisplayOrder } from "@/lib/roles";
+import { checkDue, checkStart, checkDone, ODD_DIFF_DAYS } from "@/lib/dateCheck";
 import { createClient } from "@/lib/supabase/client";
 import StatusBadge from "@/components/StatusBadge";
 import FieldPopup from "@/components/FieldPopup";
@@ -1251,6 +1252,7 @@ function EditPopup({
         hint="이 업무를 언제부터 하는지(착수일)입니다. 비워두면 지시일부터 본 것으로 봅니다."
         kind="date"
         value={t.start_date ?? ""}
+        check={(v) => checkStart(v, t.due_date)}
         onSave={(next) => patch(t.id, { start_date: next || null })}
         onClose={onClose}
       />
@@ -1265,6 +1267,7 @@ function EditPopup({
         kind="date"
         value={t.due_date ?? ""}
         min={createdDay}
+        check={(v) => checkDue(v, t.start_date)}
         onSave={(next) => patch(t.id, { due_date: next || null })}
         onClose={onClose}
       />
@@ -1285,6 +1288,7 @@ function EditPopup({
         value={t.completed_at ? t.completed_at.slice(0, 10) : today}
         min={createdDay}
         max={today}
+        check={(v) => checkDone(v)}
         onSave={async (next) => {
           if (!next) return patch(t.id, { status: "진행중", completed_at: null });
           const iso = noon(next);
@@ -1360,11 +1364,26 @@ function ScheduleDiff({ task }: { task: TaskWithEffectiveStatus }) {
 
   const done = task.effective_status === "완료";
 
+  /*
+    백 일 넘게 벌어졌으면 일정이 아니라 날짜를 잘못 적었을 가능성이 크다
+    (연도를 2025로 친 것 같은). 눈에 띄게 ⚠ 를 붙여 찾아보게 한다.
+  */
+  const odd = Math.abs(d) > ODD_DIFF_DAYS;
+  const mark = odd ? (
+    <span
+      className="block text-[10px] font-normal text-amber-600"
+      title="날짜가 너무 많이 벌어졌습니다. 완료계획일의 연도를 확인해보세요."
+    >
+      ⚠ 날짜 확인
+    </span>
+  ) : null;
+
   if (d > 0) {
     return (
       <span className="text-red-600 font-semibold">
         {d}일 초과
-        {!done && <span className="block text-[10px] font-normal">진행중</span>}
+        {!done && !odd && <span className="block text-[10px] font-normal">진행중</span>}
+        {mark}
       </span>
     );
   }
@@ -1372,9 +1391,15 @@ function ScheduleDiff({ task }: { task: TaskWithEffectiveStatus }) {
     return <span className="text-gray-600">{done ? "계획대로" : "오늘 마감"}</span>;
   }
   return done ? (
-    <span className="text-emerald-600 font-semibold">{-d}일 단축</span>
+    <span className="text-emerald-600 font-semibold">
+      {-d}일 단축
+      {mark}
+    </span>
   ) : (
-    <span className="text-gray-500">D-{-d}</span>
+    <span className="text-gray-500">
+      D-{-d}
+      {mark}
+    </span>
   );
 }
 
