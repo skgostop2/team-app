@@ -186,9 +186,38 @@ export function splitTitleAndNames(line: string): { title: string; names: string
  */
 export function splitItems(text: string): string[] {
   const out: string[] = [];
+  /*
+    괄호가 열린 채로 줄이 끝나면 다음 줄은 같은 건이다.
+
+      ISO (MDI) 일원화 라인 테스트 - (임동민 송영복
+        (일정변경필요시 보고, 금주 일요일 진행관련 유관팀 공유
+         라인인서트 최소인원, 공유완료후 일정등 보고바람))
+
+    이것을 줄마다 끊으면 한 건이 네 건으로 갈라진다. 괄호가 닫힐 때까지 이어 붙인다.
+  */
+  let pending: string | null = null;
+  let depth = 0;
+
   for (const line of (text ?? "").split(/\r?\n/)) {
     const t = line.trim();
     if (!t) continue;
+
+    if (pending !== null) {
+      pending += "\n" + t;
+      depth += parenDepth(t);
+      if (depth <= 0) {
+        out.push(pending);
+        pending = null;
+        depth = 0;
+      }
+      continue;
+    }
+
+    if (parenDepth(t) > 0) {
+      pending = t;
+      depth = parenDepth(t);
+      continue;
+    }
     // 한 줄 안에 번호가 둘 이상이면 번호마다 끊는다
     const marks = [...t.matchAll(/(?:^|\s)(\d{1,2})\s*[.)]\s+/g)];
     if (marks.length >= 2) {
@@ -202,7 +231,20 @@ export function splitItems(text: string): string[] {
     }
     out.push(t);
   }
+  // 괄호를 안 닫고 끝난 글도 버리지 않는다
+  if (pending !== null) out.push(pending);
+
   return out.map((l) => l.replace(/^\s*(\d{1,2}\s*[.)]|[-•*·])\s*/, "").trim()).filter(Boolean);
+}
+
+/** 그 줄에서 열린 괄호가 몇 개 남는가 (음수면 닫힌 것이 더 많다) */
+function parenDepth(line: string): number {
+  let n = 0;
+  for (const ch of line) {
+    if (ch === "(" || ch === "（") n++;
+    else if (ch === ")" || ch === "）") n--;
+  }
+  return n;
 }
 
 /** 글 어디에 있든 기한처럼 생긴 날짜를 찾는다. matched = 글에서 잘라낼 토막 */
@@ -291,45 +333,91 @@ export function splitDescription(
   line: string,
   members: Member[]
 ): { rest: string; description: string | null } {
-  const m = line.match(/^(.*?)\s*[(（]\s*([^)）]+?)\s*[)）]\s*(.*)$/);
-  if (!m) return { rest: line, description: null };
+  const groups = parenGroups(line);
+  if (groups.length === 0) return { rest: line, description: null };
 
-  const [, head, inner, tail] = m;
-  if (inner.length < DESC_MIN) return { rest: line, description: null };
+  // 뒤쪽 괄호부터 본다 — 설명은 보통 끝에 붙는다 ("ISO (MDI) …" 의 앞 괄호는 제목의 일부)
+  for (let i = groups.length - 1; i >= 0; i--) {
+    const g = groups[i];
+    const inner = g.inner;
+    if (inner.replace(/\s/g, "").length < DESC_MIN) continue;
 
-  // 괄호 안에서 담당자와 기한을 먼저 걷어낸다 — 그것들은 설명이 아니라 지시 정보다
-  const due = findDue(inner);
-  const damdang = inner.match(/담당[자]?\s*[:：]?\s*(.+)$/);
-  const tokens = namesFromClause(damdang ? damdang[1] : inner, members).filter(
-    (n) => matchName(n, members).kind !== "none"
-  );
+    // 괄호 안에서 담당자와 기한을 먼저 걷어낸다 — 그것들은 설명이 아니라 지시 정보다
+    const due = findDue(inner);
+    const damdang = inner.match(/담당[자]?\s*[:：]?\s*(.+)$/);
+    /*
+      괄호 앞머리(설명이 시작되기 전)에 명단에 있는 이름이 그대로 적혀 있으면
+      그건 담당자다. "임동민 송영복" 처럼 쉼표 없이 나열해도 잡아야 하므로
+      명단을 직접 훑고, 적힌 순서대로 둔다 (먼저 적힌 사람이 담당자).
+    */
+    const headSeg = (damdang ? damdang[1] : inner).split(/[(（\n]/)[0];
+    const tokens = members
+      .map((m) => ({ n: bareName(m.name), at: headSeg.indexOf(bareName(m.name)) }))
+      .filter((x) => x.n.length >= 2 && x.at >= 0)
+      .sort((a, b) => a.at - b.at)
+      .map((x) => x.n);
 
-  let left = inner;
-  if (due) left = left.replace(due.matched, " ");
-  for (const t of tokens) left = left.replace(t, " ");
-  left = left
-    .replace(/담당[자]?\s*[:：]?/g, " ")
-    .replace(/(책임|매니저|팀장|실장|사원|주임|대리|과장|차장|부장|님)/g, " ")
-    .replace(/[,·\s]+/g, " ")
-    .trim();
+    let left = inner;
+    if (due) left = left.replace(due.matched, " ");
+    for (const t of tokens) left = left.replace(t, " ");
+    left = left
+      .replace(/담당[자]?\s*[:：]?/g, " ")
+      .replace(/(책임|매니저|팀장|실장|사원|주임|대리|과장|차장|부장|님)/g, " ")
+      .replace(/[()（）]/g, " ")
+      // 줄 바꿈은 살린다 — 적은 사람이 나눠 적은 대로 보이는 편이 읽기 좋다
+      .split("\n")
+      .map((x) => x.replace(/[^\S\n]+/g, " ").replace(/^[\s,·-]+|[\s,·-]+$/g, ""))
+      .filter(Boolean)
+      .join("\n");
 
-  // 걷어내고 남은 말이 짧으면 설명이 아니다 ("(담당 이준호 책임)", "(9/25까지)")
-  if (left.length < DESC_MIN) return { rest: line, description: null };
+    // 걷어내고 남은 말이 짧으면 설명이 아니다 ("(담당 이준호 책임)", "(9/25까지)")
+    if (left.replace(/\s/g, "").length < DESC_MIN) continue;
 
-  // 담당자·기한은 괄호에 그대로 남겨 둔다 (아래 규칙들이 그걸 읽어간다)
-  const keep = [
-    tokens.length > 0 ? `담당 ${tokens.join(", ")}` : "",
-    due ? due.matched.trim() : "",
-  ]
-    .filter(Boolean)
-    .join(" ");
+    // 담당자·기한은 괄호에 그대로 남겨 둔다 (아래 규칙들이 그걸 읽어간다)
+    const keep = [
+      tokens.length > 0 ? `담당 ${tokens.join(", ")}` : "",
+      due ? due.matched.trim() : "",
+    ]
+      .filter(Boolean)
+      .join(" ");
 
-  const rest = `${head} ${keep ? `(${keep})` : ""} ${tail}`.replace(/\s+/g, " ").trim();
-  if (!rest || rest.replace(/[(（)）\s]/g, "").length < 2) {
-    return { rest: line, description: null };
+    const rest = `${line.slice(0, g.start)} ${keep ? `(${keep})` : ""} ${line.slice(g.end + 1)}`
+      .replace(/\s+/g, " ")
+      .trim();
+    if (!rest || rest.replace(/[(（)）\s-]/g, "").length < 2) continue;
+
+    return { rest, description: left };
   }
 
-  return { rest, description: left };
+  return { rest: line, description: null };
+}
+
+/**
+ * 괄호 묶음을 찾는다. 괄호 안에 괄호가 또 있어도 바깥 묶음 하나로 본다.
+ * 닫히지 않은 괄호는 글 끝까지로 본다 — 붙여넣은 글은 괄호를 빠뜨리는 일이 흔하다.
+ */
+function parenGroups(line: string): { start: number; end: number; inner: string }[] {
+  const out: { start: number; end: number; inner: string }[] = [];
+  let depth = 0;
+  let start = -1;
+  for (let i = 0; i < line.length; i++) {
+    const ch = line[i];
+    if (ch === "(" || ch === "（") {
+      if (depth === 0) start = i;
+      depth++;
+    } else if (ch === ")" || ch === "）") {
+      depth--;
+      if (depth === 0 && start >= 0) {
+        out.push({ start, end: i, inner: line.slice(start + 1, i) });
+        start = -1;
+      }
+      if (depth < 0) depth = 0;
+    }
+  }
+  if (depth > 0 && start >= 0) {
+    out.push({ start, end: line.length - 1, inner: line.slice(start + 1) });
+  }
+  return out;
 }
 
 export function parseItem(
