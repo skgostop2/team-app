@@ -263,7 +263,9 @@ export default function QuickAssignForm({
           onChange={(e) => setText(e.target.value)}
           autoFocus
           placeholder={
-            "여기에 지시 내용을 붙여넣으세요.\n\n예시)\n청소대차 진행보고 - 안윤환\n에어드레인 용량 조사 보고 - 안윤환"
+            self
+              ? "여기에 할 일을 적으세요. 세부 내용은 괄호 안에.\n\n예시)\n청소대차 진행보고 (대차 수량 확인 후 사진 첨부해서 보고)\n에어드레인 용량 조사 (현 설비 기준으로 산출, 9/25까지)"
+              : "여기에 지시 내용을 붙여넣으세요. 세부 내용은 괄호 안에.\n\n예시)\n청소대차 진행보고 - 안윤환 (대차 수량 확인 후 사진 첨부해서 보고)\n에어드레인 용량 조사 - 안윤환 (현 설비 기준으로 산출, 9/25까지)"
           }
           className={`w-full rounded-lg border border-gray-300 px-3 py-2.5 text-base leading-relaxed ${
             wide ? "h-60 md:h-[26rem]" : "h-36 md:h-40"
@@ -274,7 +276,9 @@ export default function QuickAssignForm({
             type="button"
             onClick={() =>
               setText(
-                "청소대차 진행보고 - 안윤환\n에어드레인 용량 조사 보고 - 안윤환\n발루프센서 배선 확인 체크시트 추가 보고 - 안윤환"
+                self
+                  ? "청소대차 진행보고 (대차 수량 확인 후 사진 첨부해서 보고)\n에어드레인 용량 조사 (현 설비 기준으로 산출, 9/25까지)"
+                  : "청소대차 진행보고 - 안윤환 (대차 수량 확인 후 사진 첨부해서 보고)\n에어드레인 용량 조사 보고 - 안윤환 (현 설비 기준으로 산출, 9/25까지)\n발루프센서 배선 확인 체크시트 추가 보고 - 안윤환"
               )
             }
             className="text-xs mt-2 px-2.5 py-1.5 rounded-lg border border-gray-300 text-gray-500 hover:bg-gray-50"
@@ -282,6 +286,12 @@ export default function QuickAssignForm({
             예시로 한번 해보기
           </button>
         )}
+
+        <p className="text-xs text-blue-800 bg-blue-50 border border-blue-100 rounded-lg px-3 py-2 mt-2 break-keep">
+          <b>세부 내용은 괄호 ( ) 안에 적으세요.</b> 괄호 안의 글은 제목이 아니라{" "}
+          <b>업무 설명</b>으로 들어갑니다. 제목 한 줄만 있으면 받는 사람이 무엇을 어디까지 해야
+          하는지 몰라 묻지도 못합니다. 괄호가 여러 줄이어도 괜찮습니다.
+        </p>
 
         {wide && (
           <p className="text-xs text-gray-400 mt-1.5 break-keep">

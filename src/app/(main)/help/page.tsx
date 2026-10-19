@@ -173,6 +173,28 @@ export default function HelpPage() {
           <b>내 업무 등록</b>에서 할 일을 편하게 적어 붙여넣으면 건별로 나눠 등록됩니다. 글 속에
           날짜가 있으면 기한도 찾아 넣습니다.
         </p>
+
+        <div className="mt-3 rounded-xl border border-blue-200 bg-blue-50 px-4 py-3">
+          <p className="text-sm font-semibold text-blue-900">세부 내용은 괄호 ( ) 안에</p>
+          <p className="text-sm text-blue-800 mt-1 break-keep">
+            제목 한 줄만 있으면 나중에 본인도, 팀장도 무엇을 어디까지 하기로 한 건지 알 수
+            없습니다. <b>괄호 안에 적은 글은 제목이 아니라 업무 설명으로 들어갑니다.</b>
+          </p>
+          <pre className="text-xs text-blue-900 bg-white/70 rounded-lg px-3 py-2 mt-2 whitespace-pre-wrap break-keep">
+{`청소대차 진행보고 (대차 수량 확인 후 사진 첨부해서 보고, 9/25까지)
+
+→ 제목   청소대차 진행보고
+   설명   대차 수량 확인 후 사진 첨부해서 보고
+   기한   9월 25일`}
+          </pre>
+          <ul className="text-xs text-blue-800 mt-2 space-y-0.5">
+            <li>· 괄호가 <b>여러 줄</b>에 걸쳐 있어도 한 건으로 묶입니다</li>
+            <li>
+              · <b>(2열)</b>, <b>(주)</b> 처럼 짧은 괄호는 제목에 그대로 둡니다
+            </li>
+            <li>· 등록 전에 오른쪽 미리보기에서 「세부 …」로 확인됩니다</li>
+          </ul>
+        </div>
         <Tip>
           업무관리 화면의 <b>+ 내 업무 추가</b> 버튼으로 한 건씩 올려도 됩니다.
         </Tip>
@@ -217,7 +239,9 @@ export default function HelpPage() {
         <ul className="space-y-1.5 text-sm text-gray-600">
           <li>
             · <b>업무지시</b> — 주간 지시문을 통째로 붙여넣으면 이름·기한을 찾아 건별로 나눕니다.
-            원문도 같이 보관됩니다.
+            원문도 같이 보관됩니다. <b>세부 내용은 괄호 ( ) 안에</b> 적으시면 제목이 아니라 업무
+            설명으로 들어갑니다 — 제목만 주면 받는 사람이 무엇을 어디까지 해야 하는지 몰라 묻지도
+            못합니다. 괄호가 여러 줄이어도 한 건으로 묶입니다.
           </li>
           <li>
             · <b>신규 업무 진행 보고</b> — 그룹장·팀원이 새로 올린 업무가 여기로 올라옵니다.{" "}
