@@ -3,7 +3,7 @@
 import { useEffect } from "react";
 import type { Profile } from "@/lib/types";
 import { createClient } from "@/lib/supabase/client";
-import { isManager, isTeamLead } from "@/lib/roles";
+import { canDirect, isManager, isTeamLead } from "@/lib/roles";
 import Sidebar from "./Sidebar";
 import MobileNav from "./MobileNav";
 import NoticePopup from "./NoticePopup";
@@ -39,7 +39,11 @@ export default function AppShell({
       </div>
 
       <div className="no-print contents">
-        <MobileNav isLead={isManager(profile)} isTeamLead={isTeamLead(profile)} />
+        <MobileNav
+          isLead={isManager(profile)}
+          isTeamLead={isTeamLead(profile)}
+          canSeeDashboard={canDirect(profile)}
+        />
       </div>
       <NoticePopup userId={profile.id} />
       <div className="no-print contents">

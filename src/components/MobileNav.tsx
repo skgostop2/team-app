@@ -13,7 +13,7 @@ import { cn } from "@/lib/utils";
  * 폰에서 아예 열리지 않았다.
  */
 
-type Item = { href: string; label: string; icon: string; who?: "lead" | "teamLead" };
+type Item = { href: string; label: string; icon: string; who?: "lead" | "teamLead" | "dash" };
 
 /** 아래 칸에 둘 것 (자주 쓰는 것) */
 const BAR_LEAD: Item[] = [
@@ -22,15 +22,18 @@ const BAR_LEAD: Item[] = [
   { href: "/assign", label: "지시", icon: "✍️" },
   { href: "/weekly", label: "주간", icon: "📊" },
 ];
+// 팀원에게는 대시보드(내 현황)가 없다 — 「내 업무」가 그 자리를 겸한다
 const BAR_MEMBER: Item[] = [
-  { href: "/dashboard", label: "홈", icon: "🏠" },
   { href: "/tasks", label: "내업무", icon: "📋" },
   { href: "/assign", label: "등록", icon: "✍️" },
   { href: "/weekly", label: "주간", icon: "📊" },
+  { href: "/calendar", label: "달력", icon: "📅" },
 ];
 
 /** 더보기에 담을 것 */
 const MORE: Item[] = [
+  // 그룹장은 아래 칸이 팀원과 같아서, 그룹 현황은 여기로 들어온다
+  { href: "/dashboard", label: "우리 그룹 현황", icon: "🏠", who: "dash" },
   { href: "/calendar", label: "달력", icon: "📅" },
   { href: "/reports", label: "신규 업무 진행 보고", icon: "📥", who: "lead" },
   { href: "/notices", label: "공지사항", icon: "📢" },
@@ -44,10 +47,13 @@ const MORE: Item[] = [
 export default function MobileNav({
   isLead,
   isTeamLead = false,
+  canSeeDashboard = false,
 }: {
   /** 실장·팀장 (운영 권한 보유자) */
   isLead: boolean;
   isTeamLead?: boolean;
+  /** 대시보드를 볼 수 있는 사람 (팀장·실장·그룹장). 팀원에게는 없다 */
+  canSeeDashboard?: boolean;
 }) {
   const pathname = usePathname();
   const [open, setOpen] = useState(false);
@@ -59,7 +65,11 @@ export default function MobileNav({
 
   const bar = isLead ? BAR_LEAD : BAR_MEMBER;
   const more = MORE.filter(
-    (m) => !m.who || (m.who === "lead" && isLead) || (m.who === "teamLead" && isTeamLead)
+    (m) =>
+      !m.who ||
+      (m.who === "lead" && isLead) ||
+      (m.who === "teamLead" && isTeamLead) ||
+      (m.who === "dash" && canSeeDashboard && !isLead)
   );
 
   const isOn = (href: string) => pathname === href || pathname.startsWith(href + "/");

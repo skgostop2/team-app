@@ -111,6 +111,24 @@ export default function TasksPage() {
     [tasks, isLead, me?.id, handedOverIds]
   );
 
+  /**
+   * 내 업무 요약 — 팀원에게는 이 화면이 유일한 자기 화면이라
+   * 예전 「내 현황」에 있던 숫자 네 개를 여기 맨 위로 옮겼다.
+   * 보고 있는 표가 아니라 "내가 맡은 업무 전체"를 센다 (필터에 흔들리지 않게).
+   */
+  const mySummary = useMemo(() => {
+    const mine = tasks.filter(
+      (t) => t.assignee_id === me?.id || (t.deputy_ids ?? []).includes(me?.id ?? "")
+    );
+    const done = mine.filter((t) => t.effective_status === "완료").length;
+    return {
+      total: mine.length,
+      inProgress: mine.filter((t) => t.effective_status === "진행중").length,
+      delayed: mine.filter((t) => t.effective_status === "지연").length,
+      rate: mine.length ? Math.round((done / mine.length) * 100) : 0,
+    };
+  }, [tasks, me?.id]);
+
   // 팀원이 스스로 올린 업무가 몇 건인지 (팀장이 바로 알아볼 수 있게)
   const memberAddedCount = useMemo(
     () => tasks.filter((t) => t.source === "팀원추가").length,
@@ -123,6 +141,15 @@ export default function TasksPage() {
 
   return (
     <div className="space-y-4">
+      {!isLead && (
+        <div className="grid grid-cols-2 md:grid-cols-4 gap-3 print-block">
+          <Stat label="내 업무" value={mySummary.total} />
+          <Stat label="진행중" value={mySummary.inProgress} accent="text-blue-600" />
+          <Stat label="지연" value={mySummary.delayed} accent="text-red-600" />
+          <Stat label="내 달성율" value={`${mySummary.rate}%`} accent="text-emerald-600" />
+        </div>
+      )}
+
       {viewingAs && (
         <ViewAsBanner
           current={viewingAs}
@@ -283,6 +310,24 @@ export default function TasksPage() {
           }}
         />
       )}
+    </div>
+  );
+}
+
+/** 화면 맨 위 숫자 한 칸 */
+function Stat({
+  label,
+  value,
+  accent = "text-gray-900",
+}: {
+  label: string;
+  value: number | string;
+  accent?: string;
+}) {
+  return (
+    <div className="rounded-xl border border-gray-200 bg-white px-4 py-3">
+      <p className="text-xs text-gray-500">{label}</p>
+      <p className={`text-2xl font-bold mt-0.5 ${accent}`}>{value}</p>
     </div>
   );
 }

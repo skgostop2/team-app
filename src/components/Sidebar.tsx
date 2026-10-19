@@ -4,11 +4,12 @@ import Link from "next/link";
 import { usePathname } from "next/navigation";
 import type { Profile } from "@/lib/types";
 import { cn } from "@/lib/utils";
-import { isManager, isTeamLead } from "@/lib/roles";
+import { canDirect, isManager, isTeamLead } from "@/lib/roles";
 import ThemeToggle from "@/components/ThemeToggle";
 
 const NAV = [
-  { href: "/dashboard", leadLabel: "전체 대시보드", memberLabel: "내 현황", access: "all" },
+  // 팀원은 「내 업무」 한 곳만 쓴다 — 같은 표를 두 메뉴로 보여주면 헷갈린다
+  { href: "/dashboard", leadLabel: "전체 대시보드", memberLabel: "우리 그룹 현황", access: "directs" },
   { href: "/tasks", leadLabel: "업무관리", memberLabel: "내 업무", access: "all" },
   { href: "/assign", leadLabel: "업무지시", memberLabel: "내 업무 등록", access: "all" },
   { href: "/calendar", leadLabel: "달력", memberLabel: "달력", access: "all" },
@@ -46,6 +47,7 @@ export default function Sidebar({ profile }: { profile: Profile }) {
         {NAV.filter((n) => {
           if (n.access === "manager") return manager;
           if (n.access === "teamLead") return teamLead;
+          if (n.access === "directs") return canDirect(profile);
           return true;
         }).map((item) => {
           const active = pathname === item.href || pathname.startsWith(item.href + "/");

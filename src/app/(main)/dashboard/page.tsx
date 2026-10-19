@@ -2,7 +2,7 @@
 
 import { useEffect, useMemo, useState } from "react";
 import Link from "next/link";
-import { useSearchParams } from "next/navigation";
+import { useRouter, useSearchParams } from "next/navigation";
 import { createClient } from "@/lib/supabase/client";
 import { formatElapsed, isLongInactive, cn } from "@/lib/utils";
 import type { Profile, TaskWithEffectiveStatus } from "@/lib/types";
@@ -30,6 +30,7 @@ export default function DashboardPage() {
   // 팀장·실장이 특정 팀원의 화면을 그대로 들여다보는 모드 (?as=<id>)
   const searchParams = useSearchParams();
   const asId = searchParams.get("as");
+  const router = useRouter();
 
   async function load() {
     const supabase = createClient();
@@ -63,6 +64,12 @@ export default function DashboardPage() {
 
   // 팀장·실장은 팀 전체, 그룹장은 자기 그룹. 보이는 범위는 서버(RLS)가 정한다.
   const isLead = canDirect(me);
+
+  // 팀원에게는 이 화면이 없다 (「내 업무」가 그 자리를 겸한다).
+  // 예전 주소를 눌러 들어온 사람은 그쪽으로 보낸다.
+  useEffect(() => {
+    if (me && !isLead) router.replace("/tasks");
+  }, [me, isLead, router]);
   const viewingAs = isLead && asId ? profiles.find((p) => p.id === asId) : undefined;
 
   // 팀장이 공개를 켜두면 팀원도 팀 전체 현황을 본다.
