@@ -27,6 +27,8 @@ export type QuickRow = {
   /** 원래 줄 */
   raw: string;
   title: string;
+  /** 괄호 안에 적어 둔 세부 설명 (없으면 null) */
+  description: string | null;
   /** 글에서 읽어낸 기한 (없으면 null) */
   dueDate: string | null;
   /** 담당자 (첫 번째 이름) */
@@ -274,11 +276,79 @@ function namesFromClause(clause: string, members: Member[]): string[] {
  *   3) 끝의 구분자 뒤 — "청소대차 진행보고 - 안윤환"
  *   4) 그래도 없으면 글 안에 명단 이름이 그대로 들어있는지
  */
+/** 세부 설명으로 보기에 충분한 길이 (이보다 짧으면 제목의 일부로 남긴다) */
+const DESC_MIN = 5;
+
+/**
+ * 줄 끝 괄호를 세부 설명으로 떼어낸다.
+ *
+ * 떼어내지 않는 경우:
+ *   - 괄호 안이 짧다 ("(좌)", "(2열)", "(주)")
+ *   - 괄호 안이 담당자·기한뿐이다 ("(담당 이준호)", "(9/25까지)")
+ *   - 괄호를 떼면 제목이 없어진다
+ */
+export function splitDescription(
+  line: string,
+  members: Member[]
+): { rest: string; description: string | null } {
+  const m = line.match(/^(.*?)\s*[(（]\s*([^)）]+?)\s*[)）]\s*(.*)$/);
+  if (!m) return { rest: line, description: null };
+
+  const [, head, inner, tail] = m;
+  if (inner.length < DESC_MIN) return { rest: line, description: null };
+
+  // 괄호 안에서 담당자와 기한을 먼저 걷어낸다 — 그것들은 설명이 아니라 지시 정보다
+  const due = findDue(inner);
+  const damdang = inner.match(/담당[자]?\s*[:：]?\s*(.+)$/);
+  const tokens = namesFromClause(damdang ? damdang[1] : inner, members).filter(
+    (n) => matchName(n, members).kind !== "none"
+  );
+
+  let left = inner;
+  if (due) left = left.replace(due.matched, " ");
+  for (const t of tokens) left = left.replace(t, " ");
+  left = left
+    .replace(/담당[자]?\s*[:：]?/g, " ")
+    .replace(/(책임|매니저|팀장|실장|사원|주임|대리|과장|차장|부장|님)/g, " ")
+    .replace(/[,·\s]+/g, " ")
+    .trim();
+
+  // 걷어내고 남은 말이 짧으면 설명이 아니다 ("(담당 이준호 책임)", "(9/25까지)")
+  if (left.length < DESC_MIN) return { rest: line, description: null };
+
+  // 담당자·기한은 괄호에 그대로 남겨 둔다 (아래 규칙들이 그걸 읽어간다)
+  const keep = [
+    tokens.length > 0 ? `담당 ${tokens.join(", ")}` : "",
+    due ? due.matched.trim() : "",
+  ]
+    .filter(Boolean)
+    .join(" ");
+
+  const rest = `${head} ${keep ? `(${keep})` : ""} ${tail}`.replace(/\s+/g, " ").trim();
+  if (!rest || rest.replace(/[(（)）\s]/g, "").length < 2) {
+    return { rest: line, description: null };
+  }
+
+  return { rest, description: left };
+}
+
 export function parseItem(
   raw: string,
   members: Member[]
-): { title: string; names: string[]; dueDate: string | null } {
-  const line = raw.trim();
+): { title: string; names: string[]; dueDate: string | null; description: string | null } {
+  /*
+    줄 끝 괄호에 적어 둔 세부 설명을 먼저 떼어낸다.
+
+      NX5 1열 H/REST 조립라인 (금형 치수 확인 후 도면 반영) - 손유익
+      청소대차 진행보고 - 안윤환 (9/25까지, 사진 첨부해서 보고)
+
+    괄호 안에 담당자나 기한만 들어 있으면 그건 설명이 아니라 지시 정보이므로
+    예전처럼 그대로 둔다. "(주)현대공업", "1열(좌)" 처럼 제목의 일부인 짧은
+    괄호도 건드리지 않는다 — 그래서 다섯 자 이상일 때만 설명으로 본다.
+  */
+  const split = splitDescription(raw.trim(), members);
+  const description = split.description;
+  const line = split.rest;
   const due = findDue(line);
   const dueDate = due?.date ?? null;
   /** 기한으로 읽은 토막("9/25까지", "기한 9/17")은 업무명에서 뺀다 */
@@ -287,7 +357,7 @@ export function parseItem(
   // 0) "안윤환: 청소대차 진행보고" — 이름이 앞에 오는 경우
   const lead = line.match(/^([가-힣]{2,4})\s*(?:책임|매니저|팀장|실장|사원|주임|대리|과장|차장|부장|님)?\s*[:：]\s*(.+)$/);
   if (lead && matchName(lead[1], members).kind === "exact" && lead[2].trim().length >= 2) {
-    return { title: cleanTitle(noDate(lead[2])), names: [lead[1]], dueDate };
+    return { title: cleanTitle(noDate(lead[2])), names: [lead[1]], dueDate, description };
   }
 
   // 1) 끝의 괄호
@@ -297,7 +367,7 @@ export function parseItem(
     const damdang = inner.match(/담당[자]?\s*[:：]?\s*(.+)$/);
     const names = namesFromClause(damdang ? damdang[1] : inner, members);
     if (names.length > 0) {
-      return { title: cleanTitle(noDate(paren[1])), names, dueDate };
+      return { title: cleanTitle(noDate(paren[1])), names, dueDate, description };
     }
   }
 
@@ -305,13 +375,13 @@ export function parseItem(
   const d = line.match(/^(.*?)[\s(（,]*담당[자]?\s*[:：]?\s*(.+)$/);
   if (d && d[1].trim()) {
     const names = namesFromClause(d[2], members);
-    if (names.length > 0) return { title: cleanTitle(noDate(d[1])), names, dueDate };
+    if (names.length > 0) return { title: cleanTitle(noDate(d[1])), names, dueDate, description };
   }
 
   // 3) 끝의 구분자 뒤
   const byTail = splitTitleAndNames(line);
   if (byTail.names.length > 0) {
-    return { title: cleanTitle(noDate(byTail.title)), names: byTail.names, dueDate };
+    return { title: cleanTitle(noDate(byTail.title)), names: byTail.names, dueDate, description };
   }
 
   // 4) 글 안에 명단 이름이 그대로 들어 있는 경우 (정확히 맞을 때만)
@@ -323,10 +393,10 @@ export function parseItem(
   if (found.length > 0) {
     let title = noDate(line);
     for (const n of found) title = title.replace(new RegExp(`[\\s,(（-]*${n}[\\s)）,]*`, "g"), " ");
-    return { title: cleanTitle(title) || line, names: found.slice(0, 3), dueDate };
+    return { title: cleanTitle(title) || line, names: found.slice(0, 3), dueDate, description };
   }
 
-  return { title: cleanTitle(noDate(line)), names: [], dueDate };
+  return { title: cleanTitle(noDate(line)), names: [], dueDate, description };
 }
 
 /** 업무명 앞뒤에 남은 직급·조사·구분자를 턴다 */
@@ -378,14 +448,14 @@ export function parseQuickLines(text: string, members: Member[]): QuickRow[] {
     }
 
     const parsed = parseItem(line, members);
-    const { title, dueDate } = parsed;
+    const { title, dueDate, description } = parsed;
     let names = parsed.names;
     let inherited = false;
     if (names.length === 0 && carried) {
       names = [carried.name];
       inherited = true;
     }
-    out.push(buildRow(line, title, names, dueDate, members, inherited));
+    out.push(buildRow(line, title, names, dueDate, members, inherited, description));
   }
   return out;
 }
@@ -396,7 +466,8 @@ function buildRow(
   names: string[],
   dueDate: string | null,
   members: Member[],
-  inherited: boolean
+  inherited: boolean,
+  description: string | null = null
 ): QuickRow {
   {
     const matches = names.map((n) => matchName(n, members));
@@ -418,6 +489,7 @@ function buildRow(
     return {
       raw: line,
       title,
+      description,
       dueDate,
       assigneeId: ids[0] ?? null,
       deputyIds: ids.slice(1).filter((x): x is string => !!x),
@@ -435,6 +507,7 @@ export function toQuickInsert(
 ) {
   return {
     title: row.title,
+    description: row.description,
     assignee_id: row.assigneeId,
     deputy_ids: row.deputyIds,
     created_by: createdBy,
