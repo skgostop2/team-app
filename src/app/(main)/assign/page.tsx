@@ -5,6 +5,7 @@ import { createClient } from "@/lib/supabase/client";
 import type { Profile } from "@/lib/types";
 import { isManager, canDirect, assignableBy, byDisplayOrder } from "@/lib/roles";
 import QuickAssignForm from "@/components/QuickAssignForm";
+import type { SimilarTask } from "@/lib/similar";
 import PrintButton from "@/components/PrintButton";
 import PrintHeader from "@/components/PrintHeader";
 
@@ -32,6 +33,8 @@ export default function AssignPage() {
   const [open, setOpen] = useState<string | null>(null);
   const [loading, setLoading] = useState(true);
   const [denied, setDenied] = useState(false);
+  /** 이미 들어가 있는 업무 — 비슷한 건을 알려주기 위해 */
+  const [existing, setExisting] = useState<SimilarTask[]>([]);
 
   async function load() {
     const supabase = createClient();
@@ -40,10 +43,17 @@ export default function AssignPage() {
     } = await supabase.auth.getUser();
     if (!user) return;
 
-    const [{ data: profile }, { data: all }] = await Promise.all([
+    const [{ data: profile }, { data: all }, { data: open }] = await Promise.all([
       supabase.from("profiles").select("*").eq("id", user.id).single(),
       supabase.from("profiles").select("*").order("sort_order"),
+      // 비슷한 업무 찾기용 — 볼 수 있는 업무만 내려온다
+      supabase
+        .from("v_tasks")
+        .select("id, title, assignee_id, due_date, effective_status, completed_at")
+        .order("created_at", { ascending: false })
+        .limit(400),
     ]);
+    setExisting((open ?? []) as SimilarTask[]);
 
     const mine = profile as Profile | null;
     setMe(mine);
@@ -125,6 +135,7 @@ export default function AssignPage() {
             instructorDefault={me.name}
             layout="page"
             mode={lead ? "assign" : "self"}
+            existing={existing}
             onDone={(n) => {
               setMsg(
                 lead

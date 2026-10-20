@@ -5,6 +5,7 @@ import { createClient } from "@/lib/supabase/client";
 import type { Profile } from "@/lib/types";
 import Link from "next/link";
 import { parseQuickLines, toQuickInsert } from "@/lib/quickAdd";
+import { findSimilar, findDuplicatesWithin, type SimilarTask } from "@/lib/similar";
 
 /**
  * 업무지시 알맹이 — 붙여넣으면 그 자리에서 이름·기한을 찾아 건별로 정리한다.
@@ -21,6 +22,7 @@ export default function QuickAssignForm({
   instructorDefault,
   layout = "modal",
   mode = "assign",
+  existing = [],
   onDone,
 }: {
   members: Profile[];
@@ -33,6 +35,8 @@ export default function QuickAssignForm({
    * self   = 팀원이 자기 업무를 등록 (담당자는 본인 고정, 지시 관련은 없다)
    */
   mode?: "assign" | "self";
+  /** 이미 들어가 있는 업무 — 비슷한 건이 있으면 알려주기 위해 받는다 */
+  existing?: SimilarTask[];
   onDone: (count: number) => void;
 }) {
   const [text, setText] = useState("");
@@ -65,6 +69,20 @@ export default function QuickAssignForm({
   const shaped = self
     ? rows.map((r) => ({ ...r, assigneeId: createdBy, deputyIds: [], warnings: [] }))
     : rows;
+
+  /*
+    비슷한 업무가 이미 있는지 본다. 막지 않고 알려만 준다 —
+    1차/2차처럼 이름이 같아도 진짜 다른 건이 있다. 판단은 사람이 한다.
+  */
+  const similar = useMemo(
+    () => shaped.map((r) => findSimilar(r.title, existing)),
+    [shaped, existing]
+  );
+  /** 붙여넣은 글 안에서 서로 겹친 줄 (같은 지시문에 같은 줄이 두 번 들어가는 일이 잦다) */
+  const dupWithin = useMemo(() => findDuplicatesWithin(shaped.map((r) => r.title)), [shaped]);
+
+  const nameOfId = (id: string | null) =>
+    members.find((m) => m.id === id)?.name ?? "담당자 미지정";
 
   const toAdd = shaped.filter((r) => !dropped[r.raw]);
   const missing = self ? 0 : toAdd.filter((r) => !r.assigneeId).length;
@@ -161,8 +179,10 @@ export default function QuickAssignForm({
           </div>
 
           <div className="border border-gray-200 rounded-lg overflow-hidden">
-            {shaped.map((r) => {
+            {shaped.map((r, ri) => {
               const out = !!dropped[r.raw];
+              const sim = similar[ri] ?? [];
+              const dupOf = dupWithin.get(ri);
               const hasWarn = r.warnings.length > 0;
               const deputies = r.deputyIds
                 .map((id) => members.find((m) => m.id === id)?.name)
@@ -202,6 +222,28 @@ export default function QuickAssignForm({
                         <p className="text-xs text-amber-700 break-keep">
                           {r.warnings.join(" · ")}
                         </p>
+                      )}
+
+                      {dupOf !== undefined && (
+                        <p className="text-xs text-amber-800 bg-amber-100 rounded px-2 py-1 mt-1 break-keep">
+                          ⚠ 이 글 안의 {dupOf + 1}번째 줄과 겹칩니다 —{" "}
+                          <b>{shaped[dupOf].title}</b>
+                        </p>
+                      )}
+
+                      {sim.length > 0 && (
+                        <div className="text-xs text-amber-800 bg-amber-100 rounded px-2 py-1 mt-1 break-keep">
+                          ⚠ 비슷한 업무가 이미 있습니다
+                          {sim.map(({ task }) => (
+                            <span key={task.id} className="block mt-0.5">
+                              · {nameOfId(task.assignee_id)} · {task.title}
+                              <span className="text-amber-700">
+                                {task.due_date ? ` (기한 ${task.due_date.slice(5)}` : " ("}
+                                {task.effective_status ?? ""})
+                              </span>
+                            </span>
+                          ))}
+                        </div>
                       )}
                     </div>
                     {!self && (
