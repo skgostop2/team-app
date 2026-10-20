@@ -217,8 +217,9 @@ export function splitItems(text: string): string[] {
 
     if (pending !== null) {
       pending += "\n" + t;
-      depth += parenDepth(t);
-      if (depth <= 0) {
+      // 「1) 2) 3)」 처럼 번호에 ) 를 쓰는 글이 많아 괄호 수를 세면 틀린다.
+      // 줄이 ) 로 끝나면 설명이 끝난 것으로 본다.
+      if (closesHere(t)) {
         out.push(pending);
         pending = null;
         depth = 0;
@@ -238,16 +239,16 @@ export function splitItems(text: string): string[] {
     */
     if (/^[(（]/.test(t) && out.length > 0) {
       const prev = out.pop() as string;
-      if (parenDepth(t) > 0) {
-        pending = prev + "\n" + t;
-        depth = parenDepth(t);
-      } else {
+      if (closesHere(t)) {
         out.push(prev + "\n" + t);
+      } else {
+        pending = prev + "\n" + t;
+        depth = 1;
       }
       continue;
     }
 
-    if (parenDepth(t) > 0) {
+    if (parenDepth(t) > 0 && !closesHere(t)) {
       pending = t;
       depth = parenDepth(t);
       continue;
@@ -269,6 +270,11 @@ export function splitItems(text: string): string[] {
   if (pending !== null) out.push(pending);
 
   return out.map((l) => l.replace(/^\s*(\d{1,2}\s*[.)]|[-•*·])\s*/, "").trim()).filter(Boolean);
+}
+
+/** 이 줄에서 설명이 끝나는가 — 닫는 괄호로 끝나면 끝으로 본다 */
+function closesHere(line: string): boolean {
+  return /[)）][\s.,·]*$/.test(line.trim());
 }
 
 /** 그 줄에서 열린 괄호가 몇 개 남는가 (음수면 닫힌 것이 더 많다) */
@@ -367,6 +373,34 @@ export function splitDescription(
   line: string,
   members: Member[]
 ): { rest: string; description: string | null } {
+  /*
+    제목을 적고 줄을 바꿔 괄호를 연 모양:
+
+      미국 출장 관련 준비 - 이성구
+      (1)설비 체크시트 만들기,
+      2)출장보고준비,
+      3)이스턴 증설 견적 재접수)
+
+    여기서는 괄호 수를 셀 수 없다 — 「1)」 「2)」 가 닫는 괄호로 읽히기 때문이다.
+    둘째 줄 이후가 ( 로 시작하면 거기서 글 끝까지를 통째로 설명으로 본다.
+  */
+  const at = line.search(/\n[ \t]*[(（]/);
+  if (at >= 0) {
+    const head = line.slice(0, at).trim();
+    const body = line
+      .slice(at)
+      .replace(/^[\s]*[(（]/, "")
+      .replace(/[)）][\s.,·]*$/, "")
+      .split("\n")
+      .map((x) => x.trim())
+      .filter(Boolean)
+      .join("\n")
+      .trim();
+    if (head.length >= 2 && body.replace(/\s/g, "").length >= DESC_MIN) {
+      return { rest: head, description: body };
+    }
+  }
+
   const groups = parenGroups(line);
   if (groups.length === 0) return { rest: line, description: null };
 
