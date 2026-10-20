@@ -26,7 +26,7 @@ const maxOf = (key: string) => MAX_BY_KEY[key] ?? MAX;
 const MIN_BY_KEY: Record<string, number> = {
   hist: 64,
   status: 76,
-  progress: 112,
+  progress: 132,
   date: 100,
   done: 84,
   assignee: 96,

@@ -66,7 +66,7 @@ const COL = {
   diff: 84,
   assignee: 104,
   instructor: 64,
-  progress: 120,
+  progress: 140,
   log: 96,
   ask: 44,
   status: 76,
@@ -423,6 +423,10 @@ export default function TaskLedger({
           noon={noon}
           today={today}
           canUrgent={canEdit && canAssign}
+          onItems={(task) => {
+            setEdit(null);
+            setItemTask(task);
+          }}
         />
       )}
 
@@ -1254,7 +1258,7 @@ function ProgressControl({
       <button
         type="button"
         onClick={onOpen}
-        title={`세부 항목 ${count.done}/${count.total} — 눌러서 체크`}
+        title={`세부 항목 ${count.done}/${count.total} — 눌러서 체크하세요`}
         className="w-full flex items-center gap-2 rounded hover:bg-blue-50 px-1 -mx-1"
       >
         <div
@@ -1327,17 +1331,26 @@ function ProgressControl({
       <div className="hidden print:block flex-1 h-1.5 rounded-full bg-gray-100 overflow-hidden">
         <div className="h-full bg-blue-500" style={{ width: `${draft}%` }} />
       </div>
-      <button
-        type="button"
-        onClick={onOpen}
-        title="눌러서 숫자로 입력"
+      <span
         className={cn(
-          "shrink-0 text-right whitespace-nowrap w-10 rounded hover:bg-blue-50",
+          "shrink-0 text-right whitespace-nowrap w-9",
           big ? "text-sm font-medium text-gray-700" : "text-xs text-gray-500",
           busy && "opacity-40"
         )}
       >
         {draft}%
+      </span>
+      {/* 세부 항목으로 나누러 들어가는 문 — 막대만 보이면 여기가 있는 줄 모른다 */}
+      <button
+        type="button"
+        onClick={onOpen}
+        title="세부 항목으로 나누기 / 숫자로 입력"
+        className={cn(
+          "no-print shrink-0 rounded border border-gray-300 text-gray-500 hover:bg-blue-50 hover:border-blue-300 hover:text-blue-700 whitespace-nowrap",
+          big ? "px-2.5 py-1.5 text-sm" : "px-1.5 py-0.5 text-[11px]"
+        )}
+      >
+        항목
       </button>
     </div>
   );
@@ -1523,6 +1536,7 @@ function EditPopup({
   noon,
   today,
   canUrgent = false,
+  onItems,
 }: {
   target: EditTarget;
   onClose: () => void;
@@ -1531,6 +1545,8 @@ function EditPopup({
   today: string;
   /** 긴급 표시를 달 수 있는 사람인지 (팀장·실장·그룹장) */
   canUrgent?: boolean;
+  /** 상세내용을 저장한 뒤 세부 항목 창을 열어주는 길 */
+  onItems?: (t: TaskWithEffectiveStatus) => void;
 }) {
   const { task: t, field } = target;
   const createdDay = t.created_at.slice(0, 10);
@@ -1565,11 +1581,20 @@ function EditPopup({
     return (
       <FieldPopup
         label="상세내용"
-        hint="줄을 나눠서 여러 항목을 적어도 됩니다."
+        hint="줄을 나눠서 1) 2) 3) 으로 적으면, 아래 버튼으로 체크 항목이 됩니다. 체크한 만큼 진행률이 자동으로 계산됩니다."
         kind="textarea"
         value={t.description ?? ""}
         placeholder="세부 지시사항, 확인할 점 등"
         onSave={(next) => patch(t.id, { description: next.trim() || null })}
+        extraAction={{
+          label: "저장하고 세부 항목으로 나누기",
+          run: async (draft) => {
+            const err = await patch(t.id, { description: draft.trim() || null });
+            if (err) return err;
+            onItems?.(t);
+            return null;
+          },
+        }}
         onClose={onClose}
       />
     );

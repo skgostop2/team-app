@@ -79,7 +79,12 @@ export default function FieldPopup({
   onSave: (next: string) => Promise<string | null>;
   onClose: () => void;
   /** 창 안에 넣을 추가 버튼 (예: 완료 취소) */
-  extraAction?: { label: string; run: () => Promise<string | null>; danger?: boolean };
+  extraAction?: {
+    label: string;
+    /** 지금 적고 있는 값을 그대로 받는다 (저장하고 이어서 무언가 할 때) */
+    run: (draft: string) => Promise<string | null>;
+    danger?: boolean;
+  };
   /** 적은 값이 말이 되는지 — 막을 것과 물어볼 것을 돌려준다 */
   check?: (value: string) => DateVerdict;
 }) {
@@ -294,7 +299,7 @@ export default function FieldPopup({
             onClick={async () => {
               setSaving(true);
               setError(null);
-              const err = await extraAction.run();
+              const err = await extraAction.run(draft);
               setSaving(false);
               if (err) {
                 setError(err);
