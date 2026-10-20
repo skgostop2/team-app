@@ -3,6 +3,7 @@
 import { useEffect, useState, useCallback, useRef } from "react";
 import { useRouter } from "next/navigation";
 import { createClient } from "@/lib/supabase/client";
+import { DATE_MAX, DATE_MIN, fixYear } from "@/lib/dateCheck";
 import { formatDate, formatDateTime } from "@/lib/utils";
 import type { Profile, TaskHistory, TaskWithEffectiveStatus } from "@/lib/types";
 import StatusBadge from "@/components/StatusBadge";
@@ -379,7 +380,9 @@ export default function TaskDetail({
                 <input
                   type="date"
                   value={dueDate}
-                  onChange={(e) => { setDueDate(e.target.value); markDirty(); }}
+                  min={DATE_MIN}
+                  max={DATE_MAX}
+                  onChange={(e) => { setDueDate(fixYear(e.target.value)); markDirty(); }}
                   className="w-full rounded-lg border border-gray-300 px-3 py-2 text-base"
                 />
               </div>
@@ -487,7 +490,7 @@ export default function TaskDetail({
                 value={doneDate || todayStr()}
                 max={todayStr()}
                 min={task.created_at.slice(0, 10)}
-                onChange={(e) => setDoneDate(e.target.value)}
+                onChange={(e) => setDoneDate(fixYear(e.target.value))}
                 className="rounded-lg border border-gray-300 px-3 py-2 text-base"
               />
               {task.status === "완료" ? (

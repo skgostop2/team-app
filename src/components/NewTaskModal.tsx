@@ -2,7 +2,7 @@
 
 import { useState } from "react";
 import { createClient } from "@/lib/supabase/client";
-import { checkDue } from "@/lib/dateCheck";
+import { checkDue, DATE_MAX, DATE_MIN, fixYear } from "@/lib/dateCheck";
 import type { Profile } from "@/lib/types";
 import { confirmDiscard, useUnsavedChanges } from "@/lib/useUnsavedChanges";
 
@@ -164,7 +164,9 @@ export default function NewTaskModal({
             <input
               type="date"
               value={dueDate}
-              onChange={(e) => setDueDate(e.target.value)}
+              min={DATE_MIN}
+              max={DATE_MAX}
+              onChange={(e) => setDueDate(fixYear(e.target.value))}
               className="w-full rounded-lg border border-gray-300 px-3 py-2.5 text-base focus:outline-none focus:ring-2 focus:ring-blue-500"
             />
             {dueDate && (

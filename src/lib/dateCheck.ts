@@ -93,3 +93,20 @@ export function checkDone(done: string): DateVerdict {
   }
   return null;
 }
+
+/**
+ * 날짜 칸이 허용하는 범위.
+ *
+ * 브라우저의 날짜 칸은 연도를 네 자리로 막아주지 않는다 — 타이핑하면
+ * 202026 처럼 여섯 자리까지 들어간다. 그래서 칸 자체에 범위를 걸고,
+ * 그래도 넘어온 값은 아래 fixYear 로 네 자리로 되돌린다.
+ */
+export const DATE_MIN = "2000-01-01";
+export const DATE_MAX = "2100-12-31";
+
+/** 연도가 네 자리를 넘으면 뒤 네 자리만 남긴다 (202026 → 2026) */
+export function fixYear(value: string): string {
+  const m = (value ?? "").match(/^(\d{5,})-(\d{2})-(\d{2})$/);
+  if (!m) return value;
+  return `${m[1].slice(-4)}-${m[2]}-${m[3]}`;
+}

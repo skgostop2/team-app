@@ -2,7 +2,7 @@
 
 import { useEffect, useRef, useState } from "react";
 import { cn } from "@/lib/utils";
-import type { DateVerdict } from "@/lib/dateCheck";
+import { DATE_MAX, DATE_MIN, fixYear, type DateVerdict } from "@/lib/dateCheck";
 
 /**
  * 칸 하나만 고치는 작은 창.
@@ -176,9 +176,9 @@ export default function FieldPopup({
               ref={firstRef as React.Ref<HTMLInputElement>}
               type="date"
               value={draft}
-              min={min}
-              max={max}
-              onChange={(e) => setDraft(e.target.value)}
+              min={min ?? DATE_MIN}
+              max={max ?? DATE_MAX}
+              onChange={(e) => setDraft(fixYear(e.target.value))}
               className="w-full rounded-lg border border-gray-300 px-3 py-2.5 text-base"
             />
 

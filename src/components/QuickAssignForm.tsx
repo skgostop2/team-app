@@ -6,6 +6,7 @@ import type { Profile } from "@/lib/types";
 import Link from "next/link";
 import { parseQuickLines, toQuickInsert } from "@/lib/quickAdd";
 import { findSimilar, findDuplicatesWithin, type SimilarTask } from "@/lib/similar";
+import { DATE_MAX, DATE_MIN, fixYear } from "@/lib/dateCheck";
 
 /**
  * 업무지시 알맹이 — 붙여넣으면 그 자리에서 이름·기한을 찾아 건별로 정리한다.
@@ -308,7 +309,9 @@ export default function QuickAssignForm({
               <input
                 type="date"
                 value={dueDate}
-                onChange={(e) => setDueDate(e.target.value)}
+                min={DATE_MIN}
+                max={DATE_MAX}
+                onChange={(e) => setDueDate(fixYear(e.target.value))}
                 className="w-full rounded-lg border border-gray-300 px-2.5 py-2 text-sm text-gray-900 mt-1"
               />
             </label>

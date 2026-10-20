@@ -11,6 +11,7 @@ import type {
 } from "@/lib/types";
 import { isManager, isTeamLead, canDirect, assignableBy } from "@/lib/roles";
 import TaskLedger from "@/components/TaskLedger";
+import type { ItemCount } from "@/lib/items";
 import DeletedTasks from "@/components/DeletedTasks";
 import ViewAsBanner from "@/components/ViewAsBanner";
 import NewTaskModal from "@/components/NewTaskModal";
@@ -37,6 +38,8 @@ export default function TasksPage() {
   const [onlyQuestions, setOnlyQuestions] = useState(false);
   /** 내가 별표를 단 업무 (사람마다 따로) */
   const [stars, setStars] = useState<Set<string>>(new Set());
+  /** 업무별 세부 항목 수 (진행률이 체크로 계산되는 업무) */
+  const [itemCounts, setItemCounts] = useState<Map<string, ItemCount>>(new Map());
   const [onlyStars, setOnlyStars] = useState(false);
 
   // 팀장·실장이 특정 팀원의 화면을 그대로 들여다보는 모드 (?as=<id>)
@@ -57,6 +60,7 @@ export default function TasksPage() {
       { data: logs },
       { data: qa },
       { data: starRows },
+      { data: itemRows },
     ] =
       await Promise.all([
       supabase.from("profiles").select("*").eq("id", user.id).single(),
@@ -70,6 +74,7 @@ export default function TasksPage() {
       supabase.from("task_updates").select("id, task_id, kind, reply_to").in("kind", ["질문", "답변"]),
       // 내 별표
       supabase.from("task_stars").select("task_id").eq("user_id", user.id),
+      supabase.from("task_items").select("task_id, done"),
     ]);
 
     setMe(profile as Profile);
@@ -78,6 +83,7 @@ export default function TasksPage() {
     setHandedOverIds(new Set(((logs ?? []) as TaskAssigneeLog[]).map((l) => l.task_id)));
     setQuestions(countQuestions(qa ?? []));
     setStars(new Set(((starRows ?? []) as { task_id: string }[]).map((r) => r.task_id)));
+    setItemCounts(countItems((itemRows ?? []) as { task_id: string; done: boolean }[]));
     setLoading(false);
   }
 
@@ -356,6 +362,7 @@ export default function TasksPage() {
         canAnswer={isLead && !viewingAs}
         stars={stars}
         onToggleStar={viewingAs ? undefined : toggleStar}
+        itemCounts={itemCounts}
         onChanged={load}
         emptyText="표시할 업무가 없습니다."
       />
@@ -444,6 +451,18 @@ function countQuestions(
     cur.total += 1;
     if (!answered.has(q.id)) cur.open += 1;
     map.set(q.task_id, cur);
+  }
+  return map;
+}
+
+/** 세부 항목 행을 업무별 개수로 바꾼다 */
+function countItems(rows: { task_id: string; done: boolean }[]): Map<string, ItemCount> {
+  const map = new Map<string, ItemCount>();
+  for (const r of rows) {
+    const cur = map.get(r.task_id) ?? { done: 0, total: 0 };
+    cur.total += 1;
+    if (r.done) cur.done += 1;
+    map.set(r.task_id, cur);
   }
   return map;
 }

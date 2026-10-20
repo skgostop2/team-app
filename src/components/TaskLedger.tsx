@@ -14,6 +14,8 @@ import TaskEditModal from "@/components/TaskEditModal";
 import ProgressLogModal from "@/components/ProgressLogModal";
 import DeleteLock from "@/components/DeleteLock";
 import QuestionModal from "@/components/QuestionModal";
+import TaskItemsModal from "@/components/TaskItemsModal";
+import type { ItemCount } from "@/lib/items";
 
 /**
  * 업무 진행 현황 — 메모 프로그램과 같은 대장(臺帳) 양식.
@@ -114,6 +116,7 @@ export default function TaskLedger({
   canAnswer = false,
   stars,
   onToggleStar,
+  itemCounts,
 }: {
   tasks: TaskWithEffectiveStatus[];
   profiles: Profile[];
@@ -140,6 +143,8 @@ export default function TaskLedger({
   /** 내가 별표를 단 업무들 (별표는 사람마다 따로다) */
   stars?: Set<string>;
   onToggleStar?: (taskId: string, next: boolean) => void;
+  /** 업무별 세부 항목 수 (진행률이 체크로 계산되는 업무) */
+  itemCounts?: Map<string, ItemCount>;
 }) {
   const [edit, setEdit] = useState<EditTarget | null>(null);
 
@@ -173,6 +178,8 @@ export default function TaskLedger({
 
   /** 질문 창을 열어 둔 업무 */
   const [askTask, setAskTask] = useState<TaskWithEffectiveStatus | null>(null);
+  /** 진행률·세부 항목 창을 열어 둔 업무 */
+  const [itemTask, setItemTask] = useState<TaskWithEffectiveStatus | null>(null);
 
   /**
    * 정렬.
@@ -435,6 +442,22 @@ export default function TaskLedger({
         />
       )}
 
+      {itemTask && (
+        <TaskItemsModal
+          task={itemTask}
+          canEdit={
+            canEdit &&
+            (canAssign ||
+              (!!viewerId &&
+                (itemTask.assignee_id === viewerId ||
+                  (itemTask.deputy_ids ?? []).includes(viewerId) ||
+                  itemTask.created_by === viewerId)))
+          }
+          onClose={() => setItemTask(null)}
+          onChanged={() => onChanged?.()}
+        />
+      )}
+
       {askTask && (
         <QuestionModal
           task={askTask}
@@ -567,8 +590,9 @@ export default function TaskLedger({
                   big
                   value={t.progress}
                   enabled={canTouch}
+                  count={itemCounts?.get(t.id)}
                   onCommit={(v) => saveProgress(t.id, v)}
-                  onOpen={() => setEdit({ task: t, field: "progress" })}
+                  onOpen={() => setItemTask(t)}
                 />
               </div>
 
@@ -1059,13 +1083,14 @@ export default function TaskLedger({
                     </Td>
                   )}
 
-                  {/* 진행률 — 표에서 바로 끌어서 맞춘다 */}
+                  {/* 진행률 — 항목이 있으면 체크로 계산되고, 없으면 끌어서 맞춘다 */}
                   <Td>
                     <ProgressControl
                       value={t.progress}
                       enabled={canTouch}
+                      count={itemCounts?.get(t.id)}
                       onCommit={(v) => saveProgress(t.id, v)}
-                      onOpen={() => setEdit({ task: t, field: "progress" })}
+                      onOpen={() => setItemTask(t)}
                     />
                   </Td>
 
@@ -1183,12 +1208,15 @@ function ProgressControl({
   enabled,
   onCommit,
   onOpen,
+  count,
   big = false,
 }: {
   value: number;
   enabled: boolean;
   onCommit: (v: number) => Promise<string | null>;
   onOpen: () => void;
+  /** 세부 항목이 있으면 진행률은 체크로 계산된다 — 끌지 못하게 막는다 */
+  count?: ItemCount;
   /** 폰 화면 — 손가락으로 잡을 수 있게 굵게 */
   big?: boolean;
 }) {
@@ -1218,6 +1246,38 @@ function ProgressControl({
       setDraft(value);
       window.alert(`진행률을 저장하지 못했습니다: ${err}`);
     }
+  }
+
+  // 세부 항목이 있는 업무는 체크 수가 곧 진행률이다. 끌어서 바꾸면 두 숫자가 따로 논다.
+  if (count && count.total > 0) {
+    return (
+      <button
+        type="button"
+        onClick={onOpen}
+        title={`세부 항목 ${count.done}/${count.total} — 눌러서 체크`}
+        className="w-full flex items-center gap-2 rounded hover:bg-blue-50 px-1 -mx-1"
+      >
+        <div
+          className={cn(
+            "flex-1 rounded-full bg-gray-100 overflow-hidden min-w-[36px]",
+            big ? "h-2" : "h-1.5"
+          )}
+        >
+          <div className="h-full bg-blue-500" style={{ width: `${value}%` }} />
+        </div>
+        <span
+          className={cn(
+            "shrink-0 text-right whitespace-nowrap",
+            big ? "text-sm font-medium text-gray-700" : "text-xs text-gray-500"
+          )}
+        >
+          {value}%
+          <span className="block text-[11px] text-gray-400 leading-tight">
+            {count.done}/{count.total}
+          </span>
+        </span>
+      </button>
+    );
   }
 
   if (!enabled) {
