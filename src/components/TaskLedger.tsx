@@ -507,9 +507,9 @@ export default function TaskLedger({
                         type="button"
                         onClick={() => completeNow(t.id)}
                         disabled={doneBusy === t.id}
-                        className="shrink-0 text-[11px] leading-none px-2 py-1 rounded border border-emerald-300 text-emerald-700 bg-emerald-50 hover:bg-emerald-100 disabled:opacity-50 whitespace-nowrap"
+                        className="shrink-0 text-xs leading-none px-2.5 py-1.5 rounded border border-emerald-400 text-emerald-700 hover:bg-emerald-50 disabled:opacity-50 whitespace-nowrap"
                       >
-                        {doneBusy === t.id ? "처리 중" : "완료"}
+                        {doneBusy === t.id ? "처리 중" : "완료 처리"}
                       </button>
                     )}
                   </div>
@@ -770,7 +770,7 @@ export default function TaskLedger({
                       )}
                       {t.title}
                       {t.source === "팀원추가" && (
-                        <span className="ml-1.5 text-[10px] px-1.5 py-0.5 rounded bg-blue-50 text-blue-700 font-normal align-middle whitespace-nowrap">
+                        <span className="ml-1.5 text-[11px] px-1.5 py-0.5 rounded bg-blue-50 text-blue-700 font-normal align-middle whitespace-nowrap">
                           팀원추가
                         </span>
                       )}
@@ -834,7 +834,7 @@ export default function TaskLedger({
                       {t.completed_at ? (
                         <>
                           <span className="block text-emerald-700 font-medium">완료</span>
-                          <span className="block text-[10px] text-gray-500">
+                          <span className="block text-[11px] text-gray-500">
                             {formatShortDate(t.completed_at)}
                           </span>
                         </>
@@ -851,9 +851,9 @@ export default function TaskLedger({
                           onClick={() => completeNow(t.id)}
                           disabled={doneBusy === t.id}
                           title="오늘 날짜로 완료 처리"
-                          className="text-[10px] leading-none px-2 py-1 rounded border border-emerald-300 text-emerald-700 bg-emerald-50 hover:bg-emerald-100 disabled:opacity-50 whitespace-nowrap"
+                          className="text-[11px] leading-none px-2 py-1 rounded border border-emerald-400 text-emerald-700 hover:bg-emerald-50 disabled:opacity-50 whitespace-nowrap"
                         >
-                          {doneBusy === t.id ? "처리중" : "완료"}
+                          {doneBusy === t.id ? "처리중" : "완료 처리"}
                         </button>
                       </div>
                     )}
@@ -949,7 +949,7 @@ export default function TaskLedger({
                           <span className="block text-gray-700 line-clamp-2 break-keep">
                             {t.last_update_text}
                           </span>
-                          <span className="block text-[10px] text-gray-400 mt-0.5">
+                          <span className="block text-[11px] text-gray-400 mt-0.5">
                             {formatShortDate(t.last_update_at)} {t.last_update_by} · 총{" "}
                             {t.update_count ?? 0}건
                           </span>
@@ -999,7 +999,7 @@ export default function TaskLedger({
                               : "이 업무 삭제"
                         }
                         className={cn(
-                          "no-print text-[10px] leading-none px-2 py-1 rounded border",
+                          "no-print text-[11px] leading-none px-2 py-1 rounded border",
                           mayDelete(t)
                             ? "border-red-200 text-red-600 hover:bg-red-50"
                             : "border-gray-200 text-gray-300 cursor-not-allowed"
@@ -1371,7 +1371,7 @@ function ScheduleDiff({ task }: { task: TaskWithEffectiveStatus }) {
   const odd = Math.abs(d) > ODD_DIFF_DAYS;
   const mark = odd ? (
     <span
-      className="block text-[10px] font-normal text-amber-600"
+      className="block text-[11px] font-normal text-amber-600"
       title="날짜가 너무 많이 벌어졌습니다. 완료계획일의 연도를 확인해보세요."
     >
       ⚠ 날짜 확인
@@ -1382,7 +1382,7 @@ function ScheduleDiff({ task }: { task: TaskWithEffectiveStatus }) {
     return (
       <span className="text-red-600 font-semibold">
         {d}일 초과
-        {!done && !odd && <span className="block text-[10px] font-normal">진행중</span>}
+        {!done && !odd && <span className="block text-[11px] font-normal">진행중</span>}
         {mark}
       </span>
     );

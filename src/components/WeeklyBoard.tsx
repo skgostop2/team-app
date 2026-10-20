@@ -170,7 +170,7 @@ function TaskRow({
           {status === "완료"
             ? `완료 ${formatShortDate(t.completed_at)}`
             : status === "지연"
-              ? `지연 ${t.overdue_days}일`
+              ? `지연 ${t.overdue_days ?? 0}일`
               : `진행 ${t.progress}%`}
           {t.due_date && status !== "완료" && (
             <span className="text-gray-400"> · 기한 {formatShortDate(t.due_date)}</span>

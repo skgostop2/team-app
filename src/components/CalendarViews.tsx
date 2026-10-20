@@ -256,7 +256,7 @@ export function TimelineView({
               <div className="shrink-0 w-[120px] px-2 py-2 border-r border-gray-200">
                 <span className="text-sm font-medium text-gray-800 break-keep">{p.name}</span>
                 {p.position && <span className="text-xs text-gray-400"> {p.position}</span>}
-                <span className="block text-[10px] text-gray-400">{bars.length}건</span>
+                <span className="block text-[11px] text-gray-400">{bars.length}건</span>
               </div>
 
               <div className="relative flex-1 py-1.5">
@@ -278,24 +278,36 @@ export function TimelineView({
                   {bars.map(({ t, s }) => {
                     const i0 = days.indexOf(s.from);
                     const i1 = days.indexOf(s.to);
+                    const w = Math.max(colWidth, (i1 - i0 + 1) * colWidth) - 2;
+                    // 하루이틀짜리는 막대가 너무 좁아 제목이 "사..." 로만 보인다.
+                    // 그럴 때는 제목을 막대 오른쪽 바깥에 적는다.
+                    const narrow = w < 72;
+                    const label = `${t.title} — ${formatShortDate(
+                      t.start_date
+                    )} ~ ${formatShortDate(t.due_date)} (${t.effective_status})`;
                     return (
-                      <button
-                        key={t.id}
-                        onClick={() => onPick(t.id)}
-                        title={`${t.title} — ${formatShortDate(t.start_date)} ~ ${formatShortDate(
-                          t.due_date
-                        )} (${t.effective_status})`}
-                        style={{
-                          marginLeft: i0 * colWidth,
-                          width: Math.max(colWidth, (i1 - i0 + 1) * colWidth) - 2,
-                        }}
-                        className={cn(
-                          "block h-5 rounded px-1.5 text-[10px] leading-5 truncate text-left",
-                          BAR[t.effective_status] ?? "bg-gray-300 text-gray-700"
+                      <div key={t.id} className="relative h-5">
+                        <button
+                          onClick={() => onPick(t.id)}
+                          title={label}
+                          style={{ marginLeft: i0 * colWidth, width: w }}
+                          className={cn(
+                            "block h-5 rounded px-1.5 text-[11px] leading-5 truncate text-left",
+                            BAR[t.effective_status] ?? "bg-gray-300 text-gray-700"
+                          )}
+                        >
+                          {narrow ? "" : t.title}
+                        </button>
+                        {narrow && (
+                          <span
+                            title={label}
+                            style={{ left: i0 * colWidth + w + 5 }}
+                            className="absolute top-0 h-5 leading-5 text-[11px] text-gray-500 whitespace-nowrap pointer-events-none"
+                          >
+                            {t.title}
+                          </span>
                         )}
-                      >
-                        {t.title}
-                      </button>
+                      </div>
                     );
                   })}
                   {bars.length === 0 && (
