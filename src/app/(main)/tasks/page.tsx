@@ -3,7 +3,12 @@
 import { useEffect, useMemo, useState } from "react";
 import { useSearchParams } from "next/navigation";
 import { createClient } from "@/lib/supabase/client";
-import type { Profile, TaskAssigneeLog, TaskWithEffectiveStatus } from "@/lib/types";
+import type {
+  Profile,
+  QuestionCount,
+  TaskAssigneeLog,
+  TaskWithEffectiveStatus,
+} from "@/lib/types";
 import { isManager, isTeamLead, canDirect, assignableBy } from "@/lib/roles";
 import TaskLedger from "@/components/TaskLedger";
 import DeletedTasks from "@/components/DeletedTasks";
@@ -27,6 +32,9 @@ export default function TasksPage() {
   const [importMsg, setImportMsg] = useState<string | null>(null);
   const [loading, setLoading] = useState(true);
   const [handedOverIds, setHandedOverIds] = useState<Set<string>>(new Set());
+  /** 업무별 질문 수 (노란 ?) */
+  const [questions, setQuestions] = useState<Map<string, QuestionCount>>(new Map());
+  const [onlyQuestions, setOnlyQuestions] = useState(false);
 
   // 팀장·실장이 특정 팀원의 화면을 그대로 들여다보는 모드 (?as=<id>)
   const searchParams = useSearchParams();
@@ -39,7 +47,13 @@ export default function TasksPage() {
     } = await supabase.auth.getUser();
     if (!user) return;
 
-    const [{ data: profile }, { data: allProfiles }, { data: allTasks }, { data: logs }] =
+    const [
+      { data: profile },
+      { data: allProfiles },
+      { data: allTasks },
+      { data: logs },
+      { data: qa },
+    ] =
       await Promise.all([
       supabase.from("profiles").select("*").eq("id", user.id).single(),
       // 삭제된 팀원도 포함 (지난 업무의 담당자 이름 표시용). 담당자 지정 목록은 아래에서 따로 추림
@@ -48,12 +62,15 @@ export default function TasksPage() {
       supabase.from("v_tasks").select("*").order("created_at", { ascending: true }),
       // 내가 예전에 담당했다가 넘긴 업무 (기록은 사라지지 않는다)
       supabase.from("task_assignee_log").select("*").eq("prev_assignee_id", user.id),
+      // 질문과 답변 (노란 ? 표시용). 볼 수 있는 업무의 것만 내려온다.
+      supabase.from("task_updates").select("id, task_id, kind, reply_to").in("kind", ["질문", "답변"]),
     ]);
 
     setMe(profile as Profile);
     setProfiles((allProfiles ?? []) as Profile[]);
     setTasks((allTasks ?? []) as TaskWithEffectiveStatus[]);
     setHandedOverIds(new Set(((logs ?? []) as TaskAssigneeLog[]).map((l) => l.task_id)));
+    setQuestions(countQuestions(qa ?? []));
     setLoading(false);
   }
 
@@ -95,8 +112,27 @@ export default function TasksPage() {
         : tasks.filter((t) => mine(t) || handedOverIds.has(t.id));
     if (hideDone) list = list.filter((t) => t.effective_status !== "완료");
     if (onlyMemberAdded) list = list.filter((t) => t.source === "팀원추가");
+    if (onlyQuestions) list = list.filter((t) => (questions.get(t.id)?.open ?? 0) > 0);
     return list;
-  }, [tasks, isLead, showAll, hideDone, onlyMemberAdded, me?.id, viewingAs, handedOverIds]);
+  }, [
+    tasks,
+    isLead,
+    showAll,
+    hideDone,
+    onlyMemberAdded,
+    onlyQuestions,
+    questions,
+    me?.id,
+    viewingAs,
+    handedOverIds,
+  ]);
+
+  /** 답변을 기다리는 질문이 몇 건인가 */
+  const openQuestions = useMemo(() => {
+    let n = 0;
+    for (const t of tasks) n += questions.get(t.id)?.open ?? 0;
+    return n;
+  }, [tasks, questions]);
 
   /** 팀원 화면에 남의 업무가 내려와 있는가 (팀장이 공개를 켜 둔 경우) */
   const othersVisible = useMemo(
@@ -148,6 +184,24 @@ export default function TasksPage() {
           <Stat label="지연" value={mySummary.delayed} accent="text-red-600" />
           <Stat label="내 달성율" value={`${mySummary.rate}%`} accent="text-emerald-600" />
         </div>
+      )}
+
+      {openQuestions > 0 && !viewingAs && (
+        <button
+          onClick={() => setOnlyQuestions((v) => !v)}
+          className="no-print w-full flex items-center gap-2 rounded-xl border border-amber-300 bg-amber-50 px-4 py-3 text-left hover:bg-amber-100"
+        >
+          <span className="inline-flex items-center justify-center w-7 h-7 rounded-full bg-amber-400 text-white font-bold">
+            ?
+          </span>
+          <span className="text-sm font-medium text-amber-900 break-keep">
+            {isLead ? "답변을 기다리는 질문" : "내가 올린 질문 중 답변 대기"} {openQuestions}건
+          </span>
+          <span className="flex-1" />
+          <span className="text-xs text-amber-700 whitespace-nowrap">
+            {onlyQuestions ? "전체 보기" : "질문만 보기"}
+          </span>
+        </button>
       )}
 
       {viewingAs && (
@@ -257,6 +311,8 @@ export default function TasksPage() {
         handedOverIds={viewingAs ? undefined : handedOverIds}
         canEdit={!viewingAs}
         canDelete={isTeamLead(me)}
+        questions={questions}
+        canAnswer={isLead && !viewingAs}
         onChanged={load}
         emptyText="표시할 업무가 없습니다."
       />
@@ -330,4 +386,21 @@ function Stat({
       <p className={`text-2xl font-bold mt-0.5 ${accent}`}>{value}</p>
     </div>
   );
+}
+
+/** 질문·답변 행을 업무별 개수로 바꾼다 */
+function countQuestions(
+  rows: { id: string; task_id: string; kind: string | null; reply_to: string | null }[]
+): Map<string, QuestionCount> {
+  const answered = new Set(
+    rows.filter((r) => r.kind === "답변" && r.reply_to).map((r) => r.reply_to as string)
+  );
+  const map = new Map<string, QuestionCount>();
+  for (const q of rows.filter((r) => r.kind === "질문")) {
+    const cur = map.get(q.task_id) ?? { open: 0, total: 0 };
+    cur.total += 1;
+    if (!answered.has(q.id)) cur.open += 1;
+    map.set(q.task_id, cur);
+  }
+  return map;
 }

@@ -213,6 +213,27 @@ export function splitItems(text: string): string[] {
       continue;
     }
 
+    /*
+      괄호로 시작하는 줄은 새 업무가 아니라 바로 윗 건의 설명이다.
+
+        ISO 일원화 라인 테스트 - 임동민
+        (일정변경필요시 보고,
+         금주 일요일 진행관련 유관팀 공유)
+
+      제목을 적고 줄을 바꿔 설명을 다는 사람이 많아서, 이걸 끊으면
+      이름 없는 업무가 하나 더 생긴다.
+    */
+    if (/^[(（]/.test(t) && out.length > 0) {
+      const prev = out.pop() as string;
+      if (parenDepth(t) > 0) {
+        pending = prev + "\n" + t;
+        depth = parenDepth(t);
+      } else {
+        out.push(prev + "\n" + t);
+      }
+      continue;
+    }
+
     if (parenDepth(t) > 0) {
       pending = t;
       depth = parenDepth(t);

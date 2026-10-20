@@ -88,7 +88,14 @@ export interface TaskUpdate {
   progress_to: number | null;
   created_at: string;
   edited_at: string | null;
+  /** 기록 / 질문 / 답변 — 질문과 답변은 ? 창에서만 보인다 */
+  kind?: "기록" | "질문" | "답변";
+  /** 답변이면 어느 질문에 대한 답인지 */
+  reply_to?: string | null;
 }
+
+/** 업무 한 건에 달린 질문 수 (답을 기다리는 것 / 전체) */
+export type QuestionCount = { open: number; total: number };
 
 export interface TaskHistory {
   id: string;

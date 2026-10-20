@@ -3,7 +3,7 @@
 import Link from "next/link";
 import { Fragment, useEffect, useMemo, useRef, useState } from "react";
 import { useColumnWidths } from "@/lib/useColumnWidths";
-import type { Profile, TaskWithEffectiveStatus } from "@/lib/types";
+import type { Profile, QuestionCount, TaskWithEffectiveStatus } from "@/lib/types";
 import { formatShortDate, formatIsoDate, cn } from "@/lib/utils";
 import { isAssignable, byDisplayOrder } from "@/lib/roles";
 import { checkDue, checkStart, checkDone, ODD_DIFF_DAYS } from "@/lib/dateCheck";
@@ -13,6 +13,7 @@ import FieldPopup from "@/components/FieldPopup";
 import TaskEditModal from "@/components/TaskEditModal";
 import ProgressLogModal from "@/components/ProgressLogModal";
 import DeleteLock from "@/components/DeleteLock";
+import QuestionModal from "@/components/QuestionModal";
 
 /**
  * 업무 진행 현황 — 메모 프로그램과 같은 대장(臺帳) 양식.
@@ -60,6 +61,7 @@ const COL = {
   instructor: 64,
   progress: 120,
   log: 96,
+  ask: 44,
   status: 76,
   note: 80,
   hist: 64,
@@ -83,6 +85,7 @@ const RESIZABLE: Record<string, number> = {
   instructor: COL.instructor,
   progress: COL.progress,
   log: COL.log,
+  ask: COL.ask,
   status: COL.status,
   note: COL.note,
   hist: COL.hist,
@@ -101,6 +104,8 @@ export default function TaskLedger({
   onChanged,
   canEdit = false,
   canDelete = false,
+  questions,
+  canAnswer = false,
 }: {
   tasks: TaskWithEffectiveStatus[];
   profiles: Profile[];
@@ -120,6 +125,10 @@ export default function TaskLedger({
   canEdit?: boolean;
   /** 표에서 바로 지울 수 있게 할지 (팀장만 — 서버에서도 팀장만 지워진다) */
   canDelete?: boolean;
+  /** 업무별 질문 개수 (노란 ? 표시에 쓴다) */
+  questions?: Map<string, QuestionCount>;
+  /** 질문에 답할 수 있는 사람인지 (팀장·실장·그룹장) */
+  canAnswer?: boolean;
 }) {
   const [edit, setEdit] = useState<EditTarget | null>(null);
 
@@ -150,6 +159,9 @@ export default function TaskLedger({
       return next;
     });
   }
+
+  /** 질문 창을 열어 둔 업무 */
+  const [askTask, setAskTask] = useState<TaskWithEffectiveStatus | null>(null);
 
   const [detailId, setDetailId] = useState<string | null>(null);
   const [logTask, setLogTask] = useState<TaskWithEffectiveStatus | null>(null);
@@ -230,7 +242,7 @@ export default function TaskLedger({
 
   /** 띠(구분줄)가 표 전체를 가로지르게 하려면 지금 세워진 칸 수가 필요하다 */
   const colCount =
-    9 + [col.date, col.days, col.diff, col.instructor, col.note, col.assignee].filter(Boolean).length;
+    10 + [col.date, col.days, col.diff, col.instructor, col.note, col.assignee].filter(Boolean).length;
 
   // 나머지 칸 합 + 업무내용 최소 폭 = 표 최소 폭
   const tableMinWidth =
@@ -245,6 +257,7 @@ export default function TaskLedger({
     (col.instructor ? W.instructor : 0) +
     W.progress +
     W.log +
+    W.ask +
     W.status +
     (col.note ? W.note : 0) +
     W.hist +
@@ -347,6 +360,23 @@ export default function TaskLedger({
                   (logTask.deputy_ids ?? []).includes(viewerId))))
           }
           onClose={() => setLogTask(null)}
+          onChanged={() => onChanged?.()}
+        />
+      )}
+
+      {askTask && (
+        <QuestionModal
+          task={askTask}
+          profiles={profiles}
+          canAsk={
+            canEdit &&
+            (canAnswer ||
+              (!!viewerId &&
+                (askTask.assignee_id === viewerId ||
+                  (askTask.deputy_ids ?? []).includes(viewerId))))
+          }
+          canAnswer={canAnswer}
+          onClose={() => setAskTask(null)}
           onChanged={() => onChanged?.()}
         />
       )}
@@ -602,6 +632,7 @@ export default function TaskLedger({
               </div>
 
               <div className="mt-3 flex gap-2">
+                <AskButton big count={questions?.get(t.id)} onClick={() => setAskTask(t)} />
                 <button
                   onClick={() => setDetailId(t.id)}
                   className="flex-1 text-xs px-3 py-2 rounded-lg border border-gray-300 text-gray-600"
@@ -667,6 +698,7 @@ export default function TaskLedger({
             {col.instructor && <col style={{ width: W.instructor }} />}
             <col style={{ width: W.progress }} />
             <col style={{ width: W.log }} />
+            <col style={{ width: W.ask }} />
             <col style={{ width: W.status }} />
             {col.note && <col style={{ width: W.note }} />}
             <col style={{ width: W.hist }} />
@@ -698,6 +730,7 @@ export default function TaskLedger({
               )}
               <Th grip="progress" onGrip={startDrag} stick>진행률</Th>
               <Th grip="log" onGrip={startDrag} stick>진행기록</Th>
+              <Th grip="ask" onGrip={startDrag} stick>질문</Th>
               <Th grip="status" onGrip={startDrag} stick>상태</Th>
               {col.note && (
                 <Th grip="note" onGrip={startDrag} stick>비고</Th>
@@ -961,6 +994,10 @@ export default function TaskLedger({
                   </Td>
 
                   <Td className="text-center">
+                    <AskButton count={questions?.get(t.id)} onClick={() => setAskTask(t)} />
+                  </Td>
+
+                  <Td className="text-center">
                     <StatusBadge status={t.effective_status} />
                   </Td>
 
@@ -1143,6 +1180,52 @@ function ProgressControl({
         {draft}%
       </button>
     </div>
+  );
+}
+
+/**
+ * 노란 물음표 — 이 업무에 대해 묻는 자리.
+ *
+ * 모르면 물어보고 가야 하는데 그동안 길이 없었다. 줄마다 눈에 띄는 자리에 둔다.
+ * 답을 기다리는 질문이 있으면 노랗게 차오르고, 다 답이 달렸으면 조용한 회색이 된다.
+ */
+function AskButton({
+  count,
+  onClick,
+  big = false,
+}: {
+  count?: QuestionCount;
+  onClick: () => void;
+  big?: boolean;
+}) {
+  const open = count?.open ?? 0;
+  const total = count?.total ?? 0;
+  const title =
+    open > 0
+      ? `답변을 기다리는 질문 ${open}건`
+      : total > 0
+        ? `질문 ${total}건 (답변 완료)`
+        : "이 업무가 이해되지 않으면 여기서 물어보세요";
+
+  return (
+    <button
+      type="button"
+      onClick={onClick}
+      title={title}
+      aria-label={title}
+      className={cn(
+        "no-print inline-flex items-center justify-center gap-0.5 rounded-full border font-bold whitespace-nowrap",
+        big ? "px-3 py-2 text-sm" : "w-7 h-7 text-sm",
+        open > 0
+          ? "bg-amber-400 border-amber-500 text-white hover:bg-amber-500"
+          : total > 0
+            ? "bg-amber-50 border-amber-300 text-amber-700 hover:bg-amber-100"
+            : "border-gray-300 text-gray-400 hover:bg-amber-50 hover:text-amber-600 hover:border-amber-300"
+      )}
+    >
+      ?{open > 0 && <span className="text-[11px] font-semibold">{open}</span>}
+      {big && <span className="font-medium">질문</span>}
+    </button>
   );
 }
 

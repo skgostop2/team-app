@@ -184,7 +184,7 @@ export default function QuickAssignForm({
                     <div className="min-w-0 flex-1">
                       <p className="text-sm font-medium text-gray-900 break-keep">{r.title}</p>
                       {r.description && (
-                        <p className="text-xs text-gray-600 break-keep mt-0.5">
+                        <p className="text-xs text-gray-600 break-keep mt-0.5 whitespace-pre-wrap">
                           <span className="text-gray-400">세부 </span>
                           {r.description}
                         </p>

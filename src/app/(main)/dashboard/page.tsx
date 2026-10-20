@@ -5,7 +5,7 @@ import Link from "next/link";
 import { useRouter, useSearchParams } from "next/navigation";
 import { createClient } from "@/lib/supabase/client";
 import { formatElapsed, isLongInactive, cn } from "@/lib/utils";
-import type { Profile, TaskWithEffectiveStatus } from "@/lib/types";
+import type { Profile, QuestionCount, TaskWithEffectiveStatus } from "@/lib/types";
 import {
   isTeamLead,
   isAssignable,
@@ -26,6 +26,7 @@ export default function DashboardPage() {
   const [shared, setShared] = useState(false);
   const [loading, setLoading] = useState(true);
   const [togglingShare, setTogglingShare] = useState(false);
+  const [questions, setQuestions] = useState<Map<string, QuestionCount>>(new Map());
 
   // 팀장·실장이 특정 팀원의 화면을 그대로 들여다보는 모드 (?as=<id>)
   const searchParams = useSearchParams();
@@ -39,7 +40,8 @@ export default function DashboardPage() {
     } = await supabase.auth.getUser();
     if (!user) return;
 
-    const [{ data: profile }, { data: p }, { data: t }, { data: setting }] = await Promise.all([
+    const [{ data: profile }, { data: p }, { data: t }, { data: setting }, { data: qa }] =
+      await Promise.all([
       supabase.from("profiles").select("*").eq("id", user.id).single(),
       // 삭제된 팀원도 포함해서 불러온다 (지난 업무의 담당자 이름을 보존해서 표시하기 위함)
       supabase.from("profiles").select("*").order("name"),
@@ -49,12 +51,17 @@ export default function DashboardPage() {
         .select("value")
         .eq("key", "share_progress_with_members")
         .maybeSingle(),
+      supabase
+        .from("task_updates")
+        .select("id, task_id, kind, reply_to")
+        .in("kind", ["질문", "답변"]),
     ]);
 
     setMe(profile as Profile);
     setProfiles((p ?? []) as Profile[]);
     setTasks((t ?? []) as TaskWithEffectiveStatus[]);
     setShared(Boolean(setting?.value));
+    setQuestions(countQuestions(qa ?? []));
     setLoading(false);
   }
 
@@ -297,6 +304,8 @@ export default function DashboardPage() {
         viewerId={subjectId}
         canEdit={!viewingAs}
         canDelete={isTeamLead(me)}
+        questions={questions}
+        canAnswer={isLead && !viewingAs}
         onChanged={load}
         emptyText={canSeeTeam ? "등록된 업무가 없습니다." : "배정된 업무가 없습니다."}
       />
@@ -565,4 +574,21 @@ function StatCard({
       <p className={cn("text-2xl font-bold", accent ?? "text-gray-900")}>{value}</p>
     </div>
   );
+}
+
+/** 질문·답변 행을 업무별 개수로 바꾼다 */
+function countQuestions(
+  rows: { id: string; task_id: string; kind: string | null; reply_to: string | null }[]
+): Map<string, QuestionCount> {
+  const answered = new Set(
+    rows.filter((r) => r.kind === "답변" && r.reply_to).map((r) => r.reply_to as string)
+  );
+  const map = new Map<string, QuestionCount>();
+  for (const q of rows.filter((r) => r.kind === "질문")) {
+    const cur = map.get(q.task_id) ?? { open: 0, total: 0 };
+    cur.total += 1;
+    if (!answered.has(q.id)) cur.open += 1;
+    map.set(q.task_id, cur);
+  }
+  return map;
 }
