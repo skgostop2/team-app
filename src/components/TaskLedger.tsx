@@ -26,6 +26,10 @@ import QuestionModal from "@/components/QuestionModal";
  * 변경 이력과 삭제는 줄 끝 "이력" 버튼에 모아둔다.
  */
 
+/** 정렬 기준 — 고른 것은 그 브라우저에 기억된다 */
+const SORTS = ["등록순", "마감순", "진행률순", "지연먼저"] as const;
+type SortKey = (typeof SORTS)[number];
+
 /** 지금 열려 있는 수정 창 */
 type EditTarget = {
   task: TaskWithEffectiveStatus;
@@ -47,6 +51,7 @@ type EditTarget = {
  * 칸을 늘리거나 줄일 때는 여기만 고치면 표 최소 폭도 같이 따라간다.
  */
 const COL = {
+  star: 30,
   no: 36,
   date: 100,
   /** 진행일정 — 착수일 */
@@ -72,6 +77,7 @@ const COL = {
 
 /** 끌어서 조절할 수 있는 칸들 (업무내용은 남는 폭을 받으므로 제외) */
 const RESIZABLE: Record<string, number> = {
+  star: COL.star,
   /** 업무내용 — 0 이면 "남는 폭을 전부" (끌어서 정하면 그 폭으로 고정된다) */
   title: 0,
   no: COL.no,
@@ -106,6 +112,8 @@ export default function TaskLedger({
   canDelete = false,
   questions,
   canAnswer = false,
+  stars,
+  onToggleStar,
 }: {
   tasks: TaskWithEffectiveStatus[];
   profiles: Profile[];
@@ -129,6 +137,9 @@ export default function TaskLedger({
   questions?: Map<string, QuestionCount>;
   /** 질문에 답할 수 있는 사람인지 (팀장·실장·그룹장) */
   canAnswer?: boolean;
+  /** 내가 별표를 단 업무들 (별표는 사람마다 따로다) */
+  stars?: Set<string>;
+  onToggleStar?: (taskId: string, next: boolean) => void;
 }) {
   const [edit, setEdit] = useState<EditTarget | null>(null);
 
@@ -163,9 +174,31 @@ export default function TaskLedger({
   /** 질문 창을 열어 둔 업무 */
   const [askTask, setAskTask] = useState<TaskWithEffectiveStatus | null>(null);
 
+  /**
+   * 정렬.
+   *
+   * 내 별표는 늘 맨 위로 올린다 — 각자 "오늘 챙길 것"을 올려두는 자리라서다.
+   * 그 다음이 팀장이 단 긴급, 그 다음이 고른 기준이다.
+   */
+  const [sortKey, setSortKey] = useState<SortKey>("등록순");
+  useEffect(() => {
+    try {
+      const v = localStorage.getItem("task-ledger-sort");
+      if (v && SORTS.includes(v as SortKey)) setSortKey(v as SortKey);
+    } catch {}
+  }, []);
+  function pickSort(k: SortKey) {
+    setSortKey(k);
+    try {
+      localStorage.setItem("task-ledger-sort", k);
+    } catch {}
+  }
+
   const [detailId, setDetailId] = useState<string | null>(null);
   const [logTask, setLogTask] = useState<TaskWithEffectiveStatus | null>(null);
   const [doneBusy, setDoneBusy] = useState<string | null>(null);
+  /** 긴급 표시를 바꾸는 중인 업무 */
+  const [urgentBusy, setUrgentBusy] = useState<string | null>(null);
   /** 지우려고 비밀번호를 묻고 있는 업무 */
   const [askDelete, setAskDelete] = useState<TaskWithEffectiveStatus | null>(null);
 
@@ -174,9 +207,25 @@ export default function TaskLedger({
    * 같은 표 안에서 띠로 나눈다 — 위가 지시, 아래가 직접 등록.
    * 한쪽만 있으면 띠를 띄우지 않는다 (쓸데없이 줄만 는다).
    */
+  const ordered = useMemo(() => {
+    const starred = (t: TaskWithEffectiveStatus) => (stars?.has(t.id) ? 0 : 1);
+    const urgent = (t: TaskWithEffectiveStatus) => (t.urgent ? 0 : 1);
+    const by: Record<SortKey, (a: TaskWithEffectiveStatus, b: TaskWithEffectiveStatus) => number> = {
+      등록순: (a, b) => a.created_at.localeCompare(b.created_at),
+      마감순: (a, b) => (a.due_date ?? "9999").localeCompare(b.due_date ?? "9999"),
+      진행률순: (a, b) => (a.progress ?? 0) - (b.progress ?? 0),
+      지연먼저: (a, b) =>
+        (b.effective_status === "지연" ? 1 : 0) - (a.effective_status === "지연" ? 1 : 0),
+    };
+    return [...tasks].sort(
+      (a, b) =>
+        starred(a) - starred(b) || urgent(a) - urgent(b) || by[sortKey](a, b)
+    );
+  }, [tasks, stars, sortKey]);
+
   const sections = useMemo(() => {
-    const directed = tasks.filter((t) => t.source !== "팀원추가");
-    const own = tasks.filter((t) => t.source === "팀원추가");
+    const directed = ordered.filter((t) => t.source !== "팀원추가");
+    const own = ordered.filter((t) => t.source === "팀원추가");
     const out: { key: string; label: string; items: TaskWithEffectiveStatus[] }[] = [];
     if (directed.length) {
       out.push({ key: "directed", label: canAssign ? "지시 업무" : "지시받은 업무", items: directed });
@@ -189,7 +238,7 @@ export default function TaskLedger({
       });
     }
     return out;
-  }, [tasks, canAssign]);
+  }, [ordered, canAssign]);
 
   /** 띠를 띄울지 (한 묶음뿐이면 굳이 안 띄운다) */
   const banded = sections.length > 1;
@@ -242,10 +291,11 @@ export default function TaskLedger({
 
   /** 띠(구분줄)가 표 전체를 가로지르게 하려면 지금 세워진 칸 수가 필요하다 */
   const colCount =
-    10 + [col.date, col.days, col.diff, col.instructor, col.note, col.assignee].filter(Boolean).length;
+    11 + [col.date, col.days, col.diff, col.instructor, col.note, col.assignee].filter(Boolean).length;
 
   // 나머지 칸 합 + 업무내용 최소 폭 = 표 최소 폭
   const tableMinWidth =
+    W.star +
     W.no +
     (col.date ? W.date : 0) +
     W.start +
@@ -291,6 +341,14 @@ export default function TaskLedger({
     if (err) window.alert(`완료 처리하지 못했습니다: ${err}`);
   }
 
+  /** 긴급 표시 켜고 끄기 — 팀장·실장·그룹장만 (서버에서도 같은 규칙으로 막힌다) */
+  async function toggleUrgent(t: TaskWithEffectiveStatus) {
+    setUrgentBusy(t.id);
+    const err = await patch(t.id, { urgent: !t.urgent });
+    setUrgentBusy(null);
+    if (err) window.alert(`긴급 표시를 바꾸지 못했습니다: ${err}`);
+  }
+
   /** 날짜만 받아 그 날 정오로 저장한다 (시간대 때문에 하루 밀리는 것 방지) */
   function noon(dateStr: string): string | null {
     if (!/^\d{4}-\d{2}-\d{2}$/.test(dateStr)) return null;
@@ -303,6 +361,18 @@ export default function TaskLedger({
       <div className="flex items-baseline justify-between gap-3 px-4 py-3 border-b border-gray-200 flex-wrap">
         <h2 className="text-base font-bold text-gray-900">{title}</h2>
         <p className="text-xs text-gray-400">
+          <select
+            value={sortKey}
+            onChange={(e) => pickSort(e.target.value as SortKey)}
+            title="보는 순서 — 내 별표와 긴급은 늘 맨 위입니다"
+            className="no-print mr-2 px-2 py-1 rounded border border-gray-300 text-gray-600 bg-white"
+          >
+            {SORTS.map((k) => (
+              <option key={k} value={k}>
+                {k}
+              </option>
+            ))}
+          </select>
           <button
             onClick={toggleCompact}
             className="no-print hidden md:inline-block mr-2 px-2 py-1 rounded border border-gray-300 text-gray-600 hover:bg-gray-50"
@@ -345,6 +415,7 @@ export default function TaskLedger({
           patch={patch}
           noon={noon}
           today={today}
+          canUrgent={canEdit && canAssign}
         />
       )}
 
@@ -460,6 +531,12 @@ export default function TaskLedger({
                 {t.is_new && (
                   <span className="inline-block w-2 h-2 rounded-full bg-blue-500 mr-1.5 align-middle" />
                 )}
+                <UrgentChip
+                  on={!!t.urgent}
+                  canSet={canEdit && canAssign}
+                  busy={urgentBusy === t.id}
+                  onToggle={() => toggleUrgent(t)}
+                />
                 {t.title}
                 {t.source === "팀원추가" && (
                         <span className="ml-2 text-[11px] px-1.5 py-0.5 rounded bg-blue-50 text-blue-700 font-normal align-middle whitespace-nowrap">
@@ -631,7 +708,13 @@ export default function TaskLedger({
                 </Cell>
               </div>
 
-              <div className="mt-3 flex gap-2">
+              <div className="mt-3 flex gap-2 items-center">
+                <StarButton
+                  big
+                  on={!!stars?.has(t.id)}
+                  onClick={() => onToggleStar?.(t.id, !stars?.has(t.id))}
+                  disabled={!onToggleStar}
+                />
                 <AskButton big count={questions?.get(t.id)} onClick={() => setAskTask(t)} />
                 <button
                   onClick={() => setDetailId(t.id)}
@@ -685,6 +768,7 @@ export default function TaskLedger({
           }}
         >
           <colgroup>
+            <col style={{ width: W.star }} />
             <col style={{ width: W.no }} />
             {col.date && <col style={{ width: W.date }} />}
             {/* 업무내용 — 끌어서 정한 폭이 있으면 그 폭, 없으면 남는 폭 전부 */}
@@ -706,6 +790,9 @@ export default function TaskLedger({
           <thead>
             {/* 머리줄은 따라 내려온다 — 스크롤해도 어느 칸인지 보인다 */}
             <tr className="bg-blue-50 text-gray-700 text-xs">
+              <Th stick className="px-0" >
+                <span title="내가 별표를 단 업무가 맨 위로 올라옵니다">★</span>
+              </Th>
               <Th grip="no" onGrip={startDrag} stick>NO.</Th>
               {col.date && (
                 <Th grip="date" onGrip={startDrag} stick>작성일</Th>
@@ -781,10 +868,17 @@ export default function TaskLedger({
                 <tr
                   key={t.id}
                   className={cn(
-                    "border-b border-gray-200 last:border-0 hover:bg-gray-50",
+                    "group border-b border-gray-200 last:border-0 hover:bg-gray-50",
                     handedOver && "bg-gray-50/60"
                   )}
                 >
+                  <Td className="text-center px-0">
+                    <StarButton
+                      on={!!stars?.has(t.id)}
+                      onClick={() => onToggleStar?.(t.id, !stars?.has(t.id))}
+                      disabled={!onToggleStar}
+                    />
+                  </Td>
                   <Td className="text-center text-gray-500">{i + 1}</Td>
                   {col.date && (
                     <Td className="text-gray-600 whitespace-nowrap">{formatIsoDate(t.created_at)}</Td>
@@ -801,6 +895,12 @@ export default function TaskLedger({
                       {t.is_new && (
                         <span className="inline-block w-1.5 h-1.5 rounded-full bg-blue-500 mr-1.5 align-middle" />
                       )}
+                      <UrgentChip
+                        on={!!t.urgent}
+                        canSet={canEdit && canAssign}
+                        busy={urgentBusy === t.id}
+                        onToggle={() => toggleUrgent(t)}
+                      />
                       {t.title}
                       {t.source === "팀원추가" && (
                         <span className="ml-1.5 text-[11px] px-1.5 py-0.5 rounded bg-blue-50 text-blue-700 font-normal align-middle whitespace-nowrap">
@@ -1184,6 +1284,80 @@ function ProgressControl({
 }
 
 /**
+ * 별표 — 사람마다 따로다.
+ *
+ * 팀장이 "이거 중요하다"고 찍는 표시가 아니라, 보는 사람이 자기 기준으로
+ * 오늘 챙길 것을 올려두는 자리다. 그래서 남의 화면에는 보이지 않고,
+ * 켜 두면 표 맨 위로 올라온다.
+ */
+function StarButton({
+  on,
+  onClick,
+  disabled,
+  big = false,
+}: {
+  on: boolean;
+  onClick: () => void;
+  disabled?: boolean;
+  big?: boolean;
+}) {
+  return (
+    <button
+      type="button"
+      onClick={onClick}
+      disabled={disabled}
+      title={on ? "별표 지우기 (나에게만 보입니다)" : "별표 달기 — 맨 위로 올라옵니다"}
+      aria-label="별표"
+      className={cn(
+        "no-print leading-none disabled:opacity-40",
+        big ? "text-xl" : "text-base",
+        on ? "text-amber-400" : "text-gray-300 hover:text-amber-300"
+      )}
+    >
+      {on ? "★" : "☆"}
+    </button>
+  );
+}
+
+/** 팀장·그룹장이 업무를 줄 때 다는 긴급 표시 */
+function UrgentChip({
+  on,
+  canSet,
+  busy,
+  onToggle,
+}: {
+  on: boolean;
+  canSet: boolean;
+  busy?: boolean;
+  onToggle: () => void;
+}) {
+  // 꺼져 있을 때는 아예 자리를 차지하지 않는다 — 모든 줄에 「긴급」이 떠 있으면 뜻이 없어진다.
+  // 켜는 것은 제목 수정 창에서 한다.
+  if (!on) return null;
+  return (
+    <button
+      type="button"
+      onClick={onToggle}
+      disabled={!canSet || busy}
+      title={
+        canSet
+          ? on
+            ? "긴급 표시 끄기"
+            : "긴급으로 표시 (받는 사람 화면에서 위로 올라갑니다)"
+          : "팀장이 긴급으로 표시한 업무입니다"
+      }
+      className={cn(
+        "no-print mr-1.5 align-middle text-[11px] px-1.5 py-0.5 rounded font-bold whitespace-nowrap",
+        "bg-red-600 text-white",
+        canSet ? "hover:bg-red-700" : "cursor-default"
+      )}
+    >
+      긴급
+    </button>
+  );
+}
+
+/**
  * 노란 물음표 — 이 업무에 대해 묻는 자리.
  *
  * 모르면 물어보고 가야 하는데 그동안 길이 없었다. 줄마다 눈에 띄는 자리에 둔다.
@@ -1288,12 +1462,15 @@ function EditPopup({
   patch,
   noon,
   today,
+  canUrgent = false,
 }: {
   target: EditTarget;
   onClose: () => void;
   patch: (id: string, fields: Record<string, unknown>) => Promise<string | null>;
   noon: (s: string) => string | null;
   today: string;
+  /** 긴급 표시를 달 수 있는 사람인지 (팀장·실장·그룹장) */
+  canUrgent?: boolean;
 }) {
   const { task: t, field } = target;
   const createdDay = t.created_at.slice(0, 10);
@@ -1302,9 +1479,19 @@ function EditPopup({
     return (
       <FieldPopup
         label="제목"
+        hint={t.urgent ? "지금 긴급으로 표시되어 있습니다." : undefined}
         kind="text"
         value={t.title}
         placeholder="업무 제목"
+        extraAction={
+          canUrgent
+            ? {
+                label: t.urgent ? "긴급 표시 끄기" : "긴급으로 표시",
+                danger: !t.urgent,
+                run: () => patch(t.id, { urgent: !t.urgent }),
+              }
+            : undefined
+        }
         onSave={async (next) => {
           if (!next.trim()) return "제목은 비워둘 수 없습니다.";
           return patch(t.id, { title: next.trim() });

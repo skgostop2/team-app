@@ -27,6 +27,7 @@ export default function DashboardPage() {
   const [loading, setLoading] = useState(true);
   const [togglingShare, setTogglingShare] = useState(false);
   const [questions, setQuestions] = useState<Map<string, QuestionCount>>(new Map());
+  const [stars, setStars] = useState<Set<string>>(new Set());
 
   // 팀장·실장이 특정 팀원의 화면을 그대로 들여다보는 모드 (?as=<id>)
   const searchParams = useSearchParams();
@@ -40,8 +41,14 @@ export default function DashboardPage() {
     } = await supabase.auth.getUser();
     if (!user) return;
 
-    const [{ data: profile }, { data: p }, { data: t }, { data: setting }, { data: qa }] =
-      await Promise.all([
+    const [
+      { data: profile },
+      { data: p },
+      { data: t },
+      { data: setting },
+      { data: qa },
+      { data: starRows },
+    ] = await Promise.all([
       supabase.from("profiles").select("*").eq("id", user.id).single(),
       // 삭제된 팀원도 포함해서 불러온다 (지난 업무의 담당자 이름을 보존해서 표시하기 위함)
       supabase.from("profiles").select("*").order("name"),
@@ -55,6 +62,7 @@ export default function DashboardPage() {
         .from("task_updates")
         .select("id, task_id, kind, reply_to")
         .in("kind", ["질문", "답변"]),
+      supabase.from("task_stars").select("task_id").eq("user_id", user.id),
     ]);
 
     setMe(profile as Profile);
@@ -62,6 +70,7 @@ export default function DashboardPage() {
     setTasks((t ?? []) as TaskWithEffectiveStatus[]);
     setShared(Boolean(setting?.value));
     setQuestions(countQuestions(qa ?? []));
+    setStars(new Set(((starRows ?? []) as { task_id: string }[]).map((r) => r.task_id)));
     setLoading(false);
   }
 
@@ -102,6 +111,24 @@ export default function DashboardPage() {
    * "왜 남의 업무가 내 화면에 뜨냐"가 되므로 켤 때는 한 번 묻는다.
    * 저장이 막히면 켜진 척하지 않고 원래대로 돌린다.
    */
+  /** 별표 켜고 끄기 — 내 화면에만 보이는 표시다 */
+  async function toggleStar(taskId: string, next: boolean) {
+    setStars((prev) => {
+      const s = new Set(prev);
+      if (next) s.add(taskId);
+      else s.delete(taskId);
+      return s;
+    });
+    const supabase = createClient();
+    const {
+      data: { user },
+    } = await supabase.auth.getUser();
+    if (!user) return;
+    if (next) await supabase.from("task_stars").insert({ task_id: taskId, user_id: user.id });
+    else
+      await supabase.from("task_stars").delete().eq("task_id", taskId).eq("user_id", user.id);
+  }
+
   async function toggleShare(next: boolean) {
     if (next) {
       const ok = window.confirm(
@@ -306,6 +333,8 @@ export default function DashboardPage() {
         canDelete={isTeamLead(me)}
         questions={questions}
         canAnswer={isLead && !viewingAs}
+        stars={stars}
+        onToggleStar={viewingAs ? undefined : toggleStar}
         onChanged={load}
         emptyText={canSeeTeam ? "등록된 업무가 없습니다." : "배정된 업무가 없습니다."}
       />

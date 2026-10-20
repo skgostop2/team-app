@@ -35,6 +35,9 @@ export default function TasksPage() {
   /** 업무별 질문 수 (노란 ?) */
   const [questions, setQuestions] = useState<Map<string, QuestionCount>>(new Map());
   const [onlyQuestions, setOnlyQuestions] = useState(false);
+  /** 내가 별표를 단 업무 (사람마다 따로) */
+  const [stars, setStars] = useState<Set<string>>(new Set());
+  const [onlyStars, setOnlyStars] = useState(false);
 
   // 팀장·실장이 특정 팀원의 화면을 그대로 들여다보는 모드 (?as=<id>)
   const searchParams = useSearchParams();
@@ -53,6 +56,7 @@ export default function TasksPage() {
       { data: allTasks },
       { data: logs },
       { data: qa },
+      { data: starRows },
     ] =
       await Promise.all([
       supabase.from("profiles").select("*").eq("id", user.id).single(),
@@ -64,6 +68,8 @@ export default function TasksPage() {
       supabase.from("task_assignee_log").select("*").eq("prev_assignee_id", user.id),
       // 질문과 답변 (노란 ? 표시용). 볼 수 있는 업무의 것만 내려온다.
       supabase.from("task_updates").select("id, task_id, kind, reply_to").in("kind", ["질문", "답변"]),
+      // 내 별표
+      supabase.from("task_stars").select("task_id").eq("user_id", user.id),
     ]);
 
     setMe(profile as Profile);
@@ -71,6 +77,7 @@ export default function TasksPage() {
     setTasks((allTasks ?? []) as TaskWithEffectiveStatus[]);
     setHandedOverIds(new Set(((logs ?? []) as TaskAssigneeLog[]).map((l) => l.task_id)));
     setQuestions(countQuestions(qa ?? []));
+    setStars(new Set(((starRows ?? []) as { task_id: string }[]).map((r) => r.task_id)));
     setLoading(false);
   }
 
@@ -113,6 +120,7 @@ export default function TasksPage() {
     if (hideDone) list = list.filter((t) => t.effective_status !== "완료");
     if (onlyMemberAdded) list = list.filter((t) => t.source === "팀원추가");
     if (onlyQuestions) list = list.filter((t) => (questions.get(t.id)?.open ?? 0) > 0);
+    if (onlyStars) list = list.filter((t) => stars.has(t.id));
     return list;
   }, [
     tasks,
@@ -121,11 +129,33 @@ export default function TasksPage() {
     hideDone,
     onlyMemberAdded,
     onlyQuestions,
+    onlyStars,
+    stars,
     questions,
     me?.id,
     viewingAs,
     handedOverIds,
   ]);
+
+  /** 별표 켜고 끄기 — 내 화면에만 보이는 표시다 */
+  async function toggleStar(taskId: string, next: boolean) {
+    setStars((prev) => {
+      const s = new Set(prev);
+      if (next) s.add(taskId);
+      else s.delete(taskId);
+      return s;
+    });
+    const supabase = createClient();
+    const { data: { user } } = await supabase.auth.getUser();
+    if (!user) return;
+    if (next) await supabase.from("task_stars").insert({ task_id: taskId, user_id: user.id });
+    else
+      await supabase
+        .from("task_stars")
+        .delete()
+        .eq("task_id", taskId)
+        .eq("user_id", user.id);
+  }
 
   /** 답변을 기다리는 질문이 몇 건인가 */
   const openQuestions = useMemo(() => {
@@ -238,6 +268,17 @@ export default function TasksPage() {
           </p>
         </div>
         <div className="flex items-center gap-2 flex-wrap">
+          {!viewingAs && stars.size > 0 && (
+            <label className="flex items-center gap-1.5 text-xs text-amber-800 border border-amber-300 bg-amber-50 rounded-lg px-3 py-2 cursor-pointer">
+              <input
+                type="checkbox"
+                checked={onlyStars}
+                onChange={(e) => setOnlyStars(e.target.checked)}
+                className="w-3.5 h-3.5"
+              />
+              ★ 내 별표만 ({stars.size})
+            </label>
+          )}
           <label className="flex items-center gap-1.5 text-xs text-gray-600 border border-gray-300 rounded-lg px-3 py-2 cursor-pointer bg-white">
             <input
               type="checkbox"
@@ -313,6 +354,8 @@ export default function TasksPage() {
         canDelete={isTeamLead(me)}
         questions={questions}
         canAnswer={isLead && !viewingAs}
+        stars={stars}
+        onToggleStar={viewingAs ? undefined : toggleStar}
         onChanged={load}
         emptyText="표시할 업무가 없습니다."
       />

@@ -45,6 +45,8 @@ export default function QuickAssignForm({
   const [dropped, setDropped] = useState<Record<string, boolean>>({});
   const [instructor, setInstructor] = useState(instructorDefault ?? "");
   const [dueDate, setDueDate] = useState("");
+  /** 이 지시 전체를 긴급으로 (글에 「긴급」이라 적은 줄은 그것만으로도 긴급이 된다) */
+  const [urgentAll, setUrgentAll] = useState(false);
   const [saving, setSaving] = useState(false);
   const [error, setError] = useState<string | null>(null);
   const [warn, setWarn] = useState<string | null>(null);
@@ -116,6 +118,7 @@ export default function QuickAssignForm({
         ...toQuickInsert(r, createdBy, {
           instructor: self ? null : instructor.trim() || null,
           dueDate: dueDate || null,
+          urgent: !self && urgentAll,
         }),
         ...(batchId ? { batch_id: batchId } : {}),
       }));
@@ -202,7 +205,14 @@ export default function QuickAssignForm({
                       className="w-4 h-4 mt-1.5 shrink-0"
                     />
                     <div className="min-w-0 flex-1">
-                      <p className="text-sm font-medium text-gray-900 break-keep">{r.title}</p>
+                      <p className="text-sm font-medium text-gray-900 break-keep">
+                        {(r.urgent || (!self && urgentAll)) && (
+                          <span className="mr-1.5 align-middle text-[11px] px-1.5 py-0.5 rounded bg-red-600 text-white font-bold">
+                            긴급
+                          </span>
+                        )}
+                        {r.title}
+                      </p>
                       {r.description && (
                         <p className="text-xs text-gray-600 break-keep mt-0.5 whitespace-pre-wrap">
                           <span className="text-gray-400">세부 </span>
@@ -271,6 +281,17 @@ export default function QuickAssignForm({
           </div>
 
           <div className={self ? "mt-3" : "grid grid-cols-2 gap-2 mt-3"}>
+            {!self && (
+            <label className="col-span-2 flex items-center gap-2 text-xs text-gray-700 border border-gray-300 rounded-lg px-3 py-2 cursor-pointer bg-white">
+              <input
+                type="checkbox"
+                checked={urgentAll}
+                onChange={(e) => setUrgentAll(e.target.checked)}
+                className="w-3.5 h-3.5"
+              />
+              이 지시 전체를 <b className="text-red-600">긴급</b>으로 (받는 사람 화면에서 위로 올라갑니다)
+            </label>
+            )}
             {!self && (
             <label className="text-xs text-gray-500">
               지시자 (전체 공통)

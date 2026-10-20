@@ -76,6 +76,8 @@ export interface TaskWithEffectiveStatus extends Task {
   last_update_at: string | null;
   last_update_text: string | null;
   last_update_by: string | null;
+  /** 팀장·그룹장이 업무를 줄 때 다는 긴급 표시 */
+  urgent?: boolean;
 }
 
 /** 진행기록 — 업무가 어떻게 되어가는지 그때그때 적어 쌓는 이력. 지워지지 않는다. */

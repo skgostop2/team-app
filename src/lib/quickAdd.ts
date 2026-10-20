@@ -29,6 +29,8 @@ export type QuickRow = {
   title: string;
   /** 괄호 안에 적어 둔 세부 설명 (없으면 null) */
   description: string | null;
+  /** 글에 「긴급」이라고 적혀 있었는가 */
+  urgent: boolean;
   /** 글에서 읽어낸 기한 (없으면 null) */
   dueDate: string | null;
   /** 담당자 (첫 번째 이름) */
@@ -40,6 +42,17 @@ export type QuickRow = {
 };
 
 export type Member = { id: string; name: string };
+
+/** 「긴급」이라고 적어 보내는 일이 흔하다 — 그대로 읽어 긴급 표시로 만든다 */
+const URGENT = /(긴급|급함|매우\s*급|asap)/i;
+
+/** 제목 앞에 붙은 (긴급) 같은 표시는 긴급 칸으로 가므로 제목에서 뺀다 */
+function stripUrgentMark(t: string): string {
+  return t
+    .replace(/^[\s]*[[(（【]\s*(긴급|급함)\s*[)）\]】][\s:：-]*/g, "")
+    .replace(/^(긴급|급함)\s*[:：-]\s*/g, "")
+    .trim();
+}
 
 /** 글자 단위 편집거리. 한글 이름은 짧아서 이 정도면 충분하다. */
 export function editDistance(a: string, b: string): number {
@@ -510,7 +523,7 @@ export function parseItem(
 
 /** 업무명 앞뒤에 남은 직급·조사·구분자를 턴다 */
 function cleanTitle(s: string): string {
-  return s
+  return stripUrgentMark(s)
     // 이름을 뗀 자리에 남는 "매니저가", "책임이", "님께서" 같은 꼬리
     .replace(
       /^\s*(책임|매니저|팀장|실장|사원|주임|대리|과장|차장|부장|공장장|대표|이사|상무|전무|기사|반장|조장|님)\s*(이|가|은|는|께서|에게|한테)?\s*/,
@@ -599,6 +612,7 @@ function buildRow(
       raw: line,
       title,
       description,
+      urgent: URGENT.test(line),
       dueDate,
       assigneeId: ids[0] ?? null,
       deputyIds: ids.slice(1).filter((x): x is string => !!x),
@@ -612,11 +626,12 @@ function buildRow(
 export function toQuickInsert(
   row: QuickRow,
   createdBy: string,
-  opts: { instructor?: string | null; dueDate?: string | null } = {}
+  opts: { instructor?: string | null; dueDate?: string | null; urgent?: boolean } = {}
 ) {
   return {
     title: row.title,
     description: row.description,
+    urgent: row.urgent || opts.urgent === true,
     assignee_id: row.assigneeId,
     deputy_ids: row.deputyIds,
     created_by: createdBy,

@@ -28,6 +28,7 @@ export default function NewTaskModal({
   const [instructor, setInstructor] = useState(defaultInstructor);
   const [note, setNote] = useState("");
   const [dueDate, setDueDate] = useState("");
+  const [urgent, setUrgent] = useState(false);
   /*
     적은 날짜가 말이 되는지 본다. 새 업무는 막지 않고 묻기만 한다 —
     지난 업무를 뒤늦게 올리는 경우가 있어서다. 연도를 잘못 친 것만 눈에 띄면 된다.
@@ -73,6 +74,7 @@ export default function NewTaskModal({
       instructor: instructor.trim() || null,
       note: note.trim() || null,
       due_date: dueDate || null,
+      urgent: selfMode ? false : urgent,
       start_date: new Date().toISOString().slice(0, 10),
     });
 
@@ -180,6 +182,20 @@ export default function NewTaskModal({
               </p>
             )}
           </div>
+          {!selfMode && (
+            <label className="flex items-center gap-2 text-sm text-gray-700 border border-gray-300 rounded-lg px-3 py-2.5 cursor-pointer">
+              <input
+                type="checkbox"
+                checked={urgent}
+                onChange={(e) => setUrgent(e.target.checked)}
+                className="w-4 h-4"
+              />
+              <span>
+                <b className="text-red-600">긴급</b>으로 표시 (받는 사람 화면에서 위로 올라갑니다)
+              </span>
+            </label>
+          )}
+
           <div>
             <label className="block text-sm font-medium text-gray-700 mb-1">비고</label>
             <textarea
