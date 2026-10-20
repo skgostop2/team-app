@@ -1,6 +1,7 @@
 "use client";
 
 import { useEffect, useMemo, useState } from "react";
+import { cn } from "@/lib/utils";
 import { useSearchParams } from "next/navigation";
 import { createClient } from "@/lib/supabase/client";
 import type {
@@ -18,6 +19,7 @@ import NewTaskModal from "@/components/NewTaskModal";
 import ImportTasksModal from "@/components/ImportTasksModal";
 import QuickAddModal from "@/components/QuickAddModal";
 import PrintButton from "@/components/PrintButton";
+import PrintByPerson from "@/components/PrintByPerson";
 import PrintHeader from "@/components/PrintHeader";
 
 export default function TasksPage() {
@@ -41,6 +43,8 @@ export default function TasksPage() {
   /** 업무별 세부 항목 수 (진행률이 체크로 계산되는 업무) */
   const [itemCounts, setItemCounts] = useState<Map<string, ItemCount>>(new Map());
   const [onlyStars, setOnlyStars] = useState(false);
+  /** 사람별로 장을 나눠 인쇄하는 중인지 */
+  const [printByPerson, setPrintByPerson] = useState(false);
 
   // 팀장·실장이 특정 팀원의 화면을 그대로 들여다보는 모드 (?as=<id>)
   const searchParams = useSearchParams();
@@ -212,7 +216,17 @@ export default function TasksPage() {
   const unconfirmed = visibleTasks.filter((t) => t.is_new).length;
 
   return (
-    <div className="space-y-4">
+    <div className={cn("space-y-4", printByPerson && "print-person-mode")}>
+      {printByPerson && (
+        <div className="print-person-sheet">
+          <PrintByPerson
+            tasks={isLead && showAll ? tasks : visibleTasks}
+            profiles={profiles}
+            itemCounts={itemCounts}
+            hideDone={hideDone}
+          />
+        </div>
+      )}
       {!isLead && (
         <div className="grid grid-cols-2 md:grid-cols-4 gap-3 print-block">
           <Stat label="내 업무" value={mySummary.total} />
@@ -330,6 +344,23 @@ export default function TasksPage() {
             </button>
           )}
           <PrintButton />
+          {isLead && !viewingAs && (
+            <button
+              type="button"
+              onClick={() => {
+                // 사람별 장을 먼저 그린 뒤에 인쇄 창을 띄운다
+                setPrintByPerson(true);
+                setTimeout(() => {
+                  window.print();
+                  setPrintByPerson(false);
+                }, 80);
+              }}
+              title="팀원 한 사람에 한 장씩 — 철해두고 보기 좋게"
+              className="no-print rounded-lg border border-gray-300 px-3 py-2 text-sm font-medium text-gray-600 hover:bg-gray-50"
+            >
+              🖨 사람별 인쇄
+            </button>
+          )}
           {!viewingAs && (
             <button
               onClick={() => setShowNewModal(true)}

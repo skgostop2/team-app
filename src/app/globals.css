@@ -330,6 +330,17 @@ html[data-theme="sf"] .bg-black\/50 {
   .print-table thead {
     display: table-header-group; /* 여러 장이면 머리줄 반복 */
   }
+  /* 사람별 인쇄 중에는 화면 내용 대신 사람별 장만 찍는다 */
+  .print-person-mode > *:not(.print-person-sheet) {
+    display: none !important;
+  }
+
+  /* 사람마다 새 장에서 시작 (철해 두고 한 사람씩 보기 위함) */
+  .print-page-break {
+    break-before: page;
+    page-break-before: always;
+  }
+
   .print-table tr,
   .print-block {
     break-inside: avoid;
