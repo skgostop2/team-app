@@ -63,8 +63,18 @@ export function roleOrder(role: Role): number {
   return 3;
 }
 
-/** 팀장이 정한 순서대로 정렬 (같으면 역할 → 이름 순) */
+/**
+ * 보이는 순서.
+ *
+ * 윗사람(실장 → 팀장)이 늘 맨 위다. 새로 등록해 순서값이 없는 실장이
+ * 팀원들 밑에 끼어 있으면 명단으로 보이지 않는다.
+ * 그 아래는 팀장이 끌어서 정한 순서를 그대로 따른다.
+ */
 export function byDisplayOrder(a: Profile, b: Profile): number {
+  const top = (p: Profile) => (p.role === "실장" ? 0 : p.role === "팀장" ? 1 : 2);
+  const t = top(a) - top(b);
+  if (t !== 0) return t;
+
   const ao = a.sort_order ?? 1000;
   const bo = b.sort_order ?? 1000;
   if (ao !== bo) return ao - bo;
