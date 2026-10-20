@@ -7,6 +7,7 @@ import Link from "next/link";
 import { parseQuickLines, toQuickInsert } from "@/lib/quickAdd";
 import { findSimilar, findDuplicatesWithin, type SimilarTask } from "@/lib/similar";
 import { DATE_MAX, DATE_MIN, fixYear } from "@/lib/dateCheck";
+import { itemsFromText } from "@/lib/items";
 
 /**
  * 업무지시 알맹이 — 붙여넣으면 그 자리에서 이름·기한을 찾아 건별로 정리한다.
@@ -124,10 +125,30 @@ export default function QuickAssignForm({
         ...(batchId ? { batch_id: batchId } : {}),
       }));
 
-      const { error: err } = await supabase.from("tasks").insert(payload);
+      const { data: made, error: err } = await supabase.from("tasks").insert(payload).select("id");
       if (err) {
         setError(`등록에 실패했습니다: ${err.message}`);
         return;
+      }
+
+      /*
+        괄호 안에 1) 2) 3) 으로 적어 보낸 것은 그 업무 안에서 관리할 항목이다.
+        등록하는 김에 체크 항목으로 만들어 둔다 — 받는 사람이 따로 만들 일이 없도록.
+        (항목이 둘 이상일 때만. 한 줄짜리는 그냥 설명이다)
+      */
+      const rows = (made ?? []) as { id: string }[];
+      const itemRows: { task_id: string; idx: number; text: string }[] = [];
+      payload.forEach((t, i) => {
+        const id = rows[i]?.id;
+        if (!id) return;
+        const lines = itemsFromText(String(t.description ?? ""));
+        if (lines.length >= 2) {
+          lines.forEach((text, idx) => itemRows.push({ task_id: id, idx, text }));
+        }
+      });
+      if (itemRows.length > 0) {
+        const { error: itemErr } = await supabase.from("task_items").insert(itemRows);
+        if (itemErr) setWarn(`세부 항목 만들기는 실패했습니다 (${itemErr.message}). 업무는 등록됐습니다.`);
       }
 
       setSaved(payload.length);

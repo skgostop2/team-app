@@ -109,6 +109,18 @@ export default function TaskItemsModal({
   /** 상세내용에 적어 둔 1) 2) 3) 을 그대로 항목으로 */
   async function fromDescription() {
     const lines = itemsFromText(task.description ?? "");
+    /*
+      항목을 만들면 진행률은 체크 수로 다시 계산된다.
+      이미 손으로 60% 라 적어 둔 업무가 말없이 0% 가 되면 당황스러우므로 먼저 묻는다.
+    */
+    if ((task.progress ?? 0) > 0 && lines.length > 0) {
+      const ok = window.confirm(
+        `항목 ${lines.length}개를 만듭니다.\n\n` +
+          `진행률은 이제 체크한 항목 수로 계산되어 ${task.progress}% → 0% 에서 다시 시작합니다.\n` +
+          `끝난 항목에 체크하시면 그만큼 올라갑니다.\n\n계속할까요?`
+      );
+      if (!ok) return;
+    }
     if (lines.length === 0) {
       setError("상세내용에서 항목을 찾지 못했습니다. 1) 2) 또는 - 로 줄을 나눠 적어주세요.");
       return;

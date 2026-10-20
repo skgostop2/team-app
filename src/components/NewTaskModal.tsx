@@ -3,6 +3,7 @@
 import { useState } from "react";
 import { createClient } from "@/lib/supabase/client";
 import { checkDue, DATE_MAX, DATE_MIN, fixYear } from "@/lib/dateCheck";
+import { itemsFromText } from "@/lib/items";
 import type { Profile } from "@/lib/types";
 import { confirmDiscard, useUnsavedChanges } from "@/lib/useUnsavedChanges";
 
@@ -66,7 +67,7 @@ export default function NewTaskModal({
       data: { user },
     } = await supabase.auth.getUser();
 
-    const { error: insertError } = await supabase.from("tasks").insert({
+    const { data: made, error: insertError } = await supabase.from("tasks").insert({
       title: title.trim(),
       description: description.trim() || null,
       assignee_id: assigneeId || null,
@@ -76,12 +77,21 @@ export default function NewTaskModal({
       due_date: dueDate || null,
       urgent: selfMode ? false : urgent,
       start_date: new Date().toISOString().slice(0, 10),
-    });
+    }).select("id").single();
 
     if (insertError) {
       setError(insertError.message);
       setSaving(false);
       return;
+    }
+
+    // 상세내용을 1) 2) 3) 으로 적었으면 그대로 체크 항목으로 만들어 둔다
+    const lines = itemsFromText(description);
+    const newId = (made as { id: string } | null)?.id;
+    if (newId && lines.length >= 2) {
+      await supabase
+        .from("task_items")
+        .insert(lines.map((text, idx) => ({ task_id: newId, idx, text })));
     }
 
     onCreated();
