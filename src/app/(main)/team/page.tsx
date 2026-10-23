@@ -9,6 +9,7 @@ import { isManager, isTeamLead, byDisplayOrder } from "@/lib/roles";
 import DeletePasswordSetting from "@/components/DeletePasswordSetting";
 import GroupManager from "@/components/GroupManager";
 import MemberStatus from "@/components/MemberStatus";
+import BulkMemberAdd from "@/components/BulkMemberAdd";
 
 export default function TeamPage() {
   const [me, setMe] = useState<Profile | null>(null);
@@ -232,6 +233,16 @@ export default function TeamPage() {
             {showPreForm ? "취소" : "+ 팀원 미리 등록"}
           </button>
         </div>
+
+        <BulkMemberAdd
+          existingEmails={profiles.map((p) => p.email)}
+          onDone={async (n) => {
+            setMessage(
+              `${n}명을 미리 등록했습니다. 각자 회사 메일과 비밀번호 1234 로 들어오시면 됩니다.`
+            );
+            await load();
+          }}
+        />
 
         {showPreForm && (
           <PreRegisterForm
