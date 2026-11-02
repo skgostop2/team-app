@@ -43,6 +43,10 @@ export default function TasksPage() {
   /** 업무별 세부 항목 수 (진행률이 체크로 계산되는 업무) */
   const [itemCounts, setItemCounts] = useState<Map<string, ItemCount>>(new Map());
   const [onlyStars, setOnlyStars] = useState(false);
+  /** 담당자로 추리기 (팀장·실장·그룹장) — 빈 값이면 모두 */
+  const [who, setWho] = useState("");
+  /** 업무 찾기 — 업무명·상세내용·담당자 이름에서 */
+  const [q, setQ] = useState("");
   /** 사람별로 장을 나눠 인쇄하는 중인지 */
   const [printByPerson, setPrintByPerson] = useState(false);
 
@@ -116,7 +120,10 @@ export default function TasksPage() {
     const mine = (t: TaskWithEffectiveStatus) =>
       t.assignee_id === me?.id || (t.deputy_ids ?? []).includes(me?.id ?? "");
     let list = isLead
-      ? showAll
+      ? who
+        ? // 사람을 고르면 「전체 보기」와 상관없이 그 사람 업무 전부
+          tasks.filter((t) => t.assignee_id === who || (t.deputy_ids ?? []).includes(who))
+        : showAll
         ? tasks
         : // 내 업무 + 미지정 + 팀원이 스스로 올린 업무 (팀장이 놓치지 않게)
           tasks.filter((t) => mine(t) || !t.assignee_id || t.source === "팀원추가")
@@ -131,8 +138,21 @@ export default function TasksPage() {
     if (onlyMemberAdded) list = list.filter((t) => t.source === "팀원추가");
     if (onlyQuestions) list = list.filter((t) => (questions.get(t.id)?.open ?? 0) > 0);
     if (onlyStars) list = list.filter((t) => stars.has(t.id));
+    const word = q.trim().toLowerCase();
+    if (word) {
+      const nameOf = (id: string | null) => profiles.find((p) => p.id === id)?.name ?? "";
+      list = list.filter((t) =>
+        [t.title, t.description ?? "", nameOf(t.assignee_id), t.instructor ?? ""]
+          .join(" ")
+          .toLowerCase()
+          .includes(word)
+      );
+    }
     return list;
   }, [
+    who,
+    q,
+    profiles,
     tasks,
     isLead,
     showAll,
@@ -260,6 +280,7 @@ export default function TasksPage() {
           members={assignableBy(me, profiles)}
           unconfirmed={unconfirmed}
           basePath="/tasks"
+          editable
         />
       )}
 
@@ -372,6 +393,57 @@ export default function TasksPage() {
         </div>
       </div>
 
+      {!viewingAs && (
+        <div className="no-print flex items-center gap-2 flex-wrap">
+          {isLead && (
+            <select
+              value={who}
+              onChange={(e) => setWho(e.target.value)}
+              className={cn(
+                "rounded-lg border px-3 py-2 text-sm bg-white",
+                who ? "border-blue-400 text-blue-700 font-medium" : "border-gray-300 text-gray-700"
+              )}
+            >
+              <option value="">담당자: 모두</option>
+              {assignableBy(me, profiles).map((p) => (
+                <option key={p.id} value={p.id}>
+                  {p.name}
+                  {p.position ? ` ${p.position}` : ""}
+                </option>
+              ))}
+            </select>
+          )}
+          <div className="relative flex-1 min-w-[180px] max-w-sm">
+            <input
+              value={q}
+              onChange={(e) => setQ(e.target.value)}
+              placeholder={isLead ? "업무명·내용·이름으로 찾기" : "업무명·내용으로 찾기"}
+              className="w-full rounded-lg border border-gray-300 bg-white pl-8 pr-8 py-2 text-sm"
+            />
+            <span className="absolute left-2.5 top-1/2 -translate-y-1/2 text-gray-400 text-sm">🔍</span>
+            {q && (
+              <button
+                onClick={() => setQ("")}
+                title="지우기"
+                className="absolute right-2 top-1/2 -translate-y-1/2 text-gray-400 hover:text-gray-700 text-lg leading-none"
+              >
+                ×
+              </button>
+            )}
+          </div>
+          {(who || q.trim()) && (
+            <span className="text-xs text-gray-500">
+              {visibleTasks.length}건
+              {who && (
+                <button onClick={() => setWho("")} className="ml-2 text-blue-600 hover:underline">
+                  사람 고르기 풀기
+                </button>
+              )}
+            </span>
+          )}
+        </div>
+      )}
+
       <TaskLedger
         tasks={visibleTasks}
         profiles={profiles}
@@ -383,14 +455,14 @@ export default function TasksPage() {
               : "업무 진행 현황 (내 업무)"
         }
         showAssignee={isLead}
-        canAssign={isLead && !viewingAs}
+        canAssign={isLead}
         onAssigned={load}
         viewerId={viewingAs ? viewingAs.id : me?.id}
         handedOverIds={viewingAs ? undefined : handedOverIds}
-        canEdit={!viewingAs}
+        canEdit
         canDelete={isTeamLead(me)}
         questions={questions}
-        canAnswer={isLead && !viewingAs}
+        canAnswer={isLead}
         stars={stars}
         onToggleStar={viewingAs ? undefined : toggleStar}
         itemCounts={itemCounts}

@@ -375,12 +375,13 @@ function MemberProgressTable({
   onReorder: (index: number, dir: -1 | 1) => void;
   reordering: boolean;
 }) {
+  const router = useRouter();
   return (
     <div className="bg-white rounded-xl border border-gray-200 print-block">
       <div className="flex items-baseline justify-between gap-3 px-4 py-3 border-b border-gray-200 flex-wrap">
         <h2 className="text-base font-bold text-gray-900">팀원별 진척 현황</h2>
         <p className="text-xs text-gray-400">
-          ▲▼ 순서 변경 · &quot;추가&quot;는 팀원이 스스로 올린 업무 건수
+          <b className="text-blue-600">이름(줄)을 누르면 그 사람 업무</b> · ▲▼ 순서 변경 · &quot;추가&quot;는 팀원이 스스로 올린 업무 건수
         </p>
       </div>
 
@@ -408,7 +409,16 @@ function MemberProgressTable({
               const heavy = ratio > 0.7;
               const medium = ratio > 0.4;
               return (
-                <tr key={m.profile.id} className="border-b border-gray-200 last:border-0 hover:bg-gray-50">
+                <tr
+                  key={m.profile.id}
+                  onClick={(e) => {
+                    // 줄 아무 데나 눌러도 그 사람 업무로 (▲▼·링크는 제 할 일을 한다)
+                    if ((e.target as HTMLElement).closest("button,a")) return;
+                    router.push(`/tasks?as=${m.profile.id}`);
+                  }}
+                  title={`${m.profile.name} 님 업무 보기`}
+                  className="border-b border-gray-200 last:border-0 hover:bg-blue-50/60 cursor-pointer"
+                >
                   <MTd className="text-center">
                     <div className="flex items-center justify-center gap-0.5">
                       <button
@@ -431,7 +441,14 @@ function MemberProgressTable({
                   </MTd>
 
                   <MTd>
-                    <span className="font-medium text-gray-900 break-keep">{m.profile.name}</span>
+                    <Link
+                      href={`/tasks?as=${m.profile.id}`}
+                      title={`${m.profile.name} 님 업무 보기`}
+                      className="font-semibold text-blue-700 hover:underline underline-offset-2 break-keep"
+                    >
+                      {m.profile.name}
+                      <span className="ml-0.5 text-blue-400">›</span>
+                    </Link>
                     {m.profile.position && (
                       <span className="text-xs text-gray-400"> {m.profile.position}</span>
                     )}
@@ -522,9 +539,9 @@ function MemberProgressTable({
                   <MTd className="text-center">
                     <Link
                       href={`/tasks?as=${m.profile.id}`}
-                      className="inline-block text-xs px-2.5 py-1.5 rounded-lg border border-gray-300 text-gray-600 hover:bg-gray-50 whitespace-nowrap"
+                      className="inline-block text-xs px-2.5 py-1.5 rounded-lg bg-blue-600 text-white font-medium hover:bg-blue-700 whitespace-nowrap"
                     >
-                      보기
+                      업무 보기
                     </Link>
                   </MTd>
                 </tr>

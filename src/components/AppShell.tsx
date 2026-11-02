@@ -9,6 +9,7 @@ import MobileNav from "./MobileNav";
 import NoticePopup from "./NoticePopup";
 import NotesPanel from "./NotesPanel";
 import NoticePanel from "./NoticePanel";
+import NoticeStrip from "./NoticeStrip";
 
 export default function AppShell({
   profile,
@@ -35,6 +36,7 @@ export default function AppShell({
           <span className="font-bold text-gray-900">업무관리</span>
           <span className="text-xs text-gray-500">{profile.name}님</span>
         </header>
+        <NoticeStrip />
 
         <main className="p-4 md:p-8 pb-20 md:pb-8 max-w-[1400px] mx-auto">{children}</main>
       </div>

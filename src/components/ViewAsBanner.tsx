@@ -18,11 +18,14 @@ export default function ViewAsBanner({
   members,
   unconfirmed,
   basePath,
+  editable = false,
 }: {
   current: Profile;
   members: Profile[];
   unconfirmed: number;
   basePath: string;
+  /** 업무 화면처럼 그 자리에서 고칠 수 있는 곳인지 */
+  editable?: boolean;
 }) {
   return (
     <div className="no-print rounded-xl border border-blue-200 bg-blue-50 px-4 py-3 space-y-2">
@@ -33,7 +36,9 @@ export default function ViewAsBanner({
             {current.position ? ` ${current.position}` : ""} 님 화면으로 보는 중
           </p>
           <p className="text-xs text-blue-700 mt-0.5 break-keep">
-            이 팀원에게 보이는 그대로입니다. 여기서는 내용을 바꿀 수 없습니다.
+            {editable
+              ? "이 팀원에게 보이는 그대로입니다. 여기서 바로 고치면 팀원 화면에도 그대로 바뀝니다."
+              : "이 팀원에게 보이는 그대로입니다. 여기서는 내용을 바꿀 수 없습니다."}
             {unconfirmed > 0 && (
               <span className="font-semibold"> · 아직 확인하지 않은 업무 {unconfirmed}건</span>
             )}

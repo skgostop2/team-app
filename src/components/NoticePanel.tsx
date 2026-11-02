@@ -108,6 +108,7 @@ export default function NoticePanel() {
     }
     setText("");
     loadRecent(); // 올린 글이 오른쪽에 바로 붙는다
+    window.dispatchEvent(new Event("notice-posted")); // 폰 위쪽 띠도 바로
     setSent(true);
     setTimeout(() => {
       setSent(false);
