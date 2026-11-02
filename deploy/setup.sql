@@ -147,7 +147,9 @@ create table if not exists public.notices (
   title text not null,
   content text not null,
   created_by uuid,
-  created_at timestamp with time zone default now() not null
+  created_at timestamp with time zone default now() not null,
+  kind text default '공지' not null check (kind in ('공지','공유')),
+  popup boolean default true not null
 );
 
 create table if not exists public.notice_reads (
@@ -944,9 +946,13 @@ create policy task_stars_delete on public.task_stars for delete using ((user_id 
 create policy deleted_tasks_select on public.deleted_tasks for select using (is_manager(auth.uid()));
 
 create policy notices_select on public.notices for select using (is_approved(auth.uid()));
-create policy notices_insert on public.notices for insert with check (is_manager(auth.uid()));
-create policy notices_update on public.notices for update using (is_manager(auth.uid()));
-create policy notices_delete on public.notices for delete using (is_manager(auth.uid()));
+create policy notices_insert on public.notices for insert with check (
+  created_by = auth.uid()
+  and ((is_manager(auth.uid()) and kind in ('공지','공유'))
+       or (is_approved(auth.uid()) and kind = '공유'))
+);
+create policy notices_update on public.notices for update using (is_manager(auth.uid()) or created_by = auth.uid());
+create policy notices_delete on public.notices for delete using (is_manager(auth.uid()) or created_by = auth.uid());
 create policy notice_reads_select on public.notice_reads for select using (((user_id = auth.uid()) or is_manager(auth.uid())));
 create policy notice_reads_insert on public.notice_reads for insert with check ((user_id = auth.uid()));
 

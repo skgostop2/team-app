@@ -115,6 +115,10 @@ export interface Notice {
   content: string;
   created_by: string | null;
   created_at: string;
+  /** 공지 = 팀장·실장이 내리는 것 / 공유 = 누구나 올리는 제안·공유 */
+  kind?: "공지" | "공유";
+  /** 올릴 때 모두에게 팝업으로 띄울지 */
+  popup?: boolean;
 }
 
 export interface NoticeRead {
