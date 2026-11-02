@@ -8,6 +8,7 @@ import Sidebar from "./Sidebar";
 import MobileNav from "./MobileNav";
 import NoticePopup from "./NoticePopup";
 import NotesPanel from "./NotesPanel";
+import NoticePanel from "./NoticePanel";
 
 export default function AppShell({
   profile,
@@ -48,6 +49,7 @@ export default function AppShell({
       <NoticePopup userId={profile.id} />
       <div className="no-print contents">
         <NotesPanel />
+        <NoticePanel />
       </div>
     </div>
   );
