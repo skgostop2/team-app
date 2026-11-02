@@ -103,16 +103,19 @@ export default function NoticePopup({ userId }: { userId: string }) {
           )}
         </div>
 
-        <div className="p-6">
+        <div className={"p-6 " + (isNotice ? "bg-sky-50" : "bg-amber-50")}>
           <h2 className="text-xl font-extrabold text-gray-900 mb-1 break-keep">{current.title}</h2>
           <p className="text-xs text-gray-500 mb-4">
             {author && <b className="text-gray-700">{author}</b>}
             {author && " · "}
             {formatDateTime(current.created_at)}
           </p>
-          <div className="text-base text-gray-800 whitespace-pre-wrap break-keep max-h-64 overflow-y-auto mb-6 leading-relaxed">
-            {current.content}
-          </div>
+          {current.content.trim() !== current.title.trim() && (
+            <div className="text-base text-gray-800 whitespace-pre-wrap break-keep max-h-64 overflow-y-auto mb-6 leading-relaxed">
+              {current.content}
+            </div>
+          )}
+          {current.content.trim() === current.title.trim() && <div className="mb-4" />}
           {error && <p className="text-sm text-red-600 mb-3">{error}</p>}
           <button
             onClick={handleConfirm}

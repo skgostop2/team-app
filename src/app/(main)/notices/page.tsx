@@ -14,13 +14,13 @@ export default function NoticesPage() {
   const [reads, setReads] = useState<NoticeRead[]>([]);
   const [loading, setLoading] = useState(true);
   const [names, setNames] = useState<Map<string, string>>(new Map());
-  const [showForm, setShowForm] = useState(false);
-  const [title, setTitle] = useState("");
-  const [content, setContent] = useState("");
+  /** 메모처럼 한 칸에 쓴다 — 첫 줄이 제목, 나머지가 내용 */
+  const [draft, setDraft] = useState("");
   const [saving, setSaving] = useState(false);
   const [expanded, setExpanded] = useState<string | null>(null);
   /** 쓰고 있는 글의 구분 — 팀원은 「공유」만 쓸 수 있다 */
   const [kind, setKind] = useState<"공지" | "공유">("공유");
+  const [kindTouched, setKindTouched] = useState(false);
   /** 올릴 때 모두에게 팝업을 띄울지 */
   const [popup, setPopup] = useState(true);
   /** 모두 보기 / 공지만 / 제안·공유만 */
@@ -66,9 +66,13 @@ export default function NoticesPage() {
 
   const isLead = isManager(me);
 
-  async function handleCreate(e: React.FormEvent) {
-    e.preventDefault();
-    if (!title.trim() || !content.trim()) return;
+  async function handleCreate() {
+    const text = draft.trim();
+    if (!text || saving) return;
+    const [first, ...others] = text.split(/\r?\n/);
+    const title = first.trim().slice(0, 60);
+    // 첫 줄이 길면 나머지를 내용으로, 한 줄뿐이면 내용도 같은 글
+    const rest = (first.trim().length > 60 ? text : others.join("\n").trim()) || title;
     setSaving(true);
     setError(null);
     const supabase = createClient();
@@ -76,8 +80,8 @@ export default function NoticesPage() {
       data: { user },
     } = await supabase.auth.getUser();
     const { error: err } = await supabase.from("notices").insert({
-      title: title.trim(),
-      content: content.trim(),
+      title,
+      content: rest,
       created_by: user?.id,
       kind: isLead ? kind : "공유",
       popup,
@@ -88,9 +92,7 @@ export default function NoticesPage() {
       setError(err.message);
       return;
     }
-    setTitle("");
-    setContent("");
-    setShowForm(false);
+    setDraft("");
     load();
   }
 
@@ -107,31 +109,90 @@ export default function NoticesPage() {
   }
 
   // 공지를 쓰다가 다른 화면으로 넘어가려 하면 되묻는다
-  useUnsavedChanges(title.trim() !== "" || content.trim() !== "");
+  useUnsavedChanges(draft.trim() !== "");
 
   if (loading) return <p className="text-sm text-gray-400">불러오는 중...</p>;
 
+  // 팀장·실장은 기본이 「공지」, 팀원은 「제안」뿐
+  const effKind = isLead ? (kindTouched ? kind : "공지") : "공유";
+
   return (
-    <div className="max-w-2xl space-y-4">
-      <div className="flex items-start justify-between gap-3 flex-wrap">
-        <div>
-          <h1 className="text-xl font-bold text-gray-900">공지 · 제안</h1>
-          <p className="text-sm text-gray-500 mt-0.5 break-keep">
-            {isLead
-              ? "팀장이 내리는 공지와, 누구나 올리는 제안·공유가 함께 쌓입니다."
-              : "하고 싶은 말이나 제안을 올리면 팀 전체가 봅니다. 공지는 팀장이 올립니다."}
-          </p>
-        </div>
-        <button
-          onClick={() => {
-            setShowForm((v) => !v);
-            setKind(isLead ? "공지" : "공유");
-            setPopup(true);
+    <div className="max-w-3xl space-y-4">
+      <div>
+        <h1 className="text-xl font-bold text-gray-900">공지 · 제안</h1>
+        <p className="text-sm text-gray-500 mt-0.5 break-keep">
+          {isLead
+            ? "공지를 내리거나, 하고 싶은 말을 메모처럼 바로 붙입니다."
+            : "하고 싶은 말이나 제안을 메모처럼 한 줄 써서 붙이면 팀 전체가 봅니다."}
+        </p>
+      </div>
+
+      {/* 메모처럼 — 쓰고 엔터면 바로 붙는다 */}
+      <div
+        className={
+          "rounded-xl border-2 p-3 space-y-2 " +
+          (effKind === "공지" ? "bg-sky-50 border-sky-300" : "bg-amber-50 border-amber-300")
+        }
+      >
+        <textarea
+          value={draft}
+          onChange={(e) => setDraft(e.target.value)}
+          onKeyDown={(e) => {
+            // 한글 조합 중 엔터는 글자 확정이므로 올리지 않는다
+            if (e.key === "Enter" && !e.shiftKey && !e.nativeEvent.isComposing) {
+              e.preventDefault();
+              handleCreate();
+            }
           }}
-          className="shrink-0 text-xs px-3 py-2 rounded-lg bg-blue-600 text-white font-medium hover:bg-blue-700"
-        >
-          {showForm ? "접기" : isLead ? "+ 글 올리기" : "+ 제안·공유 올리기"}
-        </button>
+          rows={2}
+          placeholder={
+            effKind === "공지"
+              ? "공지를 쓰고 엔터 (줄바꿈은 Shift+엔터)"
+              : "하고 싶은 말·제안을 쓰고 엔터 (줄바꿈은 Shift+엔터)"
+          }
+          className="w-full rounded-lg border border-black/10 bg-white/80 px-3 py-2 text-base leading-relaxed resize-y"
+        />
+        <div className="flex items-center gap-3 flex-wrap">
+          {isLead && (
+            <div className="flex gap-1.5">
+              {(["공지", "공유"] as const).map((k) => (
+                <button
+                  key={k}
+                  type="button"
+                  onClick={() => {
+                    setKind(k);
+                    setKindTouched(true);
+                  }}
+                  className={
+                    effKind === k
+                      ? "text-xs px-2.5 py-1 rounded-lg bg-gray-900 text-white font-medium"
+                      : "text-xs px-2.5 py-1 rounded-lg border border-gray-300 bg-white text-gray-600"
+                  }
+                >
+                  {k === "공지" ? "공지" : "제안"}
+                </button>
+              ))}
+            </div>
+          )}
+          <label className="flex items-center gap-1.5 text-sm text-gray-700 cursor-pointer">
+            <input
+              type="checkbox"
+              checked={popup}
+              onChange={(e) => setPopup(e.target.checked)}
+              className="w-4 h-4"
+            />
+            모두에게 팝업
+          </label>
+          <button
+            type="button"
+            onClick={handleCreate}
+            disabled={saving || draft.trim() === ""}
+            className="ml-auto text-sm px-4 py-1.5 rounded-lg bg-gray-900 text-white font-medium hover:bg-black disabled:opacity-40"
+          >
+            {saving ? "붙이는 중..." : "붙이기"}
+          </button>
+        </div>
+        {error && <p className="text-sm text-red-600 break-keep">{error}</p>}
       </div>
 
       {/* 묶음 보기 */}
@@ -146,137 +207,93 @@ export default function NoticesPage() {
                 : "text-xs px-3 py-1.5 rounded-lg border border-gray-300 text-gray-600 hover:bg-gray-50"
             }
           >
-            {t === "공유" ? "제안·공유" : t}
+            {t === "공유" ? "제안" : t}
           </button>
         ))}
       </div>
 
-      {showForm && (
-        <form onSubmit={handleCreate} className="bg-white rounded-xl border border-gray-200 p-4 space-y-3">
-          <input
-            value={title}
-            onChange={(e) => setTitle(e.target.value)}
-            placeholder="제목"
-            className="w-full rounded-lg border border-gray-300 px-3 py-2 text-base"
-          />
-          <textarea
-            value={content}
-            onChange={(e) => setContent(e.target.value)}
-            placeholder="내용"
-            rows={4}
-            className="w-full rounded-lg border border-gray-300 px-3 py-2 text-base"
-          />
-          {isLead && (
-            <div className="flex gap-1.5">
-              {(["공지", "공유"] as const).map((k) => (
-                <button
-                  key={k}
-                  type="button"
-                  onClick={() => setKind(k)}
-                  className={
-                    kind === k
-                      ? "text-xs px-3 py-1.5 rounded-lg bg-gray-900 text-white font-medium"
-                      : "text-xs px-3 py-1.5 rounded-lg border border-gray-300 text-gray-600"
-                  }
-                >
-                  {k === "공지" ? "공지 (팀장이 내리는 것)" : "제안·공유"}
-                </button>
-              ))}
-            </div>
-          )}
-
-          <label className="flex items-center gap-2 text-sm text-gray-700 cursor-pointer">
-            <input
-              type="checkbox"
-              checked={popup}
-              onChange={(e) => setPopup(e.target.checked)}
-              className="w-4 h-4"
-            />
-            올리면 <b>모두에게 팝업</b>으로 띄우기
-          </label>
-          <p className="text-xs text-gray-400 break-keep -mt-1">
-            끄면 이 목록에만 쌓입니다. 급하지 않은 공유는 꺼두시는 편이 서로 편합니다.
-          </p>
-
-          {(title.trim() !== "" || content.trim() !== "") && (
-            <p className="text-xs text-amber-600">
-              작성 중입니다. &quot;접기&quot;를 눌러도 쓰던 내용은 그대로 남아 있습니다.
-            </p>
-          )}
-          {error && <p className="text-sm text-red-600 break-keep">{error}</p>}
-          <button
-            type="submit"
-            disabled={saving}
-            className="text-sm px-4 py-2 rounded-lg bg-gray-900 text-white font-medium hover:bg-black disabled:opacity-50"
-          >
-            {saving ? "올리는 중..." : popup ? "올리기 (모두에게 팝업)" : "올리기"}
-          </button>
-        </form>
-      )}
-
-      <div className="space-y-3">
+      {/* 쪽지판 */}
+      <div className="grid gap-3 sm:grid-cols-2">
         {notices
           .filter((n) => tab === "전체" || (n.kind ?? "공지") === tab)
           .map((n) => {
-          const noticeReads = reads.filter((r) => r.notice_id === n.id);
-          const readIds = new Set(noticeReads.map((r) => r.user_id));
-          const unreadMembers = profiles.filter((p) => !readIds.has(p.id));
-          return (
-            <div key={n.id} className="bg-white rounded-xl border border-gray-200 p-4">
-              <div className="flex items-start justify-between gap-2 flex-wrap">
-                <h3 className="font-semibold text-gray-900 break-keep">
+            const isNotice = (n.kind ?? "공지") === "공지";
+            const noticeReads = reads.filter((r) => r.notice_id === n.id);
+            const readIds = new Set(noticeReads.map((r) => r.user_id));
+            const unreadMembers = profiles.filter((p) => !readIds.has(p.id));
+            const sameAsTitle = n.content.trim() === n.title.trim();
+            return (
+              <div
+                key={n.id}
+                className={
+                  "rounded-xl border p-4 shadow-sm flex flex-col " +
+                  (isNotice
+                    ? "bg-sky-50 border-sky-300"
+                    : "bg-amber-50 border-amber-300")
+                }
+              >
+                <div className="flex items-center justify-between gap-2 mb-1.5">
                   <span
                     className={
-                      (n.kind ?? "공지") === "공지"
-                        ? "mr-1.5 align-middle text-[11px] px-1.5 py-0.5 rounded bg-blue-600 text-white font-bold"
-                        : "mr-1.5 align-middle text-[11px] px-1.5 py-0.5 rounded bg-emerald-600 text-white font-bold"
+                      "text-[11px] px-1.5 py-0.5 rounded text-white font-bold " +
+                      (isNotice ? "bg-blue-600" : "bg-emerald-600")
                     }
                   >
-                    {(n.kind ?? "공지") === "공지" ? "공지" : "제안"}
+                    {isNotice ? "공지" : "제안"}
                   </span>
-                  {n.title}
-                </h3>
-                <span className="text-xs text-gray-400 whitespace-nowrap">
-                  {names.get(n.created_by ?? "") ?? "-"} · {formatDateTime(n.created_at)}
-                </span>
-              </div>
-              <p className="text-sm text-gray-600 mt-1 whitespace-pre-wrap break-keep">{n.content}</p>
-
-              {(isLead || n.created_by === me?.id) && (
-                <button
-                  onClick={() => remove(n)}
-                  className="text-xs text-gray-400 hover:text-red-600 mt-2 mr-3"
-                >
-                  지우기
-                </button>
-              )}
-
-              {isLead && (
-                <button
-                  onClick={() => setExpanded(expanded === n.id ? null : n.id)}
-                  className="text-xs text-blue-600 hover:underline mt-2"
-                >
-                  확인 현황 ({readIds.size}/{profiles.length})
-                </button>
-              )}
-
-              {isLead && expanded === n.id && (
-                <div className="mt-2 pt-2 border-t border-gray-100 text-xs space-y-1">
-                  <p className="text-gray-500 font-medium">미확인: {unreadMembers.map((p) => p.name).join(", ") || "없음"}</p>
-                  <p className="text-gray-400">
-                    확인함: {noticeReads.map((r) => profiles.find((p) => p.id === r.user_id)?.name ?? "-").join(", ") || "없음"}
-                  </p>
+                  <span className="text-xs text-gray-500 whitespace-nowrap">
+                    <b className="text-gray-700">{names.get(n.created_by ?? "") ?? "-"}</b> ·{" "}
+                    {formatDateTime(n.created_at)}
+                  </span>
                 </div>
-              )}
-            </div>
-          );
-        })}
-        {notices.length === 0 && (
-          <div className="text-center py-16 text-gray-400 text-sm bg-white rounded-xl border border-gray-200">
-            아직 올라온 글이 없습니다.
-          </div>
-        )}
+                <h3 className="font-semibold text-gray-900 break-keep">{n.title}</h3>
+                {!sameAsTitle && (
+                  <p className="text-sm text-gray-700 mt-1 whitespace-pre-wrap break-keep">
+                    {n.content}
+                  </p>
+                )}
+
+                <div className="mt-auto pt-2 flex items-center gap-3">
+                  {(isLead || n.created_by === me?.id) && (
+                    <button
+                      onClick={() => remove(n)}
+                      className="text-xs text-gray-400 hover:text-red-600"
+                    >
+                      지우기
+                    </button>
+                  )}
+                  {isLead && (
+                    <button
+                      onClick={() => setExpanded(expanded === n.id ? null : n.id)}
+                      className="text-xs text-blue-600 hover:underline"
+                    >
+                      확인 현황 ({readIds.size}/{profiles.length})
+                    </button>
+                  )}
+                </div>
+
+                {isLead && expanded === n.id && (
+                  <div className="mt-2 pt-2 border-t border-black/10 text-xs space-y-1">
+                    <p className="text-gray-600 font-medium">
+                      미확인: {unreadMembers.map((p) => p.name).join(", ") || "없음"}
+                    </p>
+                    <p className="text-gray-500">
+                      확인함:{" "}
+                      {noticeReads
+                        .map((r) => profiles.find((p) => p.id === r.user_id)?.name ?? "-")
+                        .join(", ") || "없음"}
+                    </p>
+                  </div>
+                )}
+              </div>
+            );
+          })}
       </div>
+      {notices.length === 0 && (
+        <div className="text-center py-16 text-gray-400 text-sm bg-white rounded-xl border border-gray-200">
+          아직 붙은 글이 없습니다. 위 칸에 한 줄 써서 붙여 보세요.
+        </div>
+      )}
     </div>
   );
 }
