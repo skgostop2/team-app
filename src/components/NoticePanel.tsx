@@ -4,7 +4,11 @@ import { useEffect, useRef, useState } from "react";
 import { usePathname, useRouter } from "next/navigation";
 import { createClient } from "@/lib/supabase/client";
 import { isManager } from "@/lib/roles";
-import type { Profile } from "@/lib/types";
+import type { Notice, Profile } from "@/lib/types";
+import { formatDateTime } from "@/lib/utils";
+
+const HIDE_KEY = "notice-strip-hidden";
+const SHOW_COUNT = 3;
 
 /**
  * 화면 오른쪽에 떠 있는 「제안」 버튼.
@@ -18,8 +22,48 @@ export default function NoticePanel() {
   const [error, setError] = useState<string | null>(null);
   const [sent, setSent] = useState(false);
   const area = useRef<HTMLTextAreaElement>(null);
+  const [recent, setRecent] = useState<Notice[]>([]);
+  const [names, setNames] = useState<Map<string, string>>(new Map());
+  const [hidden, setHidden] = useState<Set<string>>(new Set());
   const path = usePathname();
   const router = useRouter();
+
+  // 방금 올린 글도 바로 보이도록 목록을 불러온다 (15초마다, 올린 직후에도)
+  async function loadRecent() {
+    const supabase = createClient();
+    const [{ data: n }, { data: p }] = await Promise.all([
+      supabase
+        .from("notices")
+        .select("*")
+        .order("created_at", { ascending: false })
+        .limit(10),
+      supabase.from("profiles").select("id,name"),
+    ]);
+    setRecent((n ?? []) as Notice[]);
+    setNames(new Map((p ?? []).map((x) => [x.id as string, x.name as string])));
+  }
+
+  useEffect(() => {
+    try {
+      const raw = localStorage.getItem(HIDE_KEY);
+      if (raw) setHidden(new Set(JSON.parse(raw) as string[]));
+    } catch {
+      // 저장이 막혀 있어도 그냥 전부 보여준다
+    }
+    loadRecent();
+    const timer = setInterval(loadRecent, 15000);
+    return () => clearInterval(timer);
+  }, []);
+
+  function hide(id: string) {
+    const next = new Set(hidden).add(id);
+    setHidden(next);
+    try {
+      localStorage.setItem(HIDE_KEY, JSON.stringify([...next]));
+    } catch {
+      // 이번 화면에서만 숨겨진다
+    }
+  }
 
   useEffect(() => {
     if (open) area.current?.focus();
@@ -63,6 +107,7 @@ export default function NoticePanel() {
       return;
     }
     setText("");
+    loadRecent(); // 올린 글이 오른쪽에 바로 붙는다
     setSent(true);
     setTimeout(() => {
       setSent(false);
@@ -72,6 +117,51 @@ export default function NoticePanel() {
 
   return (
     <>
+      {/* 최근에 붙은 글 — 올리면 여기 바로 보인다 (PC 화면 오른쪽) */}
+      {!open && (
+        <div className="no-print hidden md:flex fixed right-3 bottom-48 z-30 w-64 flex-col gap-2">
+          {recent
+            .filter((n) => !hidden.has(n.id))
+            .slice(0, SHOW_COUNT)
+            .reverse()
+            .map((n) => {
+              const isNotice = (n.kind ?? "공지") === "공지";
+              return (
+                <div
+                  key={n.id}
+                  onClick={() => router.push("/notices")}
+                  className={
+                    "relative cursor-pointer rounded-xl border-2 p-3 pr-7 shadow-lg " +
+                    (isNotice
+                      ? "bg-sky-50 border-sky-400"
+                      : "bg-amber-50 border-amber-400")
+                  }
+                >
+                  <button
+                    onClick={(e) => {
+                      e.stopPropagation();
+                      hide(n.id);
+                    }}
+                    title="이 쪽지 치우기"
+                    className="absolute top-1 right-2 text-gray-400 hover:text-gray-700 text-lg leading-none"
+                  >
+                    ×
+                  </button>
+                  <p className="text-[10px] text-gray-500">
+                    <b className={isNotice ? "text-blue-700" : "text-emerald-700"}>
+                      {isNotice ? "공지" : "제안"}
+                    </b>{" "}
+                    · {names.get(n.created_by ?? "") ?? "-"} · {formatDateTime(n.created_at)}
+                  </p>
+                  <p className="text-sm font-semibold text-gray-900 mt-0.5 break-keep line-clamp-3">
+                    {n.title}
+                  </p>
+                </div>
+              );
+            })}
+        </div>
+      )}
+
       {!open && (
         <button
           onClick={() => setOpen(true)}
