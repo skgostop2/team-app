@@ -36,7 +36,7 @@ const MORE: Item[] = [
   { href: "/dashboard", label: "우리 그룹 현황", icon: "🏠", who: "dash" },
   { href: "/calendar", label: "달력", icon: "📅" },
   { href: "/reports", label: "신규 업무 진행 보고", icon: "📥", who: "lead" },
-  { href: "/notices", label: "공지사항", icon: "📢" },
+  { href: "/notices", label: "공지 · 제안", icon: "📢" },
   { href: "/notes", label: "내 메모장", icon: "📝" },
   { href: "/team", label: "팀원관리", icon: "👥", who: "lead" },
   { href: "/evaluation", label: "고과평가", icon: "⭐", who: "teamLead" },

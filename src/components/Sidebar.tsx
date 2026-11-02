@@ -20,7 +20,7 @@ const NAV = [
     memberLabel: "신규 업무 진행 보고",
     access: "manager",
   },
-  { href: "/notices", leadLabel: "공지사항", memberLabel: "공지사항", access: "all" },
+  { href: "/notices", leadLabel: "공지 · 제안", memberLabel: "공지 · 제안", access: "all" },
   { href: "/notes", leadLabel: "내 메모장", memberLabel: "내 메모장", access: "all" },
   { href: "/security", leadLabel: "2단계 인증", memberLabel: "2단계 인증", access: "all" },
   { href: "/team", leadLabel: "팀원관리", memberLabel: "팀원관리", access: "manager" },
