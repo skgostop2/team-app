@@ -44,7 +44,7 @@ export default function NoticePopup({ userId }: { userId: string }) {
   useEffect(() => {
     loadUnread();
     // 새 글이 올라오면 재접속 없이도 뜨도록 주기적으로 확인
-    const timer = setInterval(loadUnread, 60000);
+    const timer = setInterval(loadUnread, 15000);
     return () => clearInterval(timer);
   }, [loadUnread]);
 

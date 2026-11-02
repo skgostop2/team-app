@@ -19,10 +19,9 @@ export default function NoticeBoard({ compact = false }: { compact?: boolean }) 
   const [saving, setSaving] = useState(false);
   const [expanded, setExpanded] = useState<string | null>(null);
   /** 쓰고 있는 글의 구분 — 팀원은 「공유」만 쓸 수 있다 */
-  const [kind, setKind] = useState<"공지" | "공유">("공유");
-  const [kindTouched, setKindTouched] = useState(false);
+
   /** 올릴 때 모두에게 팝업을 띄울지 */
-  const [popup, setPopup] = useState(true);
+  const popup = true; // 올리면 항상 팝업 — 묻지 않는다
   /** 모두 보기 / 공지만 / 제안·공유만 */
   const [tab, setTab] = useState<"전체" | "공지" | "공유">("전체");
   const [error, setError] = useState<string | null>(null);
@@ -83,7 +82,7 @@ export default function NoticeBoard({ compact = false }: { compact?: boolean }) 
       title,
       content: rest,
       created_by: user?.id,
-      kind: isLead ? kind : "공유",
+      kind: effKind,
       popup,
     });
     setSaving(false);
@@ -114,7 +113,7 @@ export default function NoticeBoard({ compact = false }: { compact?: boolean }) 
   if (loading) return <p className="text-sm text-gray-400">불러오는 중...</p>;
 
   // 팀장·실장은 기본이 「공지」, 팀원은 「제안」뿐
-  const effKind = isLead ? (kindTouched ? kind : "공지") : "공유";
+  const effKind: "공지" | "공유" = isLead ? "공지" : "공유";
 
   return (
     <div className={compact ? "space-y-3" : "max-w-3xl space-y-4"}>
@@ -152,37 +151,10 @@ export default function NoticeBoard({ compact = false }: { compact?: boolean }) 
           }
           className="w-full rounded-lg border border-black/10 bg-white/80 px-3 py-2 text-base leading-relaxed resize-y"
         />
-        <div className="flex items-center gap-3 flex-wrap">
-          {isLead && (
-            <div className="flex gap-1.5">
-              {(["공지", "공유"] as const).map((k) => (
-                <button
-                  key={k}
-                  type="button"
-                  onClick={() => {
-                    setKind(k);
-                    setKindTouched(true);
-                  }}
-                  className={
-                    effKind === k
-                      ? "text-xs px-2.5 py-1 rounded-lg bg-gray-900 text-white font-medium"
-                      : "text-xs px-2.5 py-1 rounded-lg border border-gray-300 bg-white text-gray-600"
-                  }
-                >
-                  {k === "공지" ? "공지" : "제안"}
-                </button>
-              ))}
-            </div>
-          )}
-          <label className="flex items-center gap-1.5 text-sm text-gray-700 cursor-pointer">
-            <input
-              type="checkbox"
-              checked={popup}
-              onChange={(e) => setPopup(e.target.checked)}
-              className="w-4 h-4"
-            />
-            모두에게 팝업
-          </label>
+        <div className="flex items-center gap-3">
+          <p className="text-xs text-gray-500 break-keep">
+            붙이면 다른 사람 화면에 바로 팝업으로 뜹니다.
+          </p>
           <button
             type="button"
             onClick={handleCreate}
