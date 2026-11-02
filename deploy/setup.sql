@@ -804,7 +804,7 @@ create or replace trigger trg_personal_notes_touch before update on public.perso
 -- 5. 보는 눈 (뷰) — 화면이 쓰는 계산값
 -- ─────────────────────────────────────────────────────────────
 
-create or replace view public.v_tasks as
+create or replace view public.v_tasks with (security_invoker = true) as
  select t.id,
     t.title,
     t.description,
