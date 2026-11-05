@@ -3,7 +3,7 @@
 import { useEffect, useState } from "react";
 import { createClient } from "@/lib/supabase/client";
 import { callEdgeFunction } from "@/lib/edge";
-import { formatElapsed, formatDate, isLongInactive } from "@/lib/utils";
+import { formatElapsed, formatDate, inactiveLabel } from "@/lib/utils";
 import type { Group, Profile } from "@/lib/types";
 import { isManager, isTeamLead, byDisplayOrder } from "@/lib/roles";
 import DeletePasswordSetting from "@/components/DeletePasswordSetting";
@@ -681,8 +681,8 @@ function MemberRow({
         <p className="text-xs text-gray-400 truncate">{profile.email}</p>
         <p className="text-xs text-gray-400">
           가입일 {formatDate(profile.created_at)} · 마지막 접속 {formatElapsed(profile.last_seen_at)}
-          {isLongInactive(profile.last_seen_at) && (
-            <span className="text-red-500 font-medium"> · 장기 미접속</span>
+          {inactiveLabel(profile.last_seen_at) && (
+            <span className="text-red-500 font-medium"> · {inactiveLabel(profile.last_seen_at)}</span>
           )}
         </p>
         {editing && (

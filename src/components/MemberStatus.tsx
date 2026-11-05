@@ -3,7 +3,7 @@
 import { useMemo, useState } from "react";
 import type { Group, Profile } from "@/lib/types";
 import { byDisplayOrder, isAssignable } from "@/lib/roles";
-import { cn, formatElapsed } from "@/lib/utils";
+import { cn, formatElapsed, inactiveLabel } from "@/lib/utils";
 
 /**
  * 팀원 현황 — 누가 준비를 끝냈고, 누가 실제로 쓰고 있는지.
@@ -114,7 +114,7 @@ export default function MemberStatus({
                   !entered ? "text-gray-300" : isQuiet ? "text-amber-600" : "text-gray-500"
                 )}
               >
-                {entered ? formatElapsed(p.last_seen_at) : "접속 없음"}
+                {entered ? (inactiveLabel(p.last_seen_at) ?? formatElapsed(p.last_seen_at)) : "접속 없음"}
               </span>
 
               {/* 준비가 어디까지 됐는가 */}

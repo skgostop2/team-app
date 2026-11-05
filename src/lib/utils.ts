@@ -28,6 +28,26 @@ export function isLongInactive(dateString: string | null | undefined, days = 3):
   return diffDay >= days;
 }
 
+/**
+ * 며칠째 안 들어왔는지 — 「장기 미접속」 대신 날수와 마지막 날짜를 보여준다.
+ * 휴가·출장인지 바로 짐작할 수 있게 마지막 접속 요일까지 붙인다.
+ * 기준일(days) 미만이면 null.
+ */
+export function inactiveLabel(
+  dateString: string | null | undefined,
+  days = 3
+): string | null {
+  if (!dateString) return "접속 기록 없음";
+  const last = new Date(dateString);
+  const now = new Date();
+  // 날짜(달력) 기준으로 센다 — 금요일 저녁 접속 후 월요일 아침이면 3일째
+  const dayStart = (d: Date) => new Date(d.getFullYear(), d.getMonth(), d.getDate()).getTime();
+  const n = Math.round((dayStart(now) - dayStart(last)) / 86400000);
+  if (n < days) return null;
+  const yo = "일월화수목금토"[last.getDay()];
+  return `${n}일째 미접속 (마지막 ${last.getMonth() + 1}/${last.getDate()} ${yo})`;
+}
+
 export function formatDate(dateString: string | null | undefined): string {
   if (!dateString) return "-";
   const d = new Date(dateString);

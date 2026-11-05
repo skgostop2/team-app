@@ -4,7 +4,7 @@ import { useEffect, useMemo, useState } from "react";
 import Link from "next/link";
 import { useRouter, useSearchParams } from "next/navigation";
 import { createClient } from "@/lib/supabase/client";
-import { formatElapsed, isLongInactive, cn } from "@/lib/utils";
+import { formatElapsed, inactiveLabel, cn } from "@/lib/utils";
 import type { Profile, QuestionCount, TaskWithEffectiveStatus } from "@/lib/types";
 import {
   isTeamLead,
@@ -457,8 +457,10 @@ function MemberProgressTable({
                     ) : (
                       <span className="block text-[11px] text-gray-400">
                         {formatElapsed(m.profile.last_seen_at)}
-                        {isLongInactive(m.profile.last_seen_at) && (
-                          <span className="text-red-500 font-medium"> · 장기 미접속</span>
+                        {inactiveLabel(m.profile.last_seen_at) && (
+                          <span className="text-red-500 font-medium block">
+                            {inactiveLabel(m.profile.last_seen_at)}
+                          </span>
                         )}
                       </span>
                     )}
