@@ -455,12 +455,14 @@ function MemberProgressTable({
                     {m.profile.status === "가입대기" ? (
                       <span className="block text-[11px] text-amber-600">가입 전 · 미리 배정됨</span>
                     ) : (
+                      // 오래 안 들어왔으면 「20일 전」은 빼고 한 줄로만 (같은 말을 두 번 하지 않게)
                       <span className="block text-[11px] text-gray-400">
-                        {formatElapsed(m.profile.last_seen_at)}
-                        {inactiveLabel(m.profile.last_seen_at) && (
-                          <span className="text-red-500 font-medium block">
+                        {inactiveLabel(m.profile.last_seen_at) ? (
+                          <span className="text-red-500 font-medium">
                             {inactiveLabel(m.profile.last_seen_at)}
                           </span>
+                        ) : (
+                          formatElapsed(m.profile.last_seen_at)
                         )}
                       </span>
                     )}

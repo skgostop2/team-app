@@ -44,8 +44,7 @@ export function inactiveLabel(
   const dayStart = (d: Date) => new Date(d.getFullYear(), d.getMonth(), d.getDate()).getTime();
   const n = Math.round((dayStart(now) - dayStart(last)) / 86400000);
   if (n < days) return null;
-  const yo = "일월화수목금토"[last.getDay()];
-  return `${n}일째 미접속 (마지막 ${last.getMonth() + 1}/${last.getDate()} ${yo})`;
+  return `미접속 ${n}일 · 최근접속 ${last.getMonth() + 1}/${last.getDate()}`;
 }
 
 export function formatDate(dateString: string | null | undefined): string {

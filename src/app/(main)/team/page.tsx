@@ -680,9 +680,11 @@ function MemberRow({
         </p>
         <p className="text-xs text-gray-400 truncate">{profile.email}</p>
         <p className="text-xs text-gray-400">
-          가입일 {formatDate(profile.created_at)} · 마지막 접속 {formatElapsed(profile.last_seen_at)}
-          {inactiveLabel(profile.last_seen_at) && (
-            <span className="text-red-500 font-medium"> · {inactiveLabel(profile.last_seen_at)}</span>
+          가입일 {formatDate(profile.created_at)} ·{" "}
+          {inactiveLabel(profile.last_seen_at) ? (
+            <span className="text-red-500 font-medium">{inactiveLabel(profile.last_seen_at)}</span>
+          ) : (
+            <>마지막 접속 {formatElapsed(profile.last_seen_at)}</>
           )}
         </p>
         {editing && (
