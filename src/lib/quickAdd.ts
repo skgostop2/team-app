@@ -128,6 +128,16 @@ export function matchName(token: string, members: Member[]): NameMatch {
   return { ...base, id: best.m.id, name: best.m.name, kind: "near" };
 }
 
+/** 사람 이름이 아닌 게 뻔한 말들 — 업무지시 글에 늘 섞여 나온다 */
+const NOT_NAMES = [
+  "기한", "완료", "보고", "참여", "담당", "관련", "이하", "유관", "확인", "회신",
+  "제출", "필히", "협조", "진행", "예정", "까지", "부터", "이상", "이내",
+  // "(대표님 지시)" 처럼 지시한 사람·성격을 적은 말 — 담당자가 아니다
+  "대표", "사장", "공장장", "본부장", "지시", "요청", "전달", "부탁", "오더",
+  "필수", "긴급", "급함", "공유", "검토", "작성", "참고",
+];
+const isNotName = (t: string) => NOT_NAMES.includes(bareName(t));
+
 const SEP = /\s*[-–—~:|]\s*|\s{2,}/;
 
 /**
@@ -153,13 +163,13 @@ export function splitTitleAndNames(line: string): { title: string; names: string
 
     const names: string[] = [];
     for (const piece of pieces) {
-      if (looksLikeName(piece)) {
+      if (looksLikeName(piece) && !isNotName(piece)) {
         names.push(piece);
         continue;
       }
       // "강신준 이준호" 처럼 띄어쓰기로만 나열한 경우
       const subs = piece.split(/\s+/).filter(Boolean);
-      if (subs.length > 1 && subs.every(looksLikeName)) {
+      if (subs.length > 1 && subs.every((x) => looksLikeName(x) && !isNotName(x))) {
         names.push(...subs);
         continue;
       }
@@ -290,19 +300,43 @@ function parenDepth(line: string): number {
 /** 글 어디에 있든 기한처럼 생긴 날짜를 찾는다. matched = 글에서 잘라낼 토막 */
 export function findDue(text: string): { date: string; matched: string } | null {
   const patterns = [
-    /기한\s*[:：]?\s*([0-9]{1,4}[-./월][0-9]{1,2}[일]?(?:[-./][0-9]{1,2})?)/,
+    /기한\s*[:：]?\s*([0-9]{1,4}[-./월][0-9]{1,2}[일]?(?:[-./][0-9]{1,2})?)(?:\s*까지)?/,
     /([0-9]{1,4}[-./][0-9]{1,2}(?:[-./][0-9]{1,2})?)\s*까지/,
     /([0-9]{1,2}\s*월\s*[0-9]{1,2}\s*일?)\s*까지/,
-    /(?:^|\s)([0-9]{1,2}\/[0-9]{1,2})(?=\s|$)/,
+    // "11월 10일" — 일 자가 붙어 있으면 까지가 없어도 날짜다
+    /([0-9]{1,2}\s*월\s*[0-9]{1,2}\s*일)/,
+    // "11/10", "(11/10)", "~11/10", "11/10일" — 뒤에 열·번 같은 말이 붙으면 날짜가 아니다 (1/2열)
+    /(?:^|[\s(（~,])([0-9]{1,2}\/[0-9]{1,2})(?:일)?(?=[\s)）,.]|$)/,
   ];
   for (const re of patterns) {
     const m = text.match(re);
     if (m) {
-      const d = parseDate(m[1].replace(/\s+/g, ""));
-      if (d) return { date: d, matched: m[0] };
+      let d = parseDate(m[1].replace(/\s+/g, "").replace(/일$/, ""));
+      if (d) {
+        d = rollYear(d, m[1]);
+        // 잘라낼 토막에서 앞에 붙은 공백·괄호·물결은 남긴다 (제목이 망가지지 않게)
+        return { date: d, matched: m[0].replace(/^[\s(（~,]+/, "") };
+      }
     }
   }
   return null;
+}
+
+/**
+ * 연도 없이 적은 날짜가 두 달 넘게 지난 날이면 내년으로 본다.
+ * 11월에 「1/10까지」라고 쓰면 내년 1월 10일이다.
+ */
+function rollYear(iso: string, written: string): string {
+  if (/\d{4}/.test(written)) return iso;
+  const d = new Date(iso + "T00:00:00");
+  const limit = new Date();
+  limit.setDate(limit.getDate() - 60);
+  if (d < limit) {
+    d.setFullYear(d.getFullYear() + 1);
+    const p = (n: number) => String(n).padStart(2, "0");
+    return `${d.getFullYear()}-${p(d.getMonth() + 1)}-${p(d.getDate())}`;
+  }
+  return iso;
 }
 
 /** 날짜만 필요할 때 */
@@ -310,11 +344,6 @@ export function findDueDate(text: string): string | null {
   return findDue(text)?.date ?? null;
 }
 
-/** 사람 이름이 아닌 게 뻔한 말들 — 업무지시 글에 늘 섞여 나온다 */
-const NOT_NAMES = [
-  "기한", "완료", "보고", "참여", "담당", "관련", "이하", "유관", "확인", "회신",
-  "제출", "필히", "협조", "진행", "예정", "까지", "부터", "이상", "이내",
-];
 /** "품질팀", "기계실" 처럼 조직 이름 */
 const ORG_TAIL = /(팀|실|부|과|반|처|소|그룹|센터)$/;
 
@@ -390,7 +419,8 @@ export function splitDescription(
     const body = line
       .slice(at)
       .replace(/^[\s]*[(（]/, "")
-      .replace(/[)）][\s.,·]*$/, "")
+      // 「…바람))」 처럼 괄호가 겹쳐 닫혀도 끝의 닫는 괄호는 모두 걷는다
+      .replace(/[)）][\s.,·)）]*$/, "")
       .split("\n")
       .map((x) => x.trim())
       .filter(Boolean)
@@ -518,41 +548,69 @@ export function parseItem(
 
   // 1) 끝의 괄호
   const paren = line.match(/^(.*?)\s*[(（]\s*([^)）]*)\s*[)）]\s*$/);
+  /** 괄호 속 이름이 명단에 없을 때 — 다른 곳에 명단 이름이 있으면 그쪽이 맞다 */
+  let parenFallback: { title: string; names: string[] } | null = null;
+  /**
+   * "(대표님 지시)" 처럼 담당자도 기한도 아닌 짧은 메모 괄호.
+   * 이름 찾기에서는 떼어 두고, 업무명 끝에 그대로 붙여 살린다.
+   */
+  let note = "";
+  let core = line;
   if (paren && paren[1].trim()) {
     const inner = paren[2];
     const damdang = inner.match(/담당[자]?\s*[:：]?\s*(.+)$/);
     const names = namesFromClause(damdang ? damdang[1] : inner, members);
-    if (names.length > 0) {
+    const known = names.filter((n) => matchName(n, members).kind !== "none");
+    if (known.length > 0) {
       return { title: cleanTitle(noDate(paren[1])), names, dueDate, description };
     }
+    if (names.length > 0) parenFallback = { title: cleanTitle(noDate(paren[1])), names };
+    else if (!damdang && !(due && inner.includes(due.matched.trim()))) {
+      core = paren[1];
+      note = `(${inner.trim()})`;
+    }
   }
+  /** 업무명 끝에 메모 괄호를 다시 붙인다 */
+  const withNote = (t: string) => (note ? `${t} ${note}` : t);
 
   // 2) "담당" 뒤
-  const d = line.match(/^(.*?)[\s(（,]*담당[자]?\s*[:：]?\s*(.+)$/);
+  const d = core.match(/^(.*?)[\s(（,]*담당[자]?\s*[:：]?\s*(.+)$/);
   if (d && d[1].trim()) {
     const names = namesFromClause(d[2], members);
-    if (names.length > 0) return { title: cleanTitle(noDate(d[1])), names, dueDate, description };
+    if (names.length > 0)
+      return { title: withNote(cleanTitle(noDate(d[1]))), names, dueDate, description };
   }
 
   // 3) 끝의 구분자 뒤
-  const byTail = splitTitleAndNames(line);
+  const byTail = splitTitleAndNames(core);
   if (byTail.names.length > 0) {
-    return { title: cleanTitle(noDate(byTail.title)), names: byTail.names, dueDate, description };
+    return {
+      title: withNote(cleanTitle(noDate(byTail.title))),
+      names: byTail.names,
+      dueDate,
+      description,
+    };
   }
 
-  // 4) 글 안에 명단 이름이 그대로 들어 있는 경우 (정확히 맞을 때만)
-  const found: string[] = [];
-  for (const m of members) {
-    const n = bareName(m.name);
-    if (n.length >= 2 && line.includes(n)) found.push(n);
-  }
+  // 4) 글 안에 명단 이름이 그대로 들어 있는 경우 (정확히 맞을 때만, 적힌 순서대로)
+  const found = members
+    .map((m) => bareName(m.name))
+    .filter((n) => n.length >= 2 && core.includes(n))
+    .sort((a, b) => core.indexOf(a) - core.indexOf(b));
   if (found.length > 0) {
-    let title = noDate(line);
+    let title = noDate(core);
     for (const n of found) title = title.replace(new RegExp(`[\\s,(（-]*${n}[\\s)）,]*`, "g"), " ");
-    return { title: cleanTitle(title) || line, names: found.slice(0, 3), dueDate, description };
+    return {
+      title: withNote(cleanTitle(title) || core),
+      names: found.slice(0, 3),
+      dueDate,
+      description,
+    };
   }
 
-  return { title: cleanTitle(noDate(line)), names: [], dueDate, description };
+  if (parenFallback) return { ...parenFallback, dueDate, description };
+
+  return { title: withNote(cleanTitle(noDate(core))), names: [], dueDate, description };
 }
 
 /** 업무명 앞뒤에 남은 직급·조사·구분자를 턴다 */

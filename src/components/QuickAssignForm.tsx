@@ -93,6 +93,22 @@ export default function QuickAssignForm({
   const wide = layout === "page";
 
   async function save() {
+    /*
+      담당자 없이 올라간 업무는 어느 팀원 화면에도 뜨지 않는다.
+      「(대표님 지시)」를 사람 이름으로 읽어 담당자가 비었는데 모르고 올린 일이 있었다.
+    */
+    if (missing > 0) {
+      const names = toAdd
+        .filter((r) => !r.assigneeId)
+        .map((r) => `· ${r.title}`)
+        .join("\n");
+      const ok = window.confirm(
+        `담당자가 정해지지 않은 업무가 ${missing}건 있습니다.\n\n${names}\n\n` +
+          "이대로 올리면 어느 팀원 화면에도 보이지 않습니다.\n" +
+          "[취소]를 누르고 담당자를 고르시거나, 그래도 올리려면 [확인]을 누르세요."
+      );
+      if (!ok) return;
+    }
     setSaving(true);
     setError(null);
     setWarn(null);
