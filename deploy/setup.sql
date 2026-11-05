@@ -932,11 +932,12 @@ create policy task_updates_insert on public.task_updates for insert
 create policy task_updates_update on public.task_updates for update using ((author_id = auth.uid()));
 
 create policy task_history_select on public.task_history for select
-  using ((is_manager(auth.uid()) or (exists ( select 1 from tasks t
-    where ((t.id = task_history.task_id) and ((t.assignee_id = auth.uid()) or (t.created_by = auth.uid())))))));
+  -- 업무가 보이는 사람은 그 업무의 변경이력도 본다 (그룹장·참여자 포함)
+  using ((is_manager(auth.uid()) or (exists ( select 1 from tasks t where t.id = task_history.task_id))));
 
 create policy task_assignee_log_select on public.task_assignee_log for select
-  using ((is_manager(auth.uid()) or (prev_assignee_id = auth.uid()) or (new_assignee_id = auth.uid())));
+  using ((is_manager(auth.uid()) or (prev_assignee_id = auth.uid()) or (new_assignee_id = auth.uid())
+    or manages_user(auth.uid(), prev_assignee_id) or manages_user(auth.uid(), new_assignee_id)));
 
 -- 별표는 사람마다 따로 — 남의 별표는 보이지 않는다
 create policy task_stars_select on public.task_stars for select using ((user_id = auth.uid()));

@@ -37,6 +37,8 @@ export default function NoticeStrip() {
   }
 
   useEffect(() => {
+    // PC 화면에서는 이 띠가 안 보이므로 불러오지 않는다 (오른쪽 쪽지가 대신한다)
+    if (window.matchMedia("(min-width: 768px)").matches) return;
     load();
     const timer = setInterval(load, 15000);
     // 💬 창에서 글을 올리면 바로 다시 불러온다

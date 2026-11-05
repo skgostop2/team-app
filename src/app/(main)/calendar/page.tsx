@@ -4,7 +4,7 @@ import { useEffect, useMemo, useState } from "react";
 import { useSearchParams } from "next/navigation";
 import { createClient } from "@/lib/supabase/client";
 import type { Profile, TaskWithEffectiveStatus } from "@/lib/types";
-import { isManager, isAssignable } from "@/lib/roles";
+import { canDirect, assignableBy } from "@/lib/roles";
 import { cn } from "@/lib/utils";
 import { dayKey, shiftMonth, todayKey } from "@/lib/calendar";
 import {
@@ -74,7 +74,8 @@ export default function CalendarPage() {
     load();
   }, []);
 
-  const isLead = isManager(me);
+  // 그룹장도 자기 그룹 일정을 본다 (업무관리·대시보드와 같은 기준)
+  const isLead = canDirect(me);
   const viewingAs = isLead && asId ? profiles.find((p) => p.id === asId) : undefined;
 
   /** 이 화면에서 볼 업무 */
@@ -128,7 +129,7 @@ export default function CalendarPage() {
       {viewingAs && (
         <ViewAsBanner
           current={viewingAs}
-          members={profiles.filter(isAssignable)}
+          members={assignableBy(me, profiles)}
           unconfirmed={
             tasks.filter(
               (t) =>
@@ -231,7 +232,7 @@ export default function CalendarPage() {
           month={cursor.month}
           today={today}
           tasks={scoped}
-          profiles={profiles}
+          profiles={isLead ? assignableBy(me, profiles) : profiles}
           showEveryone={isLead && !viewingAs}
           subjectId={viewingAs?.id ?? me?.id ?? null}
           onPick={setDetailId}

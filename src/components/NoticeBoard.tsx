@@ -37,12 +37,12 @@ export default function NoticeBoard({ compact = false }: { compact?: boolean }) 
       await Promise.all([
       supabase.from("profiles").select("*").eq("id", user.id).single(),
       supabase.from("notices").select("*").order("created_at", { ascending: false }),
-      // 공지 확인 대상은 팀원 (공지를 쓰는 팀장은 집계에서 제외)
+      // 공지 확인 대상은 팀원·그룹장 (공지를 쓰는 팀장·실장은 집계에서 제외)
       supabase
         .from("profiles")
         .select("*")
         .eq("status", "승인")
-        .eq("role", "팀원")
+        .in("role", ["팀원", "그룹장"])
         .order("name"),
       supabase.from("notice_reads").select("*"),
       // 작성자 이름을 띄우기 위해 전원 (삭제된 사람 포함)
