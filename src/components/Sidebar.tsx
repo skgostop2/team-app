@@ -6,6 +6,7 @@ import type { Profile } from "@/lib/types";
 import { cn } from "@/lib/utils";
 import { canDirect, isManager, isTeamLead } from "@/lib/roles";
 import ThemeToggle from "@/components/ThemeToggle";
+import NotificationBell from "@/components/NotificationBell";
 
 const NAV = [
   // 팀원은 「내 업무」 한 곳만 쓴다 — 같은 표를 두 메뉴로 보여주면 헷갈린다
@@ -70,6 +71,9 @@ export default function Sidebar({ profile }: { profile: Profile }) {
         })}
       </nav>
 
+      <div className="px-2 py-1.5 border-t border-gray-100">
+        <NotificationBell userId={profile.id} />
+      </div>
       <div className="px-3 py-2.5 border-t border-gray-100">
         <ThemeToggle compact />
       </div>

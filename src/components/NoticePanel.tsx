@@ -51,8 +51,16 @@ export default function NoticePanel() {
       // 저장이 막혀 있어도 그냥 전부 보여준다
     }
     loadRecent();
-    const timer = setInterval(loadRecent, 15000);
-    return () => clearInterval(timer);
+    const supabase = createClient();
+    const ch = supabase
+      .channel("notices-panel")
+      .on("postgres_changes", { event: "*", schema: "public", table: "notices" }, () => loadRecent())
+      .subscribe();
+    const timer = setInterval(loadRecent, 300000);
+    return () => {
+      supabase.removeChannel(ch);
+      clearInterval(timer);
+    };
   }, []);
 
   function hide(id: string) {

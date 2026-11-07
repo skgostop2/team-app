@@ -4,6 +4,16 @@ import "./globals.css";
 export const metadata: Metadata = {
   title: "팀원 업무관리 시스템",
   description: "팀 업무 지시, 진행률 관리, 공지, 대시보드를 위한 웹 기반 업무관리 시스템",
+  manifest: "/manifest.webmanifest",
+  appleWebApp: { capable: true, statusBarStyle: "black-translucent", title: "업무관리" },
+  icons: { apple: "/icons/apple-touch-icon.png" },
+};
+
+export const viewport = {
+  themeColor: "#111827",
+  width: "device-width",
+  initialScale: 1,
+  viewportFit: "cover",
 };
 
 export default function RootLayout({ children }: LayoutProps<"/">) {

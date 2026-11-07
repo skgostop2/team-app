@@ -43,9 +43,17 @@ export default function NoticePopup({ userId }: { userId: string }) {
 
   useEffect(() => {
     loadUnread();
-    // 새 글이 올라오면 재접속 없이도 뜨도록 주기적으로 확인
-    const timer = setInterval(loadUnread, 15000);
-    return () => clearInterval(timer);
+    // 새 글이 올라오는 순간 받는다. 혹시 끊겼을 때를 위해 5분마다 한 번 더 본다.
+    const supabase = createClient();
+    const ch = supabase
+      .channel("notices-popup")
+      .on("postgres_changes", { event: "INSERT", schema: "public", table: "notices" }, () => loadUnread())
+      .subscribe();
+    const timer = setInterval(loadUnread, 300000);
+    return () => {
+      supabase.removeChannel(ch);
+      clearInterval(timer);
+    };
   }, [loadUnread]);
 
   async function handleConfirm() {

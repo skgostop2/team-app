@@ -40,6 +40,7 @@ const MORE: Item[] = [
   { href: "/notes", label: "내 메모장", icon: "📝" },
   { href: "/team", label: "팀원관리", icon: "👥", who: "lead" },
   { href: "/evaluation", label: "고과평가", icon: "⭐", who: "teamLead" },
+  { href: "/notifications", label: "알림", icon: "🔔" },
   { href: "/me", label: "내 정보", icon: "👤" },
   { href: "/security", label: "2단계 인증", icon: "🔐" },
   { href: "/help", label: "사용방법", icon: "❓" },

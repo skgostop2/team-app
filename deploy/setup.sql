@@ -993,3 +993,217 @@ on conflict (id) do nothing;
 --
 --    그 다음은 그 팀장이 화면에서 팀원을 등록하면 된다.
 -- ============================================================================
+
+-- ─────────────────────────────────────────────────────────────
+-- 7. 알림 · 푸시 (새 팀도 같은 구조)
+--    ※ 설치 후 할 일 (팀마다 한 번):
+--      1) app_secrets 에 vapid_public / vapid_private / dispatch_key 넣기
+--         (키 만들기: npx web-push generate-vapid-keys · dispatch_key 는 아무 긴 문자열)
+--      2) src/lib/push.ts 의 VAPID_PUBLIC_KEY 를 그 팀 공개키로 (팀마다 다른 저장소가 아니면 공통 키 사용 가능)
+--      3) Edge Function push-dispatch 올리기 (verify_jwt 끔)
+--      4) 아래 cron 두 줄의 주소를 그 팀 프로젝트 주소로 바꿔 실행
+-- ─────────────────────────────────────────────────────────────
+create extension if not exists pg_cron with schema pg_catalog;
+create extension if not exists pg_net with schema extensions;
+
+create table if not exists public.app_secrets (key text primary key, value text not null, updated_at timestamptz default now());
+alter table public.app_secrets enable row level security;  -- 정책 없음 = 서버(service_role)만
+
+-- ─────────────────────────────────────────────────────────────
+-- 알림 — 사람에게 "무슨 일이 생겼다"를 전하는 줄 하나.
+-- 화면 종(🔔)과 푸시가 같은 표를 본다. 푸시를 못 받는 사람도 종으로는 본다.
+-- ─────────────────────────────────────────────────────────────
+create table if not exists public.notifications (
+  id uuid default gen_random_uuid() primary key,
+  user_id uuid not null references public.profiles(id) on delete cascade,
+  kind text not null,              -- 지시 / 담당변경 / 질문 / 답변 / 제안 / 공지 / 보고 / 마감
+  title text not null,
+  body text,
+  url text,                        -- 누르면 갈 곳
+  task_id uuid,                    -- 같은 업무의 같은 종류 알림을 겹치지 않게 하는 용도
+  created_at timestamptz default now() not null,
+  read_at timestamptz,
+  pushed_at timestamptz
+);
+create index if not exists notifications_user_unread on public.notifications(user_id, created_at desc) where read_at is null;
+create index if not exists notifications_unpushed on public.notifications(created_at) where pushed_at is null;
+
+alter table public.notifications enable row level security;
+create policy notifications_select on public.notifications for select using (user_id = auth.uid());
+create policy notifications_update on public.notifications for update using (user_id = auth.uid()) with check (user_id = auth.uid());
+create policy notifications_delete on public.notifications for delete using (user_id = auth.uid());
+-- insert 는 트리거(security definer)만 한다. 사람은 직접 못 넣는다.
+
+-- 푸시 구독 — 기기 하나에 한 줄. 본인 것만 보고 지운다.
+create table if not exists public.push_subscriptions (
+  id uuid default gen_random_uuid() primary key,
+  user_id uuid not null references public.profiles(id) on delete cascade,
+  endpoint text not null unique,
+  p256dh text not null,
+  auth text not null,
+  user_agent text,
+  created_at timestamptz default now() not null,
+  last_ok_at timestamptz
+);
+alter table public.push_subscriptions enable row level security;
+create policy push_subs_select on public.push_subscriptions for select using (user_id = auth.uid());
+create policy push_subs_insert on public.push_subscriptions for insert with check (user_id = auth.uid());
+create policy push_subs_update on public.push_subscriptions for update using (user_id = auth.uid()) with check (user_id = auth.uid());
+create policy push_subs_delete on public.push_subscriptions for delete using (user_id = auth.uid());
+
+-- 화면이 실시간으로 받도록
+alter publication supabase_realtime add table public.notifications;
+alter publication supabase_realtime add table public.notices;
+
+-- ─────────────────────────────────────────────────────────────
+-- 알림 넣는 도우미 — 같은 업무·같은 종류가 10분 안에 또 생기면 겹치지 않게 한다
+-- ─────────────────────────────────────────────────────────────
+create or replace function public.notify_user(
+  p_user uuid, p_kind text, p_title text, p_body text, p_url text, p_task uuid default null
+) returns void language plpgsql security definer set search_path to 'public' as $$
+begin
+  if p_user is null then return; end if;
+  -- 자기 일은 자기에게 알리지 않는다
+  if p_user = auth.uid() then return; end if;
+  if p_task is not null and exists (
+    select 1 from public.notifications
+     where user_id = p_user and kind = p_kind and task_id = p_task
+       and created_at > now() - interval '10 minutes'
+  ) then return; end if;
+  insert into public.notifications(user_id, kind, title, body, url, task_id)
+  values (p_user, p_kind, left(p_title, 120), left(coalesce(p_body,''), 300), p_url, p_task);
+end $$;
+revoke execute on function public.notify_user(uuid,text,text,text,text,uuid) from public, anon, authenticated;
+
+/** 이 업무를 관리하는 사람들: 팀장·실장 + 담당자의 그룹장 */
+create or replace function public.task_managers(p_assignee uuid, p_deputies uuid[])
+returns setof uuid language sql stable security definer set search_path to 'public' as $$
+  select id from public.profiles where status = '승인' and role in ('팀장','실장')
+  union
+  select p.id from public.profiles p
+   where p.status = '승인' and p.role = '그룹장'
+     and p.group_id is not null
+     and p.group_id in (
+       select group_id from public.profiles where id = p_assignee
+       union
+       select group_id from public.profiles where id = any(coalesce(p_deputies,'{}'))
+     );
+$$;
+revoke execute on function public.task_managers(uuid,uuid[]) from public, anon, authenticated;
+
+-- ─────────────────────────────────────────────────────────────
+-- 무슨 일이 생기면 누구에게
+-- ─────────────────────────────────────────────────────────────
+
+-- 1) 업무가 들어오면 담당자·참여자에게. 팀원이 스스로 올린 것은 관리자에게 「보고」로.
+create or replace function public.notif_task_insert() returns trigger
+language plpgsql security definer set search_path to 'public' as $$
+declare d uuid; m uuid; who text;
+begin
+  select name into who from public.profiles where id = new.created_by;
+  if new.source = '팀원추가' then
+    for m in select * from public.task_managers(new.assignee_id, new.deputy_ids) loop
+      perform public.notify_user(m, '보고', coalesce(who,'팀원')||' 님이 업무를 올렸습니다', new.title, '/reports', new.id);
+    end loop;
+  else
+    perform public.notify_user(new.assignee_id, '지시',
+      '새 업무 지시' || case when new.urgent then ' (긴급)' else '' end, new.title, '/tasks', new.id);
+    foreach d in array coalesce(new.deputy_ids, '{}') loop
+      perform public.notify_user(d, '지시', '참여자로 지정됨', new.title, '/tasks', new.id);
+    end loop;
+  end if;
+  return new;
+end $$;
+create or replace trigger trg_notif_task_insert after insert on public.tasks
+  for each row execute function public.notif_task_insert();
+
+-- 2) 담당이 바뀌면 새 담당자에게
+create or replace function public.notif_task_update() returns trigger
+language plpgsql security definer set search_path to 'public' as $$
+declare d uuid;
+begin
+  if new.assignee_id is distinct from old.assignee_id and new.assignee_id is not null then
+    perform public.notify_user(new.assignee_id, '담당변경', '업무 담당이 되었습니다', new.title, '/tasks', new.id);
+  end if;
+  foreach d in array coalesce(new.deputy_ids, '{}') loop
+    if not (d = any(coalesce(old.deputy_ids, '{}'))) then
+      perform public.notify_user(d, '담당변경', '참여자로 지정됨', new.title, '/tasks', new.id);
+    end if;
+  end loop;
+  return new;
+end $$;
+create or replace trigger trg_notif_task_update after update of assignee_id, deputy_ids on public.tasks
+  for each row execute function public.notif_task_update();
+
+-- 3) 질문은 관리자에게, 답변은 질문한 사람에게
+create or replace function public.notif_task_update_row() returns trigger
+language plpgsql security definer set search_path to 'public' as $$
+declare t record; m uuid; who text; asker uuid;
+begin
+  select * into t from public.tasks where id = new.task_id;
+  select name into who from public.profiles where id = new.author_id;
+  if new.kind = '질문' then
+    for m in select * from public.task_managers(t.assignee_id, t.deputy_ids) loop
+      perform public.notify_user(m, '질문', coalesce(who,'팀원')||' 님의 질문', t.title||' — '||new.content, '/tasks', t.id);
+    end loop;
+  elsif new.kind = '답변' and new.reply_to is not null then
+    select author_id into asker from public.task_updates where id = new.reply_to;
+    perform public.notify_user(asker, '답변', coalesce(who,'팀장')||' 님이 답했습니다', t.title||' — '||new.content, '/tasks', t.id);
+  end if;
+  return new;
+end $$;
+create or replace trigger trg_notif_task_updates after insert on public.task_updates
+  for each row execute function public.notif_task_update_row();
+
+-- 4) 공지·제안 (팝업 켠 것만) — 올린 사람 빼고 전원
+create or replace function public.notif_notice() returns trigger
+language plpgsql security definer set search_path to 'public' as $$
+declare u uuid; who text;
+begin
+  if not new.popup then return new; end if;
+  select name into who from public.profiles where id = new.created_by;
+  for u in select id from public.profiles where status = '승인' and id <> new.created_by loop
+    perform public.notify_user(u, case when new.kind = '공지' then '공지' else '제안' end,
+      case when new.kind = '공지' then '공지: ' else coalesce(who,'팀원')||' 님의 제안: ' end || new.title,
+      new.content, '/notices', new.id);
+  end loop;
+  return new;
+end $$;
+create or replace trigger trg_notif_notice after insert on public.notices
+  for each row execute function public.notif_notice();
+
+-- 5) 마감 알림 — 매일 아침 한 번 (cron 이 부른다). 내일 마감·오늘 마감·지연 시작
+create or replace function public.notify_due_tasks() returns int
+language plpgsql security definer set search_path to 'public' as $$
+declare r record; n int := 0; d uuid;
+begin
+  for r in
+    select t.*, (t.due_date - current_date) as left_days
+      from public.tasks t
+     where t.status <> '완료' and t.due_date is not null
+       and t.due_date between current_date - 1 and current_date + 1
+  loop
+    for d in select unnest(array[r.assignee_id] || coalesce(r.deputy_ids,'{}')) loop
+      if d is null then continue; end if;
+      -- 하루에 한 번만 (task_id + kind 로 10분 중복 방지가 있지만, 날짜 단위로 한 번 더 막는다)
+      if exists (select 1 from public.notifications where user_id = d and task_id = r.id and kind = '마감' and created_at::date = current_date) then continue; end if;
+      insert into public.notifications(user_id, kind, title, body, url, task_id)
+      values (d, '마감',
+        case r.left_days when 1 then '내일 마감' when 0 then '오늘 마감' else '어제 마감 — 지연 시작' end,
+        r.title, '/tasks', r.id);
+      n := n + 1;
+    end loop;
+  end loop;
+  return n;
+end $$;
+revoke execute on function public.notify_due_tasks() from public, anon, authenticated;
+
+
+-- cron (주소를 그 팀 것으로 바꿔서)
+-- select cron.schedule('push-dispatch-every-minute', '* * * * *', $$
+--   select net.http_post(
+--     url := 'https://<project-ref>.supabase.co/functions/v1/push-dispatch',
+--     headers := jsonb_build_object('Content-Type','application/json','x-dispatch-key',(select value from public.app_secrets where key='dispatch_key')),
+--     body := '{}'::jsonb);
+-- $$);
+-- select cron.schedule('notify-due-tasks-0800-kst', '0 23 * * *', $$ select public.notify_due_tasks(); $$);

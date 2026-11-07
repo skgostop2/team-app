@@ -11,6 +11,8 @@ import NoticePopup from "./NoticePopup";
 import NotesPanel from "./NotesPanel";
 import NoticePanel from "./NoticePanel";
 import NoticeStrip from "./NoticeStrip";
+import NotificationBell from "./NotificationBell";
+import PushBanner from "./PushBanner";
 
 export default function AppShell({
   profile,
@@ -35,13 +37,19 @@ export default function AppShell({
         {/* 모바일 상단바 */}
         <header className="no-print md:hidden sticky top-0 z-20 bg-white border-b border-gray-200 px-4 h-14 flex items-center justify-between">
           <span className="font-bold text-gray-900">업무관리</span>
-          <Link href="/me" className="text-xs text-gray-500 hover:text-blue-700" title="내 정보">
-            {profile.name}님 ›
-          </Link>
+          <span className="flex items-center gap-1">
+            <NotificationBell userId={profile.id} compact />
+            <Link href="/me" className="text-xs text-gray-500 hover:text-blue-700 px-1" title="내 정보">
+              {profile.name}님 ›
+            </Link>
+          </span>
         </header>
         <NoticeStrip />
 
-        <main className="p-4 md:p-8 pb-20 md:pb-8 max-w-[1400px] mx-auto">{children}</main>
+        <main className="p-4 md:p-8 pb-20 md:pb-8 max-w-[1400px] mx-auto space-y-4">
+          <PushBanner />
+          {children}
+        </main>
       </div>
 
       <div className="no-print contents">
