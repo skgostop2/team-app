@@ -23,6 +23,7 @@ import PrintByPerson from "@/components/PrintByPerson";
 import PrintHeader from "@/components/PrintHeader";
 import TodayStrip, { type Chip } from "@/components/TodayStrip";
 import { countQuick, quickMatch, oldestUnconfirmedDays, type QuickKey } from "@/lib/today";
+import { exportTasks } from "@/lib/exportXlsx";
 
 export default function TasksPage() {
   const [me, setMe] = useState<Profile | null>(null);
@@ -51,6 +52,8 @@ export default function TasksPage() {
   const [q, setQ] = useState("");
   /** 「오늘 한 줄」에서 고른 것만 보기 */
   const [quick, setQuick] = useState<QuickKey | null>(null);
+  /** 2주 지난 완료 업무도 보기 (평소에는 접어 둔다 — 표가 끝없이 길어지지 않게) */
+  const [showOldDone, setShowOldDone] = useState(false);
   /** 사람별로 장을 나눠 인쇄하는 중인지 */
   const [printByPerson, setPrintByPerson] = useState(false);
 
@@ -139,6 +142,7 @@ export default function TasksPage() {
         ? tasks
         : tasks.filter((t) => mine(t) || handedOverIds.has(t.id));
     if (hideDone) list = list.filter((t) => t.effective_status !== "완료");
+    if (!showOldDone && !quick && !q.trim()) list = list.filter((t) => !isOldDone(t));
     if (onlyMemberAdded) list = list.filter((t) => t.source === "팀원추가");
     if (onlyQuestions) list = list.filter((t) => (questions.get(t.id)?.open ?? 0) > 0);
     if (onlyStars) list = list.filter((t) => stars.has(t.id));
@@ -158,6 +162,7 @@ export default function TasksPage() {
     who,
     q,
     quick,
+    showOldDone,
     profiles,
     tasks,
     isLead,
@@ -262,6 +267,16 @@ export default function TasksPage() {
           { key: "stalled", label: "7일째 그대로", count: c.stalled, tone: "gray" },
         ];
   }, [tasks, questions, isLead, me?.id]);
+
+  /** 접혀 있는 지난 완료 건수 */
+  const oldDoneCount = useMemo(() => {
+    const scope = isLead && !showAll
+      ? tasks.filter((t) => t.assignee_id === me?.id || (t.deputy_ids ?? []).includes(me?.id ?? "") || !t.assignee_id || t.source === "팀원추가")
+      : isLead
+        ? tasks
+        : tasks.filter((t) => t.assignee_id === me?.id || (t.deputy_ids ?? []).includes(me?.id ?? "") || handedOverIds.has(t.id));
+    return scope.filter(isOldDone).length;
+  }, [tasks, isLead, showAll, me?.id, handedOverIds]);
 
   // 팀원이 스스로 올린 업무가 몇 건인지 (팀장이 바로 알아볼 수 있게)
   const memberAddedCount = useMemo(
@@ -385,6 +400,30 @@ export default function TasksPage() {
             />
             완료 숨기기
           </label>
+          {!hideDone && oldDoneCount > 0 && (
+            <label className="flex items-center gap-1.5 text-xs text-gray-600 border border-gray-300 rounded-lg px-3 py-2 cursor-pointer bg-white">
+              <input
+                type="checkbox"
+                checked={showOldDone}
+                onChange={(e) => setShowOldDone(e.target.checked)}
+                className="w-3.5 h-3.5"
+              />
+              지난 완료 보기 ({oldDoneCount})
+            </label>
+          )}
+          <button
+            onClick={() =>
+              exportTasks(
+                visibleTasks,
+                profiles,
+                viewingAs ? `업무 ${viewingAs.name}` : isLead && showAll ? "업무 전체" : "내 업무"
+              )
+            }
+            className="text-xs px-3 py-2 rounded-lg border border-emerald-300 bg-emerald-50 text-emerald-800 font-medium hover:bg-emerald-100"
+            title="지금 보이는 표를 엑셀로"
+          >
+            엑셀
+          </button>
           {isLead && !viewingAs && memberAddedCount > 0 && (
             <label className="flex items-center gap-1.5 text-xs text-blue-700 border border-blue-300 bg-blue-50 rounded-lg px-3 py-2 cursor-pointer">
               <input
@@ -595,6 +634,12 @@ function Stat({
       <p className={`text-2xl font-bold mt-0.5 ${accent}`}>{value}</p>
     </div>
   );
+}
+
+/** 완료한 지 2주 넘은 업무 — 평소에는 접어 둔다 */
+function isOldDone(t: TaskWithEffectiveStatus): boolean {
+  if (t.effective_status !== "완료" || !t.completed_at) return false;
+  return Date.now() - new Date(t.completed_at).getTime() > 14 * 86400000;
 }
 
 /** 질문·답변 행을 업무별 개수로 바꾼다 */

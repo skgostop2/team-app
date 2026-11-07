@@ -141,6 +141,9 @@ export default function LoginPage() {
           <Link href="/signup" className="hover:text-blue-600">
             팀원 회원가입
           </Link>
+          <Link href="/reset-password" className="hover:text-blue-600">
+            비밀번호를 잊었어요
+          </Link>
           <Link href="/register-lead" className="hover:text-blue-600">
             팀장 등록
           </Link>

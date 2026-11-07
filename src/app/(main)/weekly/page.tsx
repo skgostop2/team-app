@@ -12,6 +12,8 @@ import PrintHeader from "@/components/PrintHeader";
 import TaskEditModal from "@/components/TaskEditModal";
 import WeeklyBoard from "@/components/WeeklyBoard";
 import MeetingMode from "@/components/MeetingMode";
+import WeeklyReport from "@/components/WeeklyReport";
+import { exportWeekly } from "@/lib/exportXlsx";
 
 /**
  * 금주 계획 대비 실적.
@@ -31,6 +33,8 @@ export default function WeeklyPage() {
   const [loading, setLoading] = useState(true);
   const [week, setWeek] = useState<Week>(() => thisWeek());
   const [detailId, setDetailId] = useState<string | null>(null);
+  /** 주간 보고서 (전자결재용) 화면 */
+  const [report, setReport] = useState(false);
   const [meeting, setMeeting] = useState(false);
 
   const load = useCallback(async () => {
@@ -107,8 +111,24 @@ export default function WeeklyPage() {
             업무관리에 등록된 일에서 이번 주에 걸린 것을 모았습니다. 따로 적을 것은 없습니다.
           </p>
         </div>
-        <div className="flex items-center gap-2">
+        <div className="flex items-center gap-2 flex-wrap">
           <PrintButton />
+          <button
+            onClick={() => exportWeekly(people, week.label)}
+            className="text-xs px-3 py-2 rounded-lg border border-emerald-300 bg-emerald-50 text-emerald-800 font-medium hover:bg-emerald-100"
+            title="금주 실적 · 차주 계획 두 장짜리 엑셀"
+          >
+            엑셀
+          </button>
+          {canDirect(me) && (
+            <button
+              onClick={() => setReport(true)}
+              className="text-xs px-3 py-2 rounded-lg border border-gray-300 bg-white text-gray-700 font-medium hover:bg-gray-50"
+              title="회사 양식 주간 보고서 — 화면에서 고쳐서 전자결재에 붙여 넣기"
+            >
+              주간 보고서
+            </button>
+          )}
           <button
             onClick={() => setMeeting(true)}
             className="text-xs px-3 py-2 rounded-lg bg-blue-600 text-white font-medium hover:bg-blue-700"
@@ -153,6 +173,17 @@ export default function WeeklyPage() {
           <Count label="지연" n={sum.late} className="text-amber-700" />
         </div>
       </div>
+
+      {report && me && (
+        <WeeklyReport
+          people={people}
+          week={week}
+          next={next}
+          teamName={me.team_name ?? "생기팀"}
+          author={`${me.name}${me.position ? " " + me.position : ""}`}
+          onClose={() => setReport(false)}
+        />
+      )}
 
       <WeeklyBoard
         people={people}

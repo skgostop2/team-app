@@ -385,3 +385,11 @@ html[data-theme="sf"] .bg-black\/50 {
 html[data-theme="sf"] .ledger-head {
   background-color: #16233b;
 }
+
+
+/* 주간 보고서 창이 열려 있을 때는 그것만 인쇄한다 */
+@media print {
+  body.report-open * { visibility: hidden; }
+  body.report-open .report-root, body.report-open .report-root * { visibility: visible; }
+  body.report-open .report-root { position: absolute; left: 0; top: 0; width: 100%; }
+}
