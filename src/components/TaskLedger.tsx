@@ -339,9 +339,24 @@ export default function TaskLedger({
    * 끝낸 날이 오늘이 아니면 완료여부 칸을 눌러 날짜를 고치면 된다.
    * 대부분은 "오늘 끝냈다"라서 버튼 하나로 끝나게 둔다.
    */
+  /**
+   * 체크 안 된 세부 항목이 남아 있으면 먼저 묻는다.
+   * 항목은 그 사람이 직접 체크한 기록이라, 완료 처리한다고 프로그램이 대신 체크하지 않는다.
+   */
+  function confirmLeftItems(id: string): boolean {
+    const c = itemCounts?.get(id);
+    if (!c || c.total === 0 || c.done >= c.total) return true;
+    return window.confirm(
+      `세부 항목 ${c.total}개 중 ${c.total - c.done}개가 아직 체크되지 않았습니다.\n\n` +
+        "항목은 그대로 두고 업무만 완료로 표시할까요?\n" +
+        "(남은 항목을 체크하려면 [취소]를 누르고 「항목」에서 체크하세요)"
+    );
+  }
+
   async function completeNow(id: string) {
     const iso = noon(today);
     if (!iso) return;
+    if (!confirmLeftItems(id)) return;
     setDoneBusy(id);
     const err = await patch(id, { status: "완료", progress: 100, completed_at: iso });
     setDoneBusy(null);
@@ -423,6 +438,7 @@ export default function TaskLedger({
           noon={noon}
           today={today}
           canUrgent={canEdit && canAssign}
+          confirmLeftItems={confirmLeftItems}
           onItems={(task) => {
             setEdit(null);
             setItemTask(task);
@@ -1537,6 +1553,7 @@ function EditPopup({
   today,
   canUrgent = false,
   onItems,
+  confirmLeftItems = () => true,
 }: {
   target: EditTarget;
   onClose: () => void;
@@ -1547,6 +1564,8 @@ function EditPopup({
   canUrgent?: boolean;
   /** 상세내용을 저장한 뒤 세부 항목 창을 열어주는 길 */
   onItems?: (t: TaskWithEffectiveStatus) => void;
+  /** 체크 안 된 항목이 남았을 때 완료로 표시해도 되는지 묻는 길 */
+  confirmLeftItems?: (id: string) => boolean;
 }) {
   const { task: t, field } = target;
   const createdDay = t.created_at.slice(0, 10);
@@ -1649,6 +1668,7 @@ function EditPopup({
           const iso = noon(next);
           if (!iso) return "날짜를 올바르게 입력해주세요.";
           if (iso < t.created_at) return "완료일이 지시일보다 앞설 수 없습니다.";
+          if (!confirmLeftItems(t.id)) return "완료 처리를 취소했습니다.";
           return patch(t.id, { status: "완료", progress: 100, completed_at: iso });
         }}
         onClose={onClose}

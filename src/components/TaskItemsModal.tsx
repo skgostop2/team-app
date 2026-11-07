@@ -51,7 +51,9 @@ export default function TaskItemsModal({
 
   const total = items.length;
   const done = items.filter((i) => i.done).length;
-  const pct = total ? percentOf({ done, total }) : manual;
+  // 완료 처리된 업무는 항목 체크와 상관없이 100% — 다만 몇 개를 체크했는지는 그대로 보여준다
+  const finished = task.status === "완료";
+  const pct = finished ? 100 : total ? percentOf({ done, total }) : manual;
 
   async function run(fn: () => Promise<{ error: { message: string } | null }>) {
     setBusy(true);
@@ -175,8 +177,13 @@ export default function TaskItemsModal({
           <span className="text-xl font-bold text-gray-900 w-24 text-right whitespace-nowrap">
             {pct}%
             {total > 0 && (
-              <span className="block text-xs font-normal text-gray-500">
-                {done}/{total} 항목
+              <span
+                className={
+                  "block text-xs font-normal " +
+                  (finished && done < total ? "text-amber-600" : "text-gray-500")
+                }
+              >
+                {done}/{total} 항목{finished && done < total ? " 체크 · 완료 처리됨" : ""}
               </span>
             )}
           </span>
