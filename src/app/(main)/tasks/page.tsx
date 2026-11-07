@@ -21,6 +21,8 @@ import QuickAddModal from "@/components/QuickAddModal";
 import PrintButton from "@/components/PrintButton";
 import PrintByPerson from "@/components/PrintByPerson";
 import PrintHeader from "@/components/PrintHeader";
+import TodayStrip, { type Chip } from "@/components/TodayStrip";
+import { countQuick, quickMatch, oldestUnconfirmedDays, type QuickKey } from "@/lib/today";
 
 export default function TasksPage() {
   const [me, setMe] = useState<Profile | null>(null);
@@ -47,6 +49,8 @@ export default function TasksPage() {
   const [who, setWho] = useState("");
   /** 업무 찾기 — 업무명·상세내용·담당자 이름에서 */
   const [q, setQ] = useState("");
+  /** 「오늘 한 줄」에서 고른 것만 보기 */
+  const [quick, setQuick] = useState<QuickKey | null>(null);
   /** 사람별로 장을 나눠 인쇄하는 중인지 */
   const [printByPerson, setPrintByPerson] = useState(false);
 
@@ -138,6 +142,7 @@ export default function TasksPage() {
     if (onlyMemberAdded) list = list.filter((t) => t.source === "팀원추가");
     if (onlyQuestions) list = list.filter((t) => (questions.get(t.id)?.open ?? 0) > 0);
     if (onlyStars) list = list.filter((t) => stars.has(t.id));
+    if (quick) list = list.filter((t) => quickMatch(quick, t, questions));
     const word = q.trim().toLowerCase();
     if (word) {
       const nameOf = (id: string | null) => profiles.find((p) => p.id === id)?.name ?? "";
@@ -152,6 +157,7 @@ export default function TasksPage() {
   }, [
     who,
     q,
+    quick,
     profiles,
     tasks,
     isLead,
@@ -225,6 +231,38 @@ export default function TasksPage() {
     };
   }, [tasks, me?.id]);
 
+  /** 「오늘 한 줄」 숫자 — 팀원은 내 업무, 팀장·그룹장은 보이는 업무 전체 */
+  const todayChips = useMemo<Chip[]>(() => {
+    const scope = isLead
+      ? tasks
+      : tasks.filter((t) => t.assignee_id === me?.id || (t.deputy_ids ?? []).includes(me?.id ?? ""));
+    const c = countQuick(scope, questions);
+    const oldest = oldestUnconfirmedDays(scope);
+    return isLead
+      ? [
+          { key: "delayed", label: "지연", count: c.delayed, tone: "red" },
+          { key: "today", label: "오늘 마감", count: c.today, tone: "amber" },
+          {
+            key: "new",
+            label: "미확인 지시",
+            count: c.new,
+            tone: "blue",
+            hint: oldest >= 2 ? `최대 ${oldest}일째` : undefined,
+          },
+          { key: "questions", label: "답 기다리는 질문", count: c.questions, tone: "violet" },
+          { key: "stalled", label: "정체 7일+", count: c.stalled, tone: "gray" },
+          { key: "urgent", label: "긴급", count: c.urgent, tone: "red" },
+        ]
+      : [
+          { key: "delayed", label: "지연", count: c.delayed, tone: "red" },
+          { key: "today", label: "오늘 마감", count: c.today, tone: "amber" },
+          { key: "urgent", label: "긴급", count: c.urgent, tone: "red" },
+          { key: "new", label: "새로 받음", count: c.new, tone: "blue" },
+          { key: "questions", label: "답 기다리는 중", count: c.questions, tone: "violet" },
+          { key: "stalled", label: "7일째 그대로", count: c.stalled, tone: "gray" },
+        ];
+  }, [tasks, questions, isLead, me?.id]);
+
   // 팀원이 스스로 올린 업무가 몇 건인지 (팀장이 바로 알아볼 수 있게)
   const memberAddedCount = useMemo(
     () => tasks.filter((t) => t.source === "팀원추가").length,
@@ -247,6 +285,24 @@ export default function TasksPage() {
           />
         </div>
       )}
+      {!viewingAs && (
+        <TodayStrip
+          title={isLead ? "오늘" : "오늘 내 할 일"}
+          chips={todayChips}
+          active={quick}
+          onPick={(k) => {
+            setQuick(k);
+            // 추려 보는 동안은 다른 필터와 겹치지 않게 (완료 숨기기는 그대로)
+            if (k) {
+              setOnlyQuestions(false);
+              setOnlyStars(false);
+              if (isLead && !showAll) setShowAll(true);
+            }
+          }}
+          emptyText={isLead ? "급한 것이 없습니다" : "오늘 급한 것이 없습니다"}
+        />
+      )}
+
       {!isLead && (
         <div className="grid grid-cols-2 md:grid-cols-4 gap-3 print-block">
           <Stat label="내 업무" value={mySummary.total} />

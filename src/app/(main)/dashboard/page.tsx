@@ -19,6 +19,8 @@ import type { ItemCount } from "@/lib/items";
 import ViewAsBanner from "@/components/ViewAsBanner";
 import PrintButton from "@/components/PrintButton";
 import PrintHeader from "@/components/PrintHeader";
+import TodayStrip, { type Chip } from "@/components/TodayStrip";
+import { countQuick, quickMatch, oldestUnconfirmedDays, yesterdayStart, type QuickKey } from "@/lib/today";
 
 export default function DashboardPage() {
   const [me, setMe] = useState<Profile | null>(null);
@@ -31,6 +33,10 @@ export default function DashboardPage() {
   const [stars, setStars] = useState<Set<string>>(new Set());
   /** 업무별 세부 항목 수 (진행률이 체크로 계산되는 업무) */
   const [itemCounts, setItemCounts] = useState<Map<string, ItemCount>>(new Map());
+  /** 「오늘 상황판」에서 고른 것만 표에 보이기 */
+  const [quick, setQuick] = useState<QuickKey | null>(null);
+  /** 어제부터 올라온 제안·공유 수, 팀장 확인을 기다리는 신규 업무 보고 수 */
+  const [since, setSince] = useState<{ notices: number; reports: number }>({ notices: 0, reports: 0 });
 
   // 팀장·실장이 특정 팀원의 화면을 그대로 들여다보는 모드 (?as=<id>)
   const searchParams = useSearchParams();
@@ -70,6 +76,21 @@ export default function DashboardPage() {
       supabase.from("task_items").select("task_id, done"),
     ]);
 
+    // 상황판용 — 어제부터 올라온 제안, 아직 확인 안 한 신규 업무 보고 (팀장·실장만 보인다)
+    const [{ count: noticeCnt }, { count: reportCnt }] = await Promise.all([
+      supabase
+        .from("notices")
+        .select("id", { count: "exact", head: true })
+        .eq("kind", "공유")
+        .gte("created_at", yesterdayStart().toISOString()),
+      supabase
+        .from("tasks")
+        .select("id", { count: "exact", head: true })
+        .eq("source", "팀원추가")
+        .is("lead_ack_at", null),
+    ]);
+    setSince({ notices: noticeCnt ?? 0, reports: reportCnt ?? 0 });
+
     setMe(profile as Profile);
     setProfiles((p ?? []) as Profile[]);
     setTasks((t ?? []) as TaskWithEffectiveStatus[]);
@@ -105,9 +126,39 @@ export default function DashboardPage() {
   // 화면 보기 중이면 그 팀원 업무를 "내 업무"로 삼는다
   const subjectId = viewingAs ? viewingAs.id : me?.id;
   const myTasks = useMemo(() => tasks.filter((t) => isOn(t, subjectId)), [tasks, subjectId]);
-  const scopedTasks = canSeeTeam ? tasks : myTasks;
+  const baseScoped = useMemo(() => (canSeeTeam ? tasks : myTasks), [canSeeTeam, tasks, myTasks]);
+  const scopedTasks = useMemo(
+    () => (quick ? baseScoped.filter((t) => quickMatch(quick, t, questions)) : baseScoped),
+    [baseScoped, quick, questions]
+  );
 
-  const stats = useMemo(() => summarize(scopedTasks), [scopedTasks]);
+  /** 팀장 「오늘 상황판」 — 할 일과 어제부터 바뀐 것 */
+  const boardChips = useMemo<Chip[]>(() => {
+    const c = countQuick(baseScoped, questions);
+    const oldest = oldestUnconfirmedDays(baseScoped);
+    return [
+      { key: "delayed", label: "지연", count: c.delayed, tone: "red" },
+      { key: "today", label: "오늘 마감", count: c.today, tone: "amber" },
+      {
+        key: "new",
+        label: "미확인 지시",
+        count: c.new,
+        tone: "blue",
+        hint: oldest >= 2 ? `최대 ${oldest}일째` : undefined,
+      },
+      { key: "questions", label: "답 기다리는 질문", count: c.questions, tone: "violet" },
+      { key: "stalled", label: "정체 7일+", count: c.stalled, tone: "gray" },
+    ];
+  }, [baseScoped, questions]);
+  const changedChips = useMemo<Chip[]>(() => {
+    const c = countQuick(baseScoped, questions);
+    return [
+      { key: "recent", label: "새 기록", count: c.recent, tone: "emerald" },
+      { key: "doneRecent", label: "완료됨", count: c.doneRecent, tone: "emerald" },
+    ];
+  }, [baseScoped, questions]);
+
+  const stats = useMemo(() => summarize(baseScoped), [baseScoped]);
   const myStats = useMemo(() => summarize(myTasks), [myTasks]);
 
   /**
@@ -284,6 +335,49 @@ export default function DashboardPage() {
         )}
         </div>
       </div>
+
+      {isLead && !viewingAs && (
+        <div className="space-y-2">
+          <TodayStrip
+            title="오늘 할 일"
+            chips={boardChips}
+            active={quick}
+            onPick={setQuick}
+            emptyText="급한 것이 없습니다"
+            right={
+              <span className="flex items-center gap-2 text-xs">
+                {since.reports > 0 && (
+                  <Link
+                    href="/reports"
+                    className="rounded-full border border-blue-300 bg-blue-50 text-blue-800 px-3 py-1.5 font-medium hover:bg-blue-100"
+                  >
+                    신규 업무 보고 확인 <b>{since.reports}</b>
+                  </Link>
+                )}
+              </span>
+            }
+          />
+          <TodayStrip
+            title="어제부터"
+            chips={changedChips}
+            active={quick}
+            onPick={setQuick}
+            emptyText="어제부터 올라온 기록·완료가 없습니다"
+            right={
+              <span className="flex items-center gap-2 text-xs">
+                {since.notices > 0 && (
+                  <Link
+                    href="/notices"
+                    className="rounded-full border border-amber-300 bg-amber-50 text-amber-900 px-3 py-1.5 font-medium hover:bg-amber-100"
+                  >
+                    새 제안 <b>{since.notices}</b>
+                  </Link>
+                )}
+              </span>
+            }
+          />
+        </div>
+      )}
 
       <div className="grid grid-cols-2 md:grid-cols-4 gap-3 print-block">
         <StatCard label={canSeeTeam ? "전체 업무" : "내 업무"} value={stats.total} />

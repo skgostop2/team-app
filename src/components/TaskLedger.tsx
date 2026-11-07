@@ -15,6 +15,7 @@ import ProgressLogModal from "@/components/ProgressLogModal";
 import DeleteLock from "@/components/DeleteLock";
 import QuestionModal from "@/components/QuestionModal";
 import TaskItemsModal from "@/components/TaskItemsModal";
+import QuickNoteToast from "@/components/QuickNoteToast";
 import type { ItemCount } from "@/lib/items";
 
 /**
@@ -274,10 +275,23 @@ export default function TaskLedger({
   }
 
   /** 진행률을 바로 저장한다 — 100%면 완료, 0%면 대기 (팝업과 같은 규칙) */
-  function saveProgress(id: string, v: number): Promise<string | null> {
+  /** 진행률을 밀어 저장한 직후 "한 줄 남기기"를 내밀 업무 */
+  const [noteFor, setNoteFor] = useState<{
+    id: string;
+    title: string;
+    from: number;
+    to: number;
+  } | null>(null);
+
+  async function saveProgress(id: string, v: number): Promise<string | null> {
     const n = Math.max(0, Math.min(100, Math.round(v)));
     const status = n >= 100 ? "완료" : n > 0 ? "진행중" : "대기";
-    return patch(id, { progress: n, status });
+    const t = tasks.find((x) => x.id === id);
+    const from = t?.progress ?? 0;
+    const err = await patch(id, { progress: n, status });
+    // 바뀐 게 있을 때만 한 줄 칸을 내민다 (같은 값이면 조용히)
+    if (!err && t && n !== from) setNoteFor({ id, title: t.title, from, to: n });
+    return err;
   }
 
   // 칸 폭은 쓰는 사람이 끌어서 정한다 (이 브라우저에만 저장된다)
@@ -442,6 +456,20 @@ export default function TaskLedger({
           onItems={(task) => {
             setEdit(null);
             setItemTask(task);
+          }}
+        />
+      )}
+
+      {noteFor && (
+        <QuickNoteToast
+          key={noteFor.id + noteFor.to}
+          taskId={noteFor.id}
+          title={noteFor.title}
+          from={noteFor.from}
+          to={noteFor.to}
+          onDone={(saved) => {
+            setNoteFor(null);
+            if (saved) onChanged?.();
           }}
         />
       )}

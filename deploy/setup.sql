@@ -806,55 +806,27 @@ create or replace trigger trg_personal_notes_touch before update on public.perso
 -- ─────────────────────────────────────────────────────────────
 
 create or replace view public.v_tasks with (security_invoker = true) as
- select t.id,
-    t.title,
-    t.description,
-    t.assignee_id,
-    t.created_by,
-    t.start_date,
-    t.due_date,
-    t.progress,
-    t.status,
-    t.confirmed_at,
-    t.completed_at,
-    t.created_at,
-    t.updated_at,
-    t.instructor,
-    t.note,
-    t.deputy_ids,
-    t.source,
-    coalesce(t.completed_at::date, current_date) - t.created_at::date as elapsed_days,
-        case
-            when t.due_date is null then null::integer
-            else coalesce(t.completed_at::date, current_date) - t.due_date
-        end as schedule_diff_days,
-        case
-            when t.due_date is null then 0
-            else greatest(0, coalesce(t.completed_at::date, current_date) - t.due_date)
-        end as overdue_days,
-        case
-            when t.completed_at is null or t.due_date is null then null::boolean
-            else t.completed_at::date <= t.due_date
-        end as on_time,
-        case
-            when t.status <> '완료'::text and t.due_date is not null and t.due_date < current_date then '지연'::text
-            else t.status
-        end as effective_status,
-    t.confirmed_at is null as is_new,
-    u.cnt as update_count,
-    u.last_at as last_update_at,
-    u.last_text as last_update_text,
-    u.last_by as last_update_by,
-    t.urgent
-   from tasks t
-     left join lateral ( select count(*) as cnt,
-            max(tu.created_at) as last_at,
-            (array_agg(tu.content order by tu.created_at desc))[1] as last_text,
-            (array_agg(p.name order by tu.created_at desc))[1] as last_by
-           from task_updates tu
-             left join profiles p on p.id = tu.author_id
-          where tu.task_id = t.id
-            and coalesce(tu.kind, '기록') = '기록') u on true;
+ SELECT t.id, t.title, t.description, t.assignee_id, t.created_by, t.start_date, t.due_date, t.progress, t.status,
+    t.confirmed_at, t.completed_at, t.created_at, t.updated_at, t.instructor, t.note, t.deputy_ids, t.source,
+    COALESCE(t.completed_at::date, CURRENT_DATE) - t.created_at::date AS elapsed_days,
+    CASE WHEN t.due_date IS NULL THEN NULL::integer ELSE COALESCE(t.completed_at::date, CURRENT_DATE) - t.due_date END AS schedule_diff_days,
+    CASE WHEN t.due_date IS NULL THEN 0 ELSE GREATEST(0, COALESCE(t.completed_at::date, CURRENT_DATE) - t.due_date) END AS overdue_days,
+    CASE WHEN t.completed_at IS NULL OR t.due_date IS NULL THEN NULL::boolean ELSE t.completed_at::date <= t.due_date END AS on_time,
+    CASE WHEN t.status <> '완료' AND t.due_date IS NOT NULL AND t.due_date < CURRENT_DATE THEN '지연' ELSE t.status END AS effective_status,
+    t.confirmed_at IS NULL AS is_new,
+    u.cnt AS update_count, u.last_at AS last_update_at, u.last_text AS last_update_text, u.last_by AS last_update_by,
+    t.urgent,
+    -- 마지막으로 무엇이든 움직인 때: 업무 수정·진행기록·항목 체크 중 가장 최근
+    GREATEST(t.updated_at, t.created_at, u.last_at, i.last_done) AS last_activity_at,
+    -- 정체: 끝나지 않았고 7일 넘게 아무것도 안 움직임
+    (t.status <> '완료' AND GREATEST(t.updated_at, t.created_at, u.last_at, i.last_done) < now() - interval '7 days') AS stalled
+   FROM tasks t
+     LEFT JOIN LATERAL ( SELECT count(*) AS cnt, max(tu.created_at) AS last_at,
+            (array_agg(tu.content ORDER BY tu.created_at DESC))[1] AS last_text,
+            (array_agg(p.name ORDER BY tu.created_at DESC))[1] AS last_by
+           FROM task_updates tu LEFT JOIN profiles p ON p.id = tu.author_id
+          WHERE tu.task_id = t.id AND COALESCE(tu.kind, '기록') = '기록') u ON true
+     LEFT JOIN LATERAL ( SELECT max(ti.done_at) AS last_done FROM task_items ti WHERE ti.task_id = t.id ) i ON true;
 
 -- ─────────────────────────────────────────────────────────────
 -- 6. 잠금 (RLS) — 누가 무엇을 볼 수 있는지

@@ -97,6 +97,18 @@ export default function QuickAssignForm({
       담당자 없이 올라간 업무는 어느 팀원 화면에도 뜨지 않는다.
       「(대표님 지시)」를 사람 이름으로 읽어 담당자가 비었는데 모르고 올린 일이 있었다.
     */
+    // 기한 없는 업무는 달력에도 안 올라가고 지연도 안 잡힌다 — 지금 55%가 그렇다
+    const noDue = dueDate ? [] : toAdd.filter((r) => !r.dueDate);
+    if (noDue.length > 0 && !self) {
+      const ok = window.confirm(
+        `기한이 없는 업무가 ${noDue.length}건 있습니다.\n\n` +
+          noDue.map((r) => `· ${r.title}`).join("\n") +
+          "\n\n기한이 없으면 달력·지연·마감임박에 잡히지 않습니다.\n" +
+          "[취소]를 누르고 아래 「완료계획일정」에 날짜를 넣거나 글에 「11/20까지」처럼 적어 주세요.\n" +
+          "기한 없이 올리려면 [확인]."
+      );
+      if (!ok) return;
+    }
     if (missing > 0) {
       const names = toAdd
         .filter((r) => !r.assigneeId)
@@ -257,12 +269,19 @@ export default function QuickAssignForm({
                           {r.description}
                         </p>
                       )}
-                      {(deputies.length > 0 || r.dueDate) && (
+                      {(deputies.length > 0 || r.dueDate || !dueDate) && (
                         <p className="text-xs text-gray-500">
-                          {r.dueDate && (
+                          {r.dueDate ? (
                             <span className="text-blue-700">기한 {r.dueDate.slice(5)}</span>
-                          )}
-                          {r.dueDate && deputies.length > 0 && " · "}
+                          ) : !dueDate && !out ? (
+                            <span
+                              className="inline-block rounded bg-amber-200 text-amber-900 px-1.5 py-0.5 font-medium"
+                              title="기한이 없으면 달력·지연·마감임박에 안 잡힙니다. 글에 「11/20까지」처럼 적거나 아래 전체 기한을 넣어 주세요"
+                            >
+                              기한 없음
+                            </span>
+                          ) : null}
+                          {(r.dueDate || (!dueDate && !out)) && deputies.length > 0 && " · "}
                           {deputies.length > 0 && `참여 ${deputies.join(", ")}`}
                         </p>
                       )}
@@ -342,7 +361,12 @@ export default function QuickAssignForm({
             </label>
             )}
             <label className="text-xs text-gray-500">
-              완료계획일정 (기한 못 읽은 건만)
+              완료계획일정 (기한 못 읽은 건에 한꺼번에)
+              {toAdd.some((r) => !r.dueDate) && !dueDate && (
+                <span className="ml-1 text-amber-700 font-medium">
+                  · 기한 없는 건 {toAdd.filter((r) => !r.dueDate).length}건
+                </span>
+              )}
               <input
                 type="date"
                 value={dueDate}
