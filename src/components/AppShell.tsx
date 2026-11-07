@@ -1,6 +1,7 @@
 "use client";
 
 import { useEffect } from "react";
+import Link from "next/link";
 import type { Profile } from "@/lib/types";
 import { createClient } from "@/lib/supabase/client";
 import { canDirect, isManager, isTeamLead } from "@/lib/roles";
@@ -34,7 +35,9 @@ export default function AppShell({
         {/* 모바일 상단바 */}
         <header className="no-print md:hidden sticky top-0 z-20 bg-white border-b border-gray-200 px-4 h-14 flex items-center justify-between">
           <span className="font-bold text-gray-900">업무관리</span>
-          <span className="text-xs text-gray-500">{profile.name}님</span>
+          <Link href="/me" className="text-xs text-gray-500 hover:text-blue-700" title="내 정보">
+            {profile.name}님 ›
+          </Link>
         </header>
         <NoticeStrip />
 

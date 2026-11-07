@@ -38,9 +38,13 @@ export default function Sidebar({ profile }: { profile: Profile }) {
     <aside className="hidden md:flex md:flex-col md:w-60 md:shrink-0 border-r border-gray-200 bg-white h-dvh sticky top-0">
       <div className="px-5 py-5 border-b border-gray-100">
         <p className="font-bold text-gray-900 leading-tight">팀원 업무관리</p>
-        <p className="text-xs text-gray-500 mt-1">
-          {profile.name} · {profile.role}
-        </p>
+        <Link
+          href="/me"
+          title="내 정보 · 비밀번호 · 2단계 인증"
+          className="inline-block text-xs text-gray-500 mt-1 hover:text-blue-700 hover:underline underline-offset-2"
+        >
+          {profile.name} · {profile.role} <span className="text-gray-400">›</span>
+        </Link>
       </div>
 
       <nav className="flex-1 py-3 px-2 space-y-0.5">
