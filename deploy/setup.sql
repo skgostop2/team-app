@@ -797,6 +797,21 @@ create or replace trigger trg_tasks_audit_insert after insert on public.tasks fo
 create or replace trigger trg_tasks_log_assignee after update of assignee_id on public.tasks for each row execute function tasks_log_assignee();
 create or replace trigger trg_tasks_tombstone before delete on public.tasks for each row execute function tasks_tombstone();
 create or replace trigger trg_task_items_progress after insert or delete or update on public.task_items for each row execute function task_items_sync_progress();
+
+-- 업무를 완료 처리하면 남은 세부 항목도 전부 체크된 것으로 본다
+create or replace function public.tasks_complete_items()
+returns trigger language plpgsql security definer set search_path to 'public' as $$
+begin
+  if new.status = '완료' and old.status is distinct from '완료' then
+    update public.task_items
+       set done = true, done_at = now(), done_by = coalesce(auth.uid(), new.assignee_id)
+     where task_id = new.id and not done;
+  end if;
+  return new;
+end $$;
+revoke execute on function public.tasks_complete_items() from public, anon, authenticated;
+create or replace trigger trg_tasks_complete_items after update of status on public.tasks
+  for each row execute function public.tasks_complete_items();
 create or replace trigger trg_task_updates_touch before update on public.task_updates for each row execute function task_updates_touch();
 create or replace trigger trg_personal_notes_touch before update on public.personal_notes for each row execute function personal_notes_touch();
 
