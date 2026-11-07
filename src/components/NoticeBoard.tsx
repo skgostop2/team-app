@@ -6,6 +6,8 @@ import { createClient } from "@/lib/supabase/client";
 import { formatDateTime } from "@/lib/utils";
 import type { Notice, NoticeRead, Profile } from "@/lib/types";
 import { isManager } from "@/lib/roles";
+import NoticeReplies, { type NoticeReply } from "@/components/NoticeReplies";
+import Attachments from "@/components/Attachments";
 
 export default function NoticeBoard({ compact = false }: { compact?: boolean }) {
   const [me, setMe] = useState<Profile | null>(null);
@@ -14,6 +16,9 @@ export default function NoticeBoard({ compact = false }: { compact?: boolean }) 
   const [reads, setReads] = useState<NoticeRead[]>([]);
   const [loading, setLoading] = useState(true);
   const [names, setNames] = useState<Map<string, string>>(new Map());
+  const [replies, setReplies] = useState<NoticeReply[]>([]);
+  /** 팀장·실장 id (답글·확인 표시용) */
+  const [managerIds, setManagerIds] = useState<Set<string>>(new Set());
   /** 메모처럼 한 칸에 쓴다 — 첫 줄이 제목, 나머지가 내용 */
   const [draft, setDraft] = useState("");
   const [saving, setSaving] = useState(false);
@@ -33,7 +38,7 @@ export default function NoticeBoard({ compact = false }: { compact?: boolean }) 
     } = await supabase.auth.getUser();
     if (!user) return;
 
-    const [{ data: profile }, { data: n }, { data: p }, { data: r }, { data: everyone }] =
+    const [{ data: profile }, { data: n }, { data: p }, { data: r }, { data: everyone }, { data: rp }] =
       await Promise.all([
       supabase.from("profiles").select("*").eq("id", user.id).single(),
       supabase.from("notices").select("*").order("created_at", { ascending: false }),
@@ -47,7 +52,16 @@ export default function NoticeBoard({ compact = false }: { compact?: boolean }) 
       supabase.from("notice_reads").select("*"),
       // 작성자 이름을 띄우기 위해 전원 (삭제된 사람 포함)
       supabase.from("profiles").select("id, name, role").order("name"),
+      supabase.from("notice_replies").select("*").order("created_at", { ascending: true }),
     ]);
+    setReplies((rp ?? []) as NoticeReply[]);
+    setManagerIds(
+      new Set(
+        ((everyone ?? []) as { id: string; role: string }[])
+          .filter((x) => x.role === "팀장" || x.role === "실장")
+          .map((x) => x.id)
+      )
+    );
 
     setMe(profile as Profile);
     setNotices((n ?? []) as Notice[]);
@@ -61,6 +75,15 @@ export default function NoticeBoard({ compact = false }: { compact?: boolean }) 
 
   useEffect(() => {
     load();
+    const supabase = createClient();
+    const ch = supabase
+      .channel("notice-board")
+      .on("postgres_changes", { event: "*", schema: "public", table: "notices" }, () => load())
+      .on("postgres_changes", { event: "*", schema: "public", table: "notice_replies" }, () => load())
+      .subscribe();
+    return () => {
+      supabase.removeChannel(ch);
+    };
   }, []);
 
   const isLead = isManager(me);
@@ -243,6 +266,26 @@ export default function NoticeBoard({ compact = false }: { compact?: boolean }) 
                     </button>
                   )}
                 </div>
+
+                <Attachments
+                  noticeId={n.id}
+                  canUpload={isLead || n.created_by === me?.id}
+                  names={names}
+                  meId={me?.id}
+                  isLead={isLead}
+                  compact
+                />
+                <NoticeReplies
+                  noticeId={n.id}
+                  replies={replies.filter((r) => r.notice_id === n.id)}
+                  names={names}
+                  managerIds={managerIds}
+                  leadSeen={noticeReads.some((r) => managerIds.has(r.user_id))}
+                  showLeadSeen={!isNotice}
+                  meId={me?.id}
+                  isLead={isLead}
+                  onChanged={load}
+                />
 
                 {isLead && expanded === n.id && (
                   <div className="mt-2 pt-2 border-t border-black/10 text-xs space-y-1">

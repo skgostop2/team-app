@@ -9,6 +9,8 @@ import type { Profile, TaskHistory, TaskWithEffectiveStatus } from "@/lib/types"
 import StatusBadge from "@/components/StatusBadge";
 import { isManager, isTeamLead, isAssignable } from "@/lib/roles";
 import DeleteLock from "@/components/DeleteLock";
+import QuestionModal from "@/components/QuestionModal";
+import Attachments from "@/components/Attachments";
 import { useUnsavedChanges } from "@/lib/useUnsavedChanges";
 
 /**
@@ -59,6 +61,8 @@ export default function TaskDetail({
   const router = useRouter();
   const [me, setMe] = useState<Profile | null>(null);
   const [task, setTask] = useState<TaskWithEffectiveStatus | null>(null);
+  /** 「질문 있어요」를 눌러 연 질문 창 */
+  const [asking, setAsking] = useState(false);
   const [profiles, setProfiles] = useState<Profile[]>([]);
   const [history, setHistory] = useState<TaskHistory[]>([]);
   const [loading, setLoading] = useState(true);
@@ -421,6 +425,13 @@ export default function TaskDetail({
                 </span>
               )}
             </div>
+            <Attachments
+              taskId={task.id}
+              canUpload
+              names={new Map(profiles.map((p) => [p.id, p.name]))}
+              meId={me?.id}
+              isLead={isLead}
+            />
           </div>
         ) : (
           <div className="space-y-3">
@@ -433,6 +444,13 @@ export default function TaskDetail({
                 완료계획일정: {formatDate(task.due_date)}
                 {task.instructor && <> · 지시자: {task.instructor}</>}
               </p>
+              <Attachments
+                taskId={task.id}
+                canUpload={canEditProgress || (task.deputy_ids ?? []).includes(me?.id ?? "")}
+                names={new Map(profiles.map((p) => [p.id, p.name]))}
+                meId={me?.id}
+                isLead={isLead}
+              />
             </div>
             <div>
               <label className="block text-xs font-medium text-gray-500 mb-1">비고</label>
@@ -521,13 +539,26 @@ export default function TaskDetail({
 
         <div className="flex flex-wrap gap-2 pt-2 border-t border-gray-100">
           {task.is_new && isAssignee && (
-            <button
-              onClick={confirmNew}
-              disabled={saving}
-              className="text-sm px-4 py-2 rounded-lg bg-gray-900 text-white font-medium hover:bg-black disabled:opacity-50"
-            >
-              확인했습니다
-            </button>
+            <>
+              {/* 확인은 "봤다"가 아니라 "알아들었다"여야 한다 — 모르면 바로 물을 길을 같이 준다 */}
+              <button
+                onClick={confirmNew}
+                disabled={saving}
+                className="text-sm px-4 py-2 rounded-lg bg-gray-900 text-white font-medium hover:bg-black disabled:opacity-50"
+              >
+                ✓ 이해했어요
+              </button>
+              <button
+                onClick={async () => {
+                  await confirmNew();
+                  setAsking(true);
+                }}
+                disabled={saving}
+                className="text-sm px-4 py-2 rounded-lg border-2 border-amber-400 bg-amber-50 text-amber-900 font-medium hover:bg-amber-100 disabled:opacity-50"
+              >
+                ? 질문 있어요
+              </button>
+            </>
           )}
           {canEditProgress && task.status === "완료" && (
             <button
@@ -588,6 +619,19 @@ export default function TaskDetail({
         </div>
       </div>
 
+      {asking && task && (
+        <QuestionModal
+          task={task}
+          profiles={profiles}
+          canAsk
+          canAnswer={isManager(me)}
+          onClose={() => setAsking(false)}
+          onChanged={() => {
+            load();
+            onChanged?.();
+          }}
+        />
+      )}
       {askDelete && task && (
         <DeleteLock
           title={task.title}

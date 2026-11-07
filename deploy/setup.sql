@@ -1207,3 +1207,73 @@ revoke execute on function public.notify_due_tasks() from public, anon, authenti
 --     body := '{}'::jsonb);
 -- $$);
 -- select cron.schedule('notify-due-tasks-0800-kst', '0 23 * * *', $$ select public.notify_due_tasks(); $$);
+
+-- ─────────────────────────────────────────────────────────────
+-- 8. 제안 답글 · 첨부
+-- ─────────────────────────────────────────────────────────────
+create table if not exists public.notice_replies (
+  id uuid default gen_random_uuid() primary key,
+  notice_id uuid not null references public.notices(id) on delete cascade,
+  author_id uuid not null references public.profiles(id),
+  content text not null,
+  created_at timestamptz default now() not null
+);
+create index if not exists notice_replies_notice on public.notice_replies(notice_id, created_at);
+alter table public.notice_replies enable row level security;
+create policy notice_replies_select on public.notice_replies for select using (is_approved(auth.uid()));
+create policy notice_replies_insert on public.notice_replies for insert with check (author_id = auth.uid() and is_approved(auth.uid()));
+create policy notice_replies_delete on public.notice_replies for delete using (author_id = auth.uid() or is_manager(auth.uid()));
+alter publication supabase_realtime add table public.notice_replies;
+-- 팀원도 「팀장이 확인했는지」는 본다
+alter policy notice_reads_select on public.notice_reads using (user_id = auth.uid() or is_manager(auth.uid()) or is_manager(user_id));
+
+create or replace function public.notif_notice_reply() returns trigger
+language plpgsql security definer set search_path to 'public' as $$
+declare n record; who text; u uuid;
+begin
+  select * into n from public.notices where id = new.notice_id;
+  select name into who from public.profiles where id = new.author_id;
+  perform public.notify_user(n.created_by, '답글', coalesce(who,'팀원')||' 님이 답했습니다: '||n.title, new.content, '/notices', n.id);
+  for u in select distinct author_id from public.notice_replies where notice_id = new.notice_id and author_id not in (new.author_id, n.created_by) loop
+    perform public.notify_user(u, '답글', coalesce(who,'팀원')||' 님이 답했습니다: '||n.title, new.content, '/notices', n.id);
+  end loop;
+  return new;
+end $$;
+create or replace trigger trg_notif_notice_reply after insert on public.notice_replies
+  for each row execute function public.notif_notice_reply();
+
+-- 첨부 (저장소 attachments 버킷, 비공개, 20MB)
+insert into storage.buckets (id, name, public, file_size_limit) values ('attachments','attachments',false,20971520)
+on conflict (id) do nothing;
+create table if not exists public.attachments (
+  id uuid default gen_random_uuid() primary key,
+  task_id uuid references public.tasks(id) on delete cascade,
+  notice_id uuid references public.notices(id) on delete cascade,
+  path text not null unique,
+  name text not null,
+  size int,
+  mime text,
+  uploaded_by uuid not null references public.profiles(id),
+  created_at timestamptz default now() not null,
+  check (task_id is not null or notice_id is not null)
+);
+create index if not exists attachments_task on public.attachments(task_id);
+create index if not exists attachments_notice on public.attachments(notice_id);
+alter table public.attachments enable row level security;
+create policy attachments_select on public.attachments for select using (
+  (task_id is not null and exists (select 1 from public.tasks t where t.id = attachments.task_id))
+  or (notice_id is not null and exists (select 1 from public.notices n where n.id = attachments.notice_id)));
+create policy attachments_insert on public.attachments for insert with check (
+  uploaded_by = auth.uid() and (
+    (task_id is not null and exists (select 1 from public.tasks t where t.id = attachments.task_id and (
+        is_manager(auth.uid()) or manages_task(auth.uid(), t.assignee_id, t.deputy_ids)
+        or t.assignee_id = auth.uid() or auth.uid() = any(t.deputy_ids)
+        or (t.source = '팀원추가' and t.created_by = auth.uid()))))
+    or (notice_id is not null and exists (select 1 from public.notices n where n.id = attachments.notice_id and (n.created_by = auth.uid() or is_manager(auth.uid()))))));
+create policy attachments_delete on public.attachments for delete using (uploaded_by = auth.uid() or is_manager(auth.uid()));
+create policy "attachments upload own folder" on storage.objects for insert to authenticated
+  with check (bucket_id = 'attachments' and (storage.foldername(name))[1] = auth.uid()::text);
+create policy "attachments read if listed" on storage.objects for select to authenticated
+  using (bucket_id = 'attachments' and exists (select 1 from public.attachments a where a.path = name));
+create policy "attachments delete own or manager" on storage.objects for delete to authenticated
+  using (bucket_id = 'attachments' and ((storage.foldername(name))[1] = auth.uid()::text or is_manager(auth.uid())));
