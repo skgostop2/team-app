@@ -52,13 +52,19 @@ export default function NoticePanel() {
     }
     loadRecent();
     const supabase = createClient();
-    const ch = supabase
-      .channel("notices-panel")
+    let ch: ReturnType<typeof supabase.channel> | null = null;
+    try {
+      ch = supabase
+      .channel(`notices-panel-${Date.now()}-${Math.random().toString(36).slice(2)}`)
       .on("postgres_changes", { event: "*", schema: "public", table: "notices" }, () => loadRecent())
       .subscribe();
-    const timer = setInterval(loadRecent, 300000);
+    } catch (e) {
+      console.warn("실시간 구독 실패 — 주기적으로 다시 봅니다", e);
+      ch = null;
+    }
+    const timer = setInterval(loadRecent, 60000);
     return () => {
-      supabase.removeChannel(ch);
+      if (ch) supabase.removeChannel(ch).catch(() => {});
       clearInterval(timer);
     };
   }, []);

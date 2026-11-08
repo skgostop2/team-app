@@ -58,26 +58,40 @@ export default function NotificationBell({
   useEffect(() => {
     load();
     const supabase = createClient();
-    const ch = supabase
-      .channel(`notif-${userId}`)
-      .on(
-        "postgres_changes",
-        { event: "INSERT", schema: "public", table: "notifications", filter: `user_id=eq.${userId}` },
-        (payload) => {
-          const n = payload.new as Notification;
-          setItems((prev) => [n, ...prev].slice(0, 30));
-          setFlash(n);
-          setTimeout(() => setFlash((f) => (f?.id === n.id ? null : f)), 6000);
-        }
-      )
-      .subscribe();
+    /*
+      채널 이름은 매번 새로 만든다. 같은 이름을 다시 쓰면 supabase 가 이미 구독 중인
+      채널을 돌려주고, 거기에 .on() 을 또 붙이면 "cannot add callbacks after subscribe()"
+      로 화면 전체가 깨진다 (11-09 장애 원인). 실시간이 안 되더라도 화면은 살아야 하므로
+      전부 try 로 감싸고, 60초 폴링을 같이 둔다.
+    */
+    let ch: ReturnType<typeof supabase.channel> | null = null;
+    try {
+      ch = supabase
+        .channel(`notif-${userId}-${Date.now()}-${Math.random().toString(36).slice(2)}`)
+        .on(
+          "postgres_changes",
+          { event: "INSERT", schema: "public", table: "notifications", filter: `user_id=eq.${userId}` },
+          (payload) => {
+            const n = payload.new as Notification;
+            setItems((prev) => (prev.some((x) => x.id === n.id) ? prev : [n, ...prev].slice(0, 30)));
+            setFlash(n);
+            setTimeout(() => setFlash((f) => (f?.id === n.id ? null : f)), 6000);
+          }
+        );
+      ch.subscribe();
+    } catch (e) {
+      console.warn("알림 실시간 구독 실패 — 폴링으로 대신합니다", e);
+      ch = null;
+    }
+    const timer = setInterval(load, 60000);
     // 탭이 오래 잠들었다 깨면 한 번 다시 맞춘다
     const onVisible = () => {
       if (document.visibilityState === "visible") load();
     };
     document.addEventListener("visibilitychange", onVisible);
     return () => {
-      supabase.removeChannel(ch);
+      if (ch) supabase.removeChannel(ch).catch(() => {});
+      clearInterval(timer);
       document.removeEventListener("visibilitychange", onVisible);
     };
   }, [userId, load]);

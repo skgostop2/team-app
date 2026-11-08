@@ -45,13 +45,19 @@ export default function NoticePopup({ userId }: { userId: string }) {
     loadUnread();
     // 새 글이 올라오는 순간 받는다. 혹시 끊겼을 때를 위해 5분마다 한 번 더 본다.
     const supabase = createClient();
-    const ch = supabase
-      .channel("notices-popup")
+    let ch: ReturnType<typeof supabase.channel> | null = null;
+    try {
+      ch = supabase
+      .channel(`notices-popup-${Date.now()}-${Math.random().toString(36).slice(2)}`)
       .on("postgres_changes", { event: "INSERT", schema: "public", table: "notices" }, () => loadUnread())
       .subscribe();
-    const timer = setInterval(loadUnread, 300000);
+    } catch (e) {
+      console.warn("실시간 구독 실패 — 주기적으로 다시 봅니다", e);
+      ch = null;
+    }
+    const timer = setInterval(loadUnread, 60000);
     return () => {
-      supabase.removeChannel(ch);
+      if (ch) supabase.removeChannel(ch).catch(() => {});
       clearInterval(timer);
     };
   }, [loadUnread]);

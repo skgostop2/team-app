@@ -41,16 +41,22 @@ export default function NoticeStrip() {
     if (window.matchMedia("(min-width: 768px)").matches) return;
     load();
     const supabase = createClient();
-    const ch = supabase
-      .channel("notices-strip")
+    let ch: ReturnType<typeof supabase.channel> | null = null;
+    try {
+      ch = supabase
+      .channel(`notices-strip-${Date.now()}-${Math.random().toString(36).slice(2)}`)
       .on("postgres_changes", { event: "*", schema: "public", table: "notices" }, () => load())
       .subscribe();
-    const timer = setInterval(load, 300000);
+    } catch (e) {
+      console.warn("실시간 구독 실패 — 주기적으로 다시 봅니다", e);
+      ch = null;
+    }
+    const timer = setInterval(load, 60000);
     // 💬 창에서 글을 올리면 바로 다시 불러온다
     const onPosted = () => load();
     window.addEventListener("notice-posted", onPosted);
     return () => {
-      supabase.removeChannel(ch);
+      if (ch) supabase.removeChannel(ch).catch(() => {});
       clearInterval(timer);
       window.removeEventListener("notice-posted", onPosted);
     };
