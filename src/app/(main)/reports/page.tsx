@@ -77,8 +77,11 @@ export default function ReportsPage() {
     return groups.find((g) => g.id === p?.group_id)?.name ?? null;
   };
 
-  const pending = tasks.filter((t) => !t.lead_ack_at);
-  const acked = tasks.filter((t) => t.lead_ack_at).slice(0, 30);
+  // 팀장·실장이 직접 지시한 것은 보고 대상이 아니다 — 팀원·그룹장이 올린 것만
+  const managerIds = new Set(profiles.filter((p) => p.role === "팀장" || p.role === "실장").map((p) => p.id));
+  const reported = tasks.filter((t) => !t.created_by || !managerIds.has(t.created_by));
+  const pending = reported.filter((t) => !t.lead_ack_at);
+  const acked = reported.filter((t) => t.lead_ack_at).slice(0, 30);
 
   // 최근에 가입한 사람 — 우리 팀이 아닌 계정이 들어왔는지 눈에 띄게 한다
   const since = Date.now() - NEW_MEMBER_DAYS * 24 * 60 * 60 * 1000;

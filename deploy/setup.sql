@@ -819,7 +819,8 @@ create or replace view public.v_tasks with (security_invoker = true) as
     -- 마지막으로 무엇이든 움직인 때: 업무 수정·진행기록·항목 체크 중 가장 최근
     GREATEST(t.updated_at, t.created_at, u.last_at, i.last_done) AS last_activity_at,
     -- 정체: 끝나지 않았고 7일 넘게 아무것도 안 움직임
-    (t.status <> '완료' AND GREATEST(t.updated_at, t.created_at, u.last_at, i.last_done) < now() - interval '7 days') AS stalled
+    (t.status <> '완료' AND GREATEST(t.updated_at, t.created_at, u.last_at, i.last_done) < now() - interval '7 days') AS stalled,
+    t.lead_ack_at, t.lead_ack_by, t.batch_id
    FROM tasks t
      LEFT JOIN LATERAL ( SELECT count(*) AS cnt, max(tu.created_at) AS last_at,
             (array_agg(tu.content ORDER BY tu.created_at DESC))[1] AS last_text,
