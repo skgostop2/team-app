@@ -25,6 +25,8 @@ export default function NoticePanel() {
   const [recent, setRecent] = useState<Notice[]>([]);
   const [names, setNames] = useState<Map<string, string>>(new Map());
   const [hidden, setHidden] = useState<Set<string>>(new Set());
+  /** 쪽지를 펼쳐 보이는지 — 평소에는 접어 두어 표를 가리지 않는다. 올린 직후에는 잠깐 펼친다 */
+  const [expanded, setExpanded] = useState(false);
   const path = usePathname();
   const router = useRouter();
 
@@ -122,6 +124,8 @@ export default function NoticePanel() {
     }
     setText("");
     loadRecent(); // 올린 글이 오른쪽에 바로 붙는다
+    setExpanded(true);
+    setTimeout(() => setExpanded(false), 8000);
     window.dispatchEvent(new Event("notice-posted")); // 폰 위쪽 띠도 바로
     setSent(true);
     setTimeout(() => {
@@ -133,8 +137,23 @@ export default function NoticePanel() {
   return (
     <>
       {/* 최근에 붙은 글 — 올리면 여기 바로 보인다 (PC 화면 오른쪽) */}
-      {!open && (
+      {!open && !expanded && recent.filter((n) => !hidden.has(n.id)).length > 0 && (
+        <button
+          onClick={() => setExpanded(true)}
+          title="최근 공지·제안 펼쳐 보기"
+          className="no-print hidden md:inline-flex fixed right-3 bottom-48 z-30 items-center gap-1.5 rounded-full border border-amber-400 bg-amber-50 text-amber-900 px-3 py-1.5 text-xs font-medium shadow hover:bg-amber-100"
+        >
+          📢 최근 글 {Math.min(SHOW_COUNT, recent.filter((n) => !hidden.has(n.id)).length)}
+        </button>
+      )}
+      {!open && expanded && (
         <div className="no-print hidden md:flex fixed right-3 bottom-48 z-30 w-64 flex-col gap-2">
+          <button
+            onClick={() => setExpanded(false)}
+            className="self-end text-[11px] text-gray-500 hover:text-gray-800 px-1"
+          >
+            접기 ▾
+          </button>
           {recent
             .filter((n) => !hidden.has(n.id))
             .slice(0, SHOW_COUNT)

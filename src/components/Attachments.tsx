@@ -147,7 +147,9 @@ export default function Attachments({
             >
               {busy ? `올리는 중… ${busy}` : "+ 사진·파일"}
             </button>
-            <span className="text-[11px] text-gray-400">폰에서는 카메라로 바로 찍을 수 있습니다 · {MAX_MB}MB까지</span>
+            {!compact && (
+              <span className="text-[11px] text-gray-400">폰에서는 카메라로 바로 찍을 수 있습니다 · {MAX_MB}MB까지</span>
+            )}
           </>
         )}
       </div>

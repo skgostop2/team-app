@@ -36,7 +36,13 @@ export default function WeeklyReport({
   // 인쇄할 때 뒤에 깔린 화면이 같이 찍히지 않게
   useEffect(() => {
     document.body.classList.add("report-open");
-    return () => document.body.classList.remove("report-open");
+    // 보고서는 종이처럼 — 어두운 화면 설정 중이어도 밝게 보여주고, 닫으면 되돌린다
+    const prev = document.documentElement.dataset.theme;
+    document.documentElement.dataset.theme = "light";
+    return () => {
+      document.body.classList.remove("report-open");
+      document.documentElement.dataset.theme = prev ?? "sf";
+    };
   }, []);
 
   const done = people.reduce((n, p) => n + p.done, 0);

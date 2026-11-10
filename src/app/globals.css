@@ -393,3 +393,25 @@ html[data-theme="sf"] .ledger-head {
   body.report-open .report-root, body.report-open .report-root * { visibility: visible; }
   body.report-open .report-root { position: absolute; left: 0; top: 0; width: 100%; }
 }
+
+/* ── 11-09 추가 부품(알림·제안·오늘 한 줄·첨부)이 어두운 화면에서도 읽히게 ── */
+html[data-theme="sf"] .bg-sky-50 { background-color: rgba(56, 189, 248, 0.12); }
+html[data-theme="sf"] .border-sky-300, html[data-theme="sf"] .border-sky-400 { border-color: rgba(56, 189, 248, 0.45); }
+html[data-theme="sf"] .border-amber-300, html[data-theme="sf"] .border-amber-400 { border-color: rgba(251, 191, 36, 0.5); }
+html[data-theme="sf"] .border-blue-300, html[data-theme="sf"] .border-blue-600 { border-color: rgba(94, 234, 212, 0.45); }
+html[data-theme="sf"] .border-red-300 { border-color: rgba(248, 113, 113, 0.5); }
+html[data-theme="sf"] .border-emerald-300, html[data-theme="sf"] .border-emerald-200 { border-color: rgba(52, 211, 153, 0.45); }
+html[data-theme="sf"] .border-violet-300 { border-color: rgba(167, 139, 250, 0.5); }
+html[data-theme="sf"] .bg-violet-50 { background-color: rgba(139, 92, 246, 0.16); }
+html[data-theme="sf"] .text-blue-900, html[data-theme="sf"] .text-blue-800 { color: #99f6e4; }
+html[data-theme="sf"] .text-red-800 { color: #fca5a5; }
+html[data-theme="sf"] .text-emerald-800 { color: #6ee7b7; }
+html[data-theme="sf"] .text-violet-800 { color: #c4b5fd; }
+html[data-theme="sf"] .text-blue-400 { color: #5eead4; }
+html[data-theme="sf"] .bg-blue-600.text-white, html[data-theme="sf"] .bg-emerald-600.text-white { color: #fff; }
+/* 밝은 색 띠(노란 머리, 초록 머리) 위 글자는 검게 */
+html[data-theme="sf"] .bg-amber-400, html[data-theme="sf"] .bg-amber-400 *,
+html[data-theme="sf"] .bg-amber-200, html[data-theme="sf"] .bg-amber-200 * { color: #0f172a; }
+html[data-theme="sf"] .bg-amber-500.text-white { color: #0f172a; }
+/* 검은 안내 띠(한 줄 남기기) 안의 입력칸은 밝게 */
+html[data-theme="sf"] .bg-gray-900 input.bg-white { background: #fff; color: #0f172a; }
