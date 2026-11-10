@@ -32,6 +32,9 @@ export default function TaskItemsModal({
   const [error, setError] = useState<string | null>(null);
   const [adding, setAdding] = useState("");
   const [manual, setManual] = useState(task.progress ?? 0);
+  /** 글자를 고치는 중인 항목 */
+  const [editingId, setEditingId] = useState<string | null>(null);
+  const [editText, setEditText] = useState("");
 
   const load = useCallback(async () => {
     const supabase = createClient();
@@ -104,7 +107,44 @@ export default function TaskItemsModal({
     const supabase = createClient();
     await run(async () => {
       const { error } = await supabase.from("task_items").delete().eq("id", it.id);
+      if (error) return { error };
+      // 번호가 비지 않게 당긴다 (지운 뒤 다시 넣어도 순서가 꼬이지 않도록)
+      const rest = items.filter((x) => x.id !== it.id);
+      for (let i = 0; i < rest.length; i++) {
+        if (rest[i].idx !== i) await supabase.from("task_items").update({ idx: i }).eq("id", rest[i].id);
+      }
+      return { error: null };
+    });
+  }
+
+  /** 항목 글자 고치기 — 오타 하나 때문에 지우고 다시 넣지 않도록 */
+  async function saveText(it: TaskItem) {
+    const text = editText.trim();
+    if (!text || text === it.text) {
+      setEditingId(null);
+      return;
+    }
+    const supabase = createClient();
+    const ok = await run(async () => {
+      const { error } = await supabase.from("task_items").update({ text }).eq("id", it.id);
       return { error };
+    });
+    if (ok) setEditingId(null);
+  }
+
+  /** 위아래로 한 칸 — 이웃과 번호를 맞바꾼다 */
+  async function move(it: TaskItem, dir: -1 | 1) {
+    const i = items.findIndex((x) => x.id === it.id);
+    const j = i + dir;
+    if (i < 0 || j < 0 || j >= items.length) return;
+    const other = items[j];
+    const supabase = createClient();
+    await run(async () => {
+      // 같은 번호가 잠깐 겹쳐도 되도록 둘을 순서대로 바꾼다
+      const { error: e1 } = await supabase.from("task_items").update({ idx: j }).eq("id", it.id);
+      if (e1) return { error: e1 };
+      const { error: e2 } = await supabase.from("task_items").update({ idx: i }).eq("id", other.id);
+      return { error: e2 };
     });
   }
 
@@ -259,24 +299,66 @@ export default function TaskItemsModal({
                     onChange={() => toggle(it)}
                     className="w-5 h-5 mt-0.5 shrink-0"
                   />
-                  <span
-                    className={cn(
-                      "flex-1 text-sm break-keep",
-                      it.done ? "text-gray-400 line-through" : "text-gray-800"
-                    )}
-                  >
-                    <span className="text-gray-400 mr-1">{i + 1})</span>
-                    {it.text}
-                  </span>
-                  {canEdit && (
-                    <button
-                      onClick={() => removeOne(it)}
-                      disabled={busy}
-                      title="이 항목 지우기"
-                      className="shrink-0 text-xs text-gray-300 hover:text-red-600 px-1"
+                  {editingId === it.id ? (
+                    <input
+                      autoFocus
+                      value={editText}
+                      onChange={(e) => setEditText(e.target.value)}
+                      onKeyDown={(e) => {
+                        if (e.key === "Enter" && !e.nativeEvent.isComposing) {
+                          e.preventDefault();
+                          saveText(it);
+                        }
+                        if (e.key === "Escape") setEditingId(null);
+                      }}
+                      onBlur={() => saveText(it)}
+                      className="flex-1 rounded border border-blue-400 px-2 py-1 text-sm"
+                    />
+                  ) : (
+                    <span
+                      onClick={() => {
+                        if (!canEdit || busy) return;
+                        setEditingId(it.id);
+                        setEditText(it.text);
+                      }}
+                      title={canEdit ? "누르면 글자를 고칠 수 있습니다" : undefined}
+                      className={cn(
+                        "flex-1 text-sm break-keep",
+                        canEdit && "cursor-text hover:bg-blue-50/60 rounded px-1 -mx-1",
+                        it.done ? "text-gray-400 line-through" : "text-gray-800"
+                      )}
                     >
-                      ×
-                    </button>
+                      <span className="text-gray-400 mr-1">{i + 1})</span>
+                      {it.text}
+                    </span>
+                  )}
+                  {canEdit && editingId !== it.id && (
+                    <span className="shrink-0 flex items-center gap-0.5">
+                      <button
+                        onClick={() => move(it, -1)}
+                        disabled={busy || i === 0}
+                        title="위로"
+                        className="text-[11px] text-gray-400 hover:text-gray-800 disabled:opacity-25 px-1"
+                      >
+                        ▲
+                      </button>
+                      <button
+                        onClick={() => move(it, 1)}
+                        disabled={busy || i === items.length - 1}
+                        title="아래로"
+                        className="text-[11px] text-gray-400 hover:text-gray-800 disabled:opacity-25 px-1"
+                      >
+                        ▼
+                      </button>
+                      <button
+                        onClick={() => removeOne(it)}
+                        disabled={busy}
+                        title="이 항목 지우기"
+                        className="text-xs text-gray-300 hover:text-red-600 px-1"
+                      >
+                        ×
+                      </button>
+                    </span>
                   )}
                 </li>
               ))}
@@ -305,8 +387,9 @@ export default function TaskItemsModal({
               </button>
             </div>
             <p className="text-[11px] text-gray-400 mt-2 break-keep">
-              진행률은 체크한 항목 수로 자동 계산됩니다. 다 체크해도 완료로 바뀌지는 않습니다 —
-              완료는 표의 <b>완료 처리</b> 버튼으로 하십시오.
+              항목 글자를 누르면 그 자리에서 고쳐지고, ▲▼ 로 순서를 바꿉니다. 진행률은 체크한
+              항목 수로 자동 계산되며, 다 체크해도 완료로 바뀌지는 않습니다 — 완료는 표의{" "}
+              <b>완료 처리</b> 버튼으로 하십시오.
             </p>
           </div>
         )}
