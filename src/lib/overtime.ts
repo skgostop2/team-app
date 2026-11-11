@@ -76,8 +76,18 @@ export function mustCheck(p: Profile | null | undefined): boolean {
 }
 
 /**
+ * 본인이 직접 넣거나 고칠 수 있는 날인가 — 오늘까지, 그리고 (그 달 안 또는 7일 이내).
+ * 서버 규칙(ot_editable)과 똑같이 맞춘다. 이 밖의 날짜는 팀장·상무만 넣을 수 있다.
+ */
+export function selfEditable(d: string): boolean {
+  const today = todayKey();
+  return d <= today && (d >= addDays(today, -7) || d.slice(0, 7) === today.slice(0, 7));
+}
+
+/**
  * 아직 체크하지 않은 날 — 시작일부터 어제까지의 주중 날짜 중 기록이 없는 날.
  * 너무 길어지지 않게 최근 10일만 본다 (오래 쉰 사람이 돌아왔을 때 수십 줄이 뜨지 않도록).
+ * 본인이 넣을 수 있는 날만 돌려준다 (띠에 떴는데 눌러도 저장이 안 되는 일을 막는다).
  */
 export function missingDays(entries: { work_date: string }[], startDate: string): string[] {
   const today = todayKey();
@@ -87,6 +97,8 @@ export function missingDays(entries: { work_date: string }[], startDate: string)
   const have = new Set(entries.map((e) => e.work_date));
   return workdaysBetween(from, yesterday)
     .filter((d) => !have.has(d))
+    // 본인이 못 넣는 날(달이 바뀌고 8일 넘게 지난 날)은 묻지 않는다 — 팀장 화면에 「미」로 남는다
+    .filter(selfEditable)
     .slice(-10);
 }
 

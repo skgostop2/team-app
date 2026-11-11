@@ -16,6 +16,7 @@ import {
   monthKey,
   mustCheck,
   otWork,
+  selfEditable,
   shiftMonthKey,
   shortDay,
   sumMinutes,
@@ -141,7 +142,12 @@ export default function OvertimePage() {
       { user_id: userId, work_date: d, minutes: 0, end_time: null, task_id: null, task_title: null, note: null },
       { onConflict: "user_id,work_date" }
     );
-    if (error) return window.alert(`저장하지 못했습니다: ${error.message}`);
+    if (error)
+      return window.alert(
+        error.message.includes("row-level security")
+          ? "이 날짜는 이제 본인이 넣을 수 없습니다 (그 달 안 또는 7일 이내만). 팀장에게 말씀해 주세요."
+          : `저장하지 못했습니다: ${error.message}`
+      );
     await load();
     window.dispatchEvent(new Event("overtime-saved"));
   }
@@ -276,7 +282,12 @@ export default function OvertimePage() {
                         </td>
                         <td className="px-3 py-2 break-keep text-gray-800">{e ? otWork(e) : ""}</td>
                         <td className="px-3 py-2 text-center">
-                          {e ? (
+                          {!lead && !selfEditable(d) ? (
+                            // 본인이 넣을 수 있는 기간이 지난 날 — 버튼을 두면 눌러도 저장이 안 된다
+                            <span className="text-xs text-gray-500 break-keep">
+                              {e ? "기간 지남" : "팀장에게 말씀"}
+                            </span>
+                          ) : e ? (
                             <button
                               onClick={() => setPick({ userId: me.id, date: d })}
                               className="no-print text-xs px-2.5 py-1 rounded-lg border border-gray-300 text-gray-600 hover:bg-gray-50"
