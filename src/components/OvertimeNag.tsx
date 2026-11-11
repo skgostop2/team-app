@@ -84,7 +84,11 @@ export default function OvertimeNag({ profile }: { profile: Profile }) {
     );
     setBusy(false);
     if (error) {
-      window.alert(`저장하지 못했습니다: ${error.message}`);
+      window.alert(
+        error.message.includes("row-level security")
+          ? "이 날짜는 이제 본인이 넣을 수 없습니다 (그 달 안 또는 7일 이내만). 팀장에게 말씀해 주세요."
+          : `저장하지 못했습니다: ${error.message}`
+      );
       return;
     }
     await load();

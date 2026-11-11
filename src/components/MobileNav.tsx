@@ -95,7 +95,14 @@ export default function MobileNav({
                 href={m.href}
                 className={cn(
                   "flex items-center gap-3 px-4 py-3 rounded-xl text-base",
-                  isOn(m.href) ? "bg-blue-50 text-blue-700 font-medium" : "text-gray-700"
+                  // 잔업은 매일 꼭 넣어야 하는 것이라 굵게
+                  m.href === "/overtime"
+                    ? isOn(m.href)
+                      ? "bg-blue-50 text-blue-700 font-extrabold"
+                      : "text-gray-900 font-extrabold"
+                    : isOn(m.href)
+                      ? "bg-blue-50 text-blue-700 font-medium"
+                      : "text-gray-700"
                 )}
               >
                 <span className="text-xl leading-none">{m.icon}</span>

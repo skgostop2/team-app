@@ -149,7 +149,9 @@ export default function OvertimeEntryModal({
             >
               잔업 없음 (정시 퇴근)
             </button>
-            <p className="text-xs text-gray-500 mt-3 mb-1.5">잔업을 했다면 — 끝난 시각</p>
+            <p className="text-sm font-bold text-gray-900 mt-4 mb-1.5">
+              ① 잔업을 했다면 — 끝난 시각 <span className="font-normal text-xs text-gray-500">(누르기)</span>
+            </p>
             <div className="grid grid-cols-5 gap-1.5">
               {(late ? END_OPTIONS : END_OPTIONS.slice(0, 10)).map((o) => (
                 <button
@@ -174,11 +176,13 @@ export default function OvertimeEntryModal({
             )}
           </div>
 
-          {/* 2. 무슨 업무 때문에 */}
-          {minutes !== null && minutes > 0 && (
-            <>
+          {/* 2. 무슨 업무 때문에 — 처음부터 보여준다 (시각을 눌러야 나타나면 "업무는 어디서 적지?" 하게 된다) */}
+          <>
               <div>
-                <p className="text-sm font-bold text-gray-900 mb-1.5">무슨 업무 때문에 남았나요?</p>
+                <p className="text-sm font-bold text-gray-900">② 무슨 업무 때문에 남았나요?</p>
+                <p className="text-xs text-gray-500 mb-1.5 break-keep">
+                  업무관리에 있는 내 업무에서 고르기만 합니다 — 새로 적지 않습니다
+                </p>
                 <div className="max-h-44 overflow-y-auto rounded-xl border border-gray-200 divide-y divide-gray-100">
                   {tasks.map((t) => (
                     <button
@@ -219,14 +223,15 @@ export default function OvertimeEntryModal({
                 </button>
               )}
               <button
-                onClick={() => save(minutes)}
-                disabled={busy}
+                onClick={() => {
+                  if (minutes && minutes > 0) save(minutes);
+                }}
+                disabled={busy || !minutes}
                 className="w-full rounded-xl bg-gray-900 text-white py-3 text-base font-bold hover:bg-black disabled:opacity-50"
               >
-                {busy ? "저장 중..." : `${hours(minutes)}시간 저장`}
+                {busy ? "저장 중..." : minutes ? `${hours(minutes)}시간 저장` : "① 끝난 시각을 먼저 눌러 주세요"}
               </button>
-            </>
-          )}
+          </>
 
           {error && <p className="text-sm text-red-600 break-keep">{error}</p>}
         </div>

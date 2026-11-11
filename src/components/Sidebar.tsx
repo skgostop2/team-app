@@ -57,13 +57,20 @@ export default function Sidebar({ profile }: { profile: Profile }) {
           return true;
         }).map((item) => {
           const active = pathname === item.href || pathname.startsWith(item.href + "/");
+          // 잔업은 매일 꼭 넣어야 하는 것이라 메뉴에서도 굵게 보이게 한다
+          const strong = item.href === "/overtime";
           return (
             <Link
               key={item.href}
               href={item.href}
               className={cn(
-                "block px-3 py-2.5 rounded-lg text-sm font-medium transition",
-                active ? "bg-blue-50 text-blue-700" : "text-gray-600 hover:bg-gray-50"
+                "block px-3 py-2.5 rounded-lg text-sm transition",
+                strong ? "font-extrabold" : "font-medium",
+                active
+                  ? "bg-blue-50 text-blue-700"
+                  : strong
+                    ? "text-gray-900 hover:bg-gray-50"
+                    : "text-gray-600 hover:bg-gray-50"
               )}
             >
               {isLead ? item.leadLabel : item.memberLabel}
