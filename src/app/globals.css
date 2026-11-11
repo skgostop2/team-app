@@ -415,3 +415,18 @@ html[data-theme="sf"] .bg-amber-200, html[data-theme="sf"] .bg-amber-200 * { col
 html[data-theme="sf"] .bg-amber-500.text-white { color: #0f172a; }
 /* 검은 안내 띠(한 줄 남기기) 안의 입력칸은 밝게 */
 html[data-theme="sf"] .bg-gray-900 input.bg-white { background: #fff; color: #0f172a; }
+
+/* 잔업 화면 */
+html[data-theme="sf"] .border-red-400 { border-color: rgba(248, 113, 113, 0.6); }
+html[data-theme="sf"] .bg-amber-100 { background-color: rgba(251, 191, 36, 0.2); }
+html[data-theme="sf"] .text-blue-800 { color: #99f6e4; }
+html[data-theme="sf"] .bg-red-600.text-white, html[data-theme="sf"] .bg-amber-500.text-white.font-bold { color: #fff; }
+html[data-theme="sf"] .sticky.bg-white { background-color: var(--panel); }
+html[data-theme="sf"] .sticky.bg-gray-50 { background-color: #16213a; }
+/* 어두운 화면에서 마우스를 올렸을 때 칸이 하얗게 뜨지 않게 */
+html[data-theme="sf"] .hover\:bg-gray-50:hover,
+html[data-theme="sf"] .hover\:bg-gray-100:hover { background-color: rgba(125, 211, 252, 0.08); }
+html[data-theme="sf"] .hover\:bg-amber-100:hover { background-color: rgba(251, 191, 36, 0.24); }
+html[data-theme="sf"] .hover\:bg-emerald-100:hover { background-color: rgba(52, 211, 153, 0.22); }
+html[data-theme="sf"] .hover\:bg-blue-100:hover { background-color: rgba(94, 234, 212, 0.18); }
+html[data-theme="sf"] .hover\:bg-red-50:hover { background-color: rgba(248, 113, 113, 0.16); }

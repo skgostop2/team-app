@@ -1278,3 +1278,77 @@ create policy "attachments read if listed" on storage.objects for select to auth
   using (bucket_id = 'attachments' and exists (select 1 from public.attachments a where a.path = name));
 create policy "attachments delete own or manager" on storage.objects for delete to authenticated
   using (bucket_id = 'attachments' and ((storage.foldername(name))[1] = auth.uid()::text or is_manager(auth.uid())));
+
+-- ─────────────────────────────────────────────────────────────
+-- 9. 잔업(OT) 체크
+-- ─────────────────────────────────────────────────────────────
+create table if not exists public.overtime_entries (
+  id uuid default gen_random_uuid() primary key,
+  user_id uuid not null references public.profiles(id) on delete cascade,
+  work_date date not null,
+  minutes int not null check (minutes >= 0 and minutes <= 600 and minutes % 30 = 0),
+  end_time text,
+  task_id uuid references public.tasks(id) on delete set null,
+  task_title text,
+  note text,
+  created_at timestamptz default now() not null,
+  updated_at timestamptz default now() not null,
+  unique (user_id, work_date)
+);
+create index if not exists overtime_entries_date on public.overtime_entries(work_date);
+alter table public.overtime_entries enable row level security;
+
+create table if not exists public.ot_settings (
+  id int primary key default 1 check (id = 1),
+  monthly_hours numeric not null default 20,
+  start_date date not null default current_date,
+  slogan text not null default '시간·돈이 아니라 일이 중심이 되도록 노력합시다',
+  updated_at timestamptz default now()
+);
+insert into public.ot_settings(id) values (1) on conflict (id) do nothing;
+alter table public.ot_settings enable row level security;
+create policy ot_settings_select on public.ot_settings for select using (auth.uid() is not null);
+create policy ot_settings_update on public.ot_settings for update using (is_manager(auth.uid())) with check (is_manager(auth.uid()));
+
+alter table public.profiles add column if not exists ot_exempt boolean not null default false;
+-- ※ profiles_guard 의 "본인이 못 바꾸는 칸" 목록에 ot_exempt 를 넣을 것 (본 팀 DB 에는 반영됨)
+
+create or replace function public.ot_editable(d date) returns boolean
+language sql stable set search_path to 'public' as $$
+  select d <= (now() at time zone 'Asia/Seoul')::date
+     and (d >= (now() at time zone 'Asia/Seoul')::date - 7
+          or date_trunc('month', d) = date_trunc('month', (now() at time zone 'Asia/Seoul')::date));
+$$;
+create policy overtime_select on public.overtime_entries for select using (user_id = auth.uid() or is_manager(auth.uid()));
+create policy overtime_insert on public.overtime_entries for insert
+  with check (is_manager(auth.uid()) or (user_id = auth.uid() and is_approved(auth.uid()) and ot_editable(work_date)));
+create policy overtime_update on public.overtime_entries for update
+  using (is_manager(auth.uid()) or (user_id = auth.uid() and ot_editable(work_date)))
+  with check (is_manager(auth.uid()) or (user_id = auth.uid() and ot_editable(work_date)));
+create policy overtime_delete on public.overtime_entries for delete using (is_manager(auth.uid()));
+create or replace function public.overtime_touch() returns trigger language plpgsql as $$
+begin new.updated_at := now(); return new; end $$;
+create or replace trigger trg_overtime_touch before update on public.overtime_entries
+  for each row execute function public.overtime_touch();
+
+create or replace function public.notify_missing_overtime() returns int
+language plpgsql security definer set search_path to 'public' as $$
+declare d date := (now() at time zone 'Asia/Seoul')::date - 1; n int := 0; u record; s record;
+begin
+  select * into s from public.ot_settings where id = 1;
+  if extract(isodow from d) = 7 then d := d - 2; elsif extract(isodow from d) = 6 then d := d - 1; end if;
+  if d < s.start_date then return 0; end if;
+  for u in
+    select p.id from public.profiles p
+     where p.status = '승인' and p.role <> '실장' and not p.ot_exempt
+       and not exists (select 1 from public.overtime_entries e where e.user_id = p.id and e.work_date = d)
+  loop
+    if exists (select 1 from public.notifications where user_id = u.id and kind = '잔업' and created_at::date = current_date) then continue; end if;
+    insert into public.notifications(user_id, kind, title, body, url)
+    values (u.id, '잔업', to_char(d, 'MM/DD') || ' 잔업 체크를 안 하셨습니다', '잔업이 없었어도 「없음」을 눌러 주세요', '/overtime');
+    n := n + 1;
+  end loop;
+  return n;
+end $$;
+revoke execute on function public.notify_missing_overtime() from public, anon, authenticated;
+-- select cron.schedule('notify-missing-overtime-0805-kst', '5 23 * * 0-4', $$ select public.notify_missing_overtime(); $$);

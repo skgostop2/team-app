@@ -20,6 +20,8 @@ export interface Profile {
   sort_order: number;
   /** 2단계 인증(구글 OTP)을 켰는지 */
   mfa_enabled: boolean;
+  /** 잔업 체크 대상에서 뺐는지 (테스트 계정 등) */
+  ot_exempt?: boolean;
   /** 처음 비밀번호(1234)를 본인 것으로 바꿨는지 */
   password_changed: boolean;
 }

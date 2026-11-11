@@ -13,6 +13,7 @@ import NoticePanel from "./NoticePanel";
 import NoticeStrip from "./NoticeStrip";
 import NotificationBell from "./NotificationBell";
 import PushBanner from "./PushBanner";
+import OvertimeNag from "./OvertimeNag";
 
 export default function AppShell({
   profile,
@@ -47,6 +48,7 @@ export default function AppShell({
         <NoticeStrip />
 
         <main className="p-4 md:p-8 pb-20 md:pb-8 max-w-[1400px] mx-auto space-y-4">
+          <OvertimeNag profile={profile} />
           <PushBanner />
           {children}
         </main>

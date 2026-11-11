@@ -8,7 +8,7 @@ import { disablePush, enablePush, pushState, type PushState } from "@/lib/push";
 import type { Notification } from "@/components/NotificationBell";
 
 const KIND_ICON: Record<string, string> = {
-  지시: "📌", 담당변경: "🔁", 질문: "❓", 답변: "💬", 제안: "💡", 공지: "📢", 보고: "📥", 마감: "⏰",
+  지시: "📌", 담당변경: "🔁", 질문: "❓", 답변: "💬", 제안: "💡", 공지: "📢", 보고: "📥", 마감: "⏰", 잔업: "⏱", 답글: "💬",
 };
 
 /** 알림 전체 목록 + 이 기기의 푸시 켜기/끄기 */

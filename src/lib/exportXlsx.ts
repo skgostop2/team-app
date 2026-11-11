@@ -76,3 +76,40 @@ export function exportWeekly(people: WeeklyPerson[], weekLabel: string) {
   XLSX.utils.book_append_sheet(wb, sheet(nextRows, [8, 40, 11, 9, 20]), "차주 계획");
   save(wb, `주간 계획대비 실적 ${weekLabel}.xlsx`);
 }
+
+/** 잔업 — 월 집계(사람 × 날짜) 와 내역 두 장 */
+export function exportOvertime(opts: {
+  ym: string;
+  days: string[];
+  people: { id: string; name: string }[];
+  entries: { user_id: string; work_date: string; minutes: number; end_time: string | null; task_title: string | null; note: string | null }[];
+  totalByUser: Map<string, number>;
+}) {
+  const { ym, days, people, entries, totalByUser } = opts;
+  const byKey = new Map(entries.map((e) => [`${e.user_id}|${e.work_date}`, e]));
+  const h = (min: number) => Math.round((min / 60) * 10) / 10;
+
+  const head: (string | number | null)[] = ["이름", ...days.map((d) => `${Number(d.slice(8))}일`), "월 합계(h)", "누적(h)", "비고"];
+  const rows: (string | number | null)[][] = [head];
+  for (const p of people) {
+    let sum = 0;
+    const cells = days.map((d) => {
+      const e = byKey.get(`${p.id}|${d}`);
+      if (!e) return "";
+      sum += e.minutes;
+      return h(e.minutes);
+    });
+    rows.push([p.name, ...cells, h(sum), h(totalByUser.get(p.id) ?? 0), ""]);
+  }
+
+  const detail: (string | number | null)[][] = [["날짜", "이름", "끝난 시각", "시간(h)", "업무", "메모", "비고"]];
+  const nameOf = new Map(people.map((p) => [p.id, p.name]));
+  for (const e of [...entries].filter((x) => x.work_date.startsWith(ym)).sort((a, b) => a.work_date.localeCompare(b.work_date))) {
+    detail.push([e.work_date, nameOf.get(e.user_id) ?? "", e.end_time ?? "없음", h(e.minutes), e.task_title ?? "", e.note ?? "", ""]);
+  }
+
+  const wb = XLSX.utils.book_new();
+  XLSX.utils.book_append_sheet(wb, sheet(rows, [10, ...days.map(() => 5), 10, 9, 16]), "월 집계");
+  XLSX.utils.book_append_sheet(wb, sheet(detail, [12, 10, 10, 8, 40, 30, 16]), "내역");
+  save(wb, `잔업 현황 ${ym}.xlsx`);
+}
