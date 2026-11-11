@@ -35,6 +35,11 @@ export const DEFAULT_OT_SETTINGS: OtSettings = {
   slogan: "시간·돈이 아니라 일이 중심이 되도록 노력합시다",
 };
 
+/** 잔업 때 한 일 — 직접 적은 글 (예전 방식으로 업무를 골라 넣은 기록은 그 업무 이름) */
+export function otWork(e: { note: string | null; task_title: string | null }): string {
+  return (e.note ?? "").trim() || (e.task_title ?? "").trim();
+}
+
 /** 끝난 시각 선택지 — 17:00 ~ 24:00 */
 export const END_OPTIONS: { label: string; minutes: number }[] = Array.from({ length: 15 }).map(
   (_, i) => {

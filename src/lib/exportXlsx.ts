@@ -102,14 +102,14 @@ export function exportOvertime(opts: {
     rows.push([p.name, ...cells, h(sum), h(totalByUser.get(p.id) ?? 0), ""]);
   }
 
-  const detail: (string | number | null)[][] = [["날짜", "이름", "끝난 시각", "시간(h)", "업무", "메모", "비고"]];
+  const detail: (string | number | null)[][] = [["날짜", "이름", "끝난 시각", "시간(h)", "잔업 때 한 일", "비고"]];
   const nameOf = new Map(people.map((p) => [p.id, p.name]));
   for (const e of [...entries].filter((x) => x.work_date.startsWith(ym)).sort((a, b) => a.work_date.localeCompare(b.work_date))) {
-    detail.push([e.work_date, nameOf.get(e.user_id) ?? "", e.end_time ?? "없음", h(e.minutes), e.task_title ?? "", e.note ?? "", ""]);
+    detail.push([e.work_date, nameOf.get(e.user_id) ?? "", e.end_time ?? "없음", h(e.minutes), (e.note ?? "").trim() || (e.task_title ?? ""), ""]);
   }
 
   const wb = XLSX.utils.book_new();
   XLSX.utils.book_append_sheet(wb, sheet(rows, [10, ...days.map(() => 5), 10, 9, 16]), "월 집계");
-  XLSX.utils.book_append_sheet(wb, sheet(detail, [12, 10, 10, 8, 40, 30, 16]), "내역");
+  XLSX.utils.book_append_sheet(wb, sheet(detail, [12, 10, 10, 8, 60, 16]), "내역");
   save(wb, `잔업 현황 ${ym}.xlsx`);
 }

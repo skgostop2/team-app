@@ -68,11 +68,6 @@ export default function OvertimeNag({ profile }: { profile: Profile }) {
   if (missing.length === 0 && !askToday) return null;
 
   const urgent = missing.length > 0;
-  /** 지난번에 고른 업무 — 창을 열면 미리 선택돼 있다 */
-  const lastTaskId =
-    [...entries].sort((x, y) => y.work_date.localeCompare(x.work_date)).find((e) => e.minutes > 0 && e.task_id)
-      ?.task_id ?? null;
-
   /** 「없음」은 창 없이 한 번에 */
   async function none(dates: string[]) {
     if (busy || dates.length === 0) return;
@@ -153,7 +148,6 @@ export default function OvertimeNag({ profile }: { profile: Profile }) {
           date={pick}
           userId={profile.id}
           existing={entries.find((e) => e.work_date === pick) ?? null}
-          defaultTaskId={lastTaskId}
           slogan={settings.slogan}
           onClose={() => setPick(null)}
           onSaved={() => {

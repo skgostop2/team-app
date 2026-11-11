@@ -15,6 +15,7 @@ import {
   limitTone,
   monthKey,
   mustCheck,
+  otWork,
   shiftMonthKey,
   shortDay,
   sumMinutes,
@@ -112,8 +113,9 @@ export default function OvertimePage() {
     const m = new Map<string, { title: string; minutes: number; who: Set<string> }>();
     for (const e of entries) {
       if (!e.work_date.startsWith(ym) || e.minutes <= 0) continue;
-      const k = e.task_id ?? `etc:${e.note ?? ""}`;
-      const title = e.task_id ? (e.task_title ?? "(이름 없음)") : `기타 — ${e.note ?? ""}`;
+      // 직접 적은 글이라 같은 일도 표현이 조금씩 다를 수 있다 — 글자가 같은 것끼리만 묶는다
+      const title = otWork(e) || "(적지 않음)";
+      const k = title;
       const cur = m.get(k) ?? { title, minutes: 0, who: new Set<string>() };
       cur.minutes += e.minutes;
       cur.who.add(e.user_id);
@@ -254,8 +256,7 @@ export default function OvertimePage() {
                   <th className="px-3 py-2 text-left w-28">날짜</th>
                   <th className="px-3 py-2 text-center w-20">끝난 시각</th>
                   <th className="px-3 py-2 text-center w-16">시간</th>
-                  <th className="px-3 py-2 text-left">업무</th>
-                  <th className="px-3 py-2 text-left">메모</th>
+                  <th className="px-3 py-2 text-left">잔업 때 한 일</th>
                   <th className="px-3 py-2 text-center w-32">비고</th>
                 </tr>
               </thead>
@@ -273,8 +274,7 @@ export default function OvertimePage() {
                         <td className="px-3 py-2 text-center font-semibold text-gray-900">
                           {e ? (e.minutes > 0 ? hours(e.minutes) : "—") : ""}
                         </td>
-                        <td className="px-3 py-2 break-keep text-gray-800">{e?.task_title ?? ""}</td>
-                        <td className="px-3 py-2 break-keep text-gray-600">{e?.note ?? ""}</td>
+                        <td className="px-3 py-2 break-keep text-gray-800">{e ? otWork(e) : ""}</td>
                         <td className="px-3 py-2 text-center">
                           {e ? (
                             <button
@@ -411,7 +411,7 @@ export default function OvertimePage() {
                                   title={
                                     e
                                       ? e.minutes > 0
-                                        ? `${shortDay(d)} · ~${e.end_time} · ${e.task_title ?? ""}${e.note ? " — " + e.note : ""}`
+                                        ? `${shortDay(d)} · ~${e.end_time} · ${otWork(e)}`
                                         : `${shortDay(d)} · 잔업 없음`
                                       : miss
                                         ? `${shortDay(d)} · 안 넣음`
@@ -483,13 +483,13 @@ export default function OvertimePage() {
           </div>
           <p className="text-xs text-gray-500 break-keep">
             숫자 = 잔업 시간 · <span className="text-gray-400">·</span> = 없음(정시 퇴근) ·{" "}
-            <span className="text-red-600 font-bold">미</span> = 안 넣음 · 칸에 마우스를 올리면 업무가 보이고, 누르면
+            <span className="text-red-600 font-bold">미</span> = 안 넣음 · 칸에 마우스를 올리면 적은 내용(한 일)이 보이고, 누르면
             고칠 수 있습니다. 월 합계는 기준의 80%부터 노랑, 넘으면 빨강입니다.
           </p>
 
           {/* 잔업이 많이 든 업무 — 시간을 줄이려면 사람이 아니라 이 일을 본다 */}
           <div className="bg-white rounded-xl border border-gray-200 p-4">
-            <h3 className="text-base font-bold text-gray-900">{mm}월 잔업이 많이 든 업무</h3>
+            <h3 className="text-base font-bold text-gray-900">{mm}월 잔업이 많이 든 일</h3>
             {topTasks.length === 0 ? (
               <p className="text-sm text-gray-400 mt-2">아직 기록된 잔업이 없습니다</p>
             ) : (
@@ -497,7 +497,7 @@ export default function OvertimePage() {
                 <thead>
                   <tr className="text-xs text-gray-500 text-left">
                     <th className="py-1 w-8">#</th>
-                    <th className="py-1">업무</th>
+                    <th className="py-1">잔업 때 한 일 (적은 그대로)</th>
                     <th className="py-1 w-20 text-right">시간</th>
                     <th className="py-1 pl-4">비고 (누가)</th>
                   </tr>
@@ -547,11 +547,6 @@ export default function OvertimePage() {
           date={pick.date}
           userId={pick.userId}
           existing={byKey.get(`${pick.userId}|${pick.date}`) ?? null}
-          defaultTaskId={
-            [...entries]
-              .filter((e) => e.user_id === pick.userId && e.minutes > 0 && e.task_id)
-              .sort((x, y) => y.work_date.localeCompare(x.work_date))[0]?.task_id ?? null
-          }
           slogan={settings.slogan}
           onClose={() => setPick(null)}
           onSaved={() => {
