@@ -137,7 +137,7 @@ export default function NoticePanel() {
   return (
     <>
       {/* 최근에 붙은 글 — 올리면 여기 바로 보인다 (PC 화면 오른쪽) */}
-      {!open && !expanded && recent.filter((n) => !hidden.has(n.id)).length > 0 && (
+      {!open && !expanded && !path?.startsWith("/overtime") && recent.filter((n) => !hidden.has(n.id)).length > 0 && (
         <button
           onClick={() => setExpanded(true)}
           title="최근 공지·제안 펼쳐 보기"

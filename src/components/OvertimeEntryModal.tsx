@@ -19,6 +19,7 @@ export default function OvertimeEntryModal({
   date,
   userId,
   existing,
+  defaultTaskId,
   slogan,
   onClose,
   onSaved,
@@ -26,6 +27,8 @@ export default function OvertimeEntryModal({
   date: string;
   userId: string;
   existing?: OvertimeEntry | null;
+  /** 지난번에 고른 업무 — 미리 선택해 둔다 (잔업은 대개 같은 일로 이어진다) */
+  defaultTaskId?: string | null;
   slogan: string;
   onClose: () => void;
   onSaved: () => void;
@@ -35,6 +38,9 @@ export default function OvertimeEntryModal({
     existing ? (existing.task_id ?? (existing.minutes > 0 ? "etc" : null)) : null
   );
   const [note, setNote] = useState(existing?.note ?? "");
+  /** 21:30 뒤의 시각은 접어 둔다 (이미 늦은 시각으로 넣은 기록을 고칠 때는 펼친다) */
+  const [late, setLate] = useState((existing?.minutes ?? 0) > 300);
+  const [showNote, setShowNote] = useState(!!existing?.note);
   const [tasks, setTasks] = useState<TaskLite[]>([]);
   const [busy, setBusy] = useState(false);
   const [error, setError] = useState<string | null>(null);
@@ -61,8 +67,12 @@ export default function OvertimeEntryModal({
         )
         .sort((a, b) => Number(a.effective_status === "완료") - Number(b.effective_status === "완료"));
       setTasks(mine);
+      // 새로 넣는 날이면 지난번 업무를 미리 골라 둔다 (목록에 아직 있을 때만)
+      if (!existing && defaultTaskId && mine.some((t) => t.id === defaultTaskId)) {
+        setTaskId((cur) => cur ?? defaultTaskId);
+      }
     })();
-  }, [userId, existing?.task_id]);
+  }, [userId, existing, defaultTaskId]);
 
   async function save(min: number) {
     setError(null);
@@ -141,7 +151,7 @@ export default function OvertimeEntryModal({
             </button>
             <p className="text-xs text-gray-500 mt-3 mb-1.5">잔업을 했다면 — 끝난 시각</p>
             <div className="grid grid-cols-5 gap-1.5">
-              {END_OPTIONS.map((o) => (
+              {(late ? END_OPTIONS : END_OPTIONS.slice(0, 10)).map((o) => (
                 <button
                   key={o.label}
                   onClick={() => setMinutes(o.minutes)}
@@ -157,6 +167,11 @@ export default function OvertimeEntryModal({
                 </button>
               ))}
             </div>
+            {!late && (
+              <button onClick={() => setLate(true)} className="mt-1.5 text-xs text-gray-500 underline underline-offset-2">
+                더 늦게 끝났어요 (22:00 이후)
+              </button>
+            )}
           </div>
 
           {/* 2. 무슨 업무 때문에 */}
@@ -164,7 +179,7 @@ export default function OvertimeEntryModal({
             <>
               <div>
                 <p className="text-sm font-bold text-gray-900 mb-1.5">무슨 업무 때문에 남았나요?</p>
-                <div className="max-h-52 overflow-y-auto rounded-xl border border-gray-200 divide-y divide-gray-100">
+                <div className="max-h-44 overflow-y-auto rounded-xl border border-gray-200 divide-y divide-gray-100">
                   {tasks.map((t) => (
                     <button
                       key={t.id}
@@ -190,12 +205,19 @@ export default function OvertimeEntryModal({
                   </button>
                 </div>
               </div>
-              <input
-                value={note}
-                onChange={(e) => setNote(e.target.value)}
-                placeholder={taskId === "etc" ? "무슨 일이었는지 한 줄 (필수)" : "한 줄 메모 (안 써도 됩니다)"}
-                className="w-full rounded-lg border border-gray-300 px-3 py-2.5 text-base"
-              />
+              {taskId === "etc" || showNote ? (
+                <input
+                  value={note}
+                  onChange={(e) => setNote(e.target.value)}
+                  autoFocus={taskId === "etc"}
+                  placeholder={taskId === "etc" ? "무슨 일이었는지 한 줄 (필수)" : "한 줄 메모"}
+                  className="w-full rounded-lg border border-gray-300 px-3 py-2.5 text-base"
+                />
+              ) : (
+                <button onClick={() => setShowNote(true)} className="text-xs text-gray-500 underline underline-offset-2">
+                  + 메모 추가 (안 써도 됩니다)
+                </button>
+              )}
               <button
                 onClick={() => save(minutes)}
                 disabled={busy}

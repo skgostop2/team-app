@@ -27,6 +27,7 @@ export default function OvertimeNag({ profile }: { profile: Profile }) {
   const [ready, setReady] = useState(false);
   const [pick, setPick] = useState<string | null>(null);
   const [tick, setTick] = useState(0);
+  const [busy, setBusy] = useState(false);
 
   const load = useCallback(async () => {
     const supabase = createClient();
@@ -67,45 +68,79 @@ export default function OvertimeNag({ profile }: { profile: Profile }) {
   if (missing.length === 0 && !askToday) return null;
 
   const urgent = missing.length > 0;
+  /** 지난번에 고른 업무 — 창을 열면 미리 선택돼 있다 */
+  const lastTaskId =
+    [...entries].sort((x, y) => y.work_date.localeCompare(x.work_date)).find((e) => e.minutes > 0 && e.task_id)
+      ?.task_id ?? null;
+
+  /** 「없음」은 창 없이 한 번에 */
+  async function none(dates: string[]) {
+    if (busy || dates.length === 0) return;
+    setBusy(true);
+    const supabase = createClient();
+    const { error } = await supabase.from("overtime_entries").upsert(
+      dates.map((d) => ({ user_id: profile.id, work_date: d, minutes: 0, end_time: null, task_id: null, task_title: null, note: null })),
+      { onConflict: "user_id,work_date" }
+    );
+    setBusy(false);
+    if (error) {
+      window.alert(`저장하지 못했습니다: ${error.message}`);
+      return;
+    }
+    await load();
+    window.dispatchEvent(new Event("overtime-saved"));
+  }
+
+  const rows = [...missing.map((d) => ({ d, today: false })), ...(askToday ? [{ d: today, today: true }] : [])];
 
   return (
     <>
       <div
         className={
-          "no-print rounded-xl border-2 px-4 py-3 flex items-center gap-3 flex-wrap " +
+          "no-print rounded-xl border-2 px-4 py-3 " +
           (urgent ? "border-red-400 bg-red-50" : "border-amber-300 bg-amber-50")
         }
         style={{ fontFamily: "'현대하모니 L', 'Hyundai Harmony L', Pretendard, sans-serif" }}
       >
-        <span className="text-2xl">⏱</span>
-        <div className="flex-1 min-w-[220px]">
-          <p className={"text-base font-bold break-keep " + (urgent ? "text-red-800" : "text-amber-900")}>
-            {urgent
-              ? `잔업 체크를 안 한 날이 ${missing.length}일 있습니다`
-              : "오늘 잔업을 체크해 주세요"}
-          </p>
-          <p className="text-xs text-gray-600 break-keep mt-0.5">
-            잔업이 없었어도 「없음」을 눌러야 합니다 · “{settings.slogan}”
-          </p>
-        </div>
-        <div className="flex gap-1.5 flex-wrap">
-          {missing.map((d) => (
+        <div className="flex items-center gap-2 flex-wrap">
+          <span className="text-xl">⏱</span>
+          <p className={"text-base font-bold " + (urgent ? "text-red-800" : "text-amber-900")}>잔업 체크</p>
+          <p className="text-xs text-gray-600 break-keep">“{settings.slogan}”</p>
+          {missing.length >= 2 && (
             <button
-              key={d}
-              onClick={() => setPick(d)}
-              className="rounded-lg bg-red-600 text-white px-3 py-2 text-sm font-bold hover:bg-red-700"
+              onClick={() => none(missing)}
+              disabled={busy}
+              className="ml-auto rounded-lg border border-gray-400 bg-white px-3 py-1.5 text-xs font-bold text-gray-800 hover:bg-gray-50 disabled:opacity-50"
             >
-              {shortDay(d)} 체크
-            </button>
-          ))}
-          {askToday && (
-            <button
-              onClick={() => setPick(today)}
-              className="rounded-lg bg-amber-500 text-white px-3 py-2 text-sm font-bold hover:bg-amber-600"
-            >
-              오늘 체크
+              {missing.length}일 모두 없음
             </button>
           )}
+        </div>
+        <div className="mt-2 flex flex-wrap gap-x-4 gap-y-2">
+          {rows.map(({ d, today: isToday }) => (
+            <div key={d} className="flex items-center gap-1.5">
+              <span className={"text-sm font-bold whitespace-nowrap " + (isToday ? "text-amber-900" : "text-red-800")}>
+                {isToday ? `오늘 ${shortDay(d)}` : shortDay(d)}
+              </span>
+              <button
+                onClick={() => none([d])}
+                disabled={busy}
+                className="rounded-lg border-2 border-emerald-500 bg-white px-3.5 py-2 text-sm font-bold text-emerald-700 hover:bg-emerald-50 disabled:opacity-50"
+              >
+                없음
+              </button>
+              <button
+                onClick={() => setPick(d)}
+                disabled={busy}
+                className={
+                  "rounded-lg px-3.5 py-2 text-sm font-bold text-white disabled:opacity-50 " +
+                  (isToday ? "bg-amber-500 hover:bg-amber-600" : "bg-red-600 hover:bg-red-700")
+                }
+              >
+                했음
+              </button>
+            </div>
+          ))}
         </div>
       </div>
 
@@ -114,6 +149,7 @@ export default function OvertimeNag({ profile }: { profile: Profile }) {
           date={pick}
           userId={profile.id}
           existing={entries.find((e) => e.work_date === pick) ?? null}
+          defaultTaskId={lastTaskId}
           slogan={settings.slogan}
           onClose={() => setPick(null)}
           onSaved={() => {

@@ -132,6 +132,18 @@ export default function OvertimePage() {
     setSettings((s) => ({ ...s, ...patch }));
   }
 
+  /** 「없음」은 창 없이 한 번에 */
+  async function quickNone(userId: string, d: string) {
+    const supabase = createClient();
+    const { error } = await supabase.from("overtime_entries").upsert(
+      { user_id: userId, work_date: d, minutes: 0, end_time: null, task_id: null, task_title: null, note: null },
+      { onConflict: "user_id,work_date" }
+    );
+    if (error) return window.alert(`저장하지 못했습니다: ${error.message}`);
+    await load();
+    window.dispatchEvent(new Event("overtime-saved"));
+  }
+
   async function toggleExempt(p: Profile) {
     const supabase = createClient();
     const { error } = await supabase.from("profiles").update({ ot_exempt: !p.ot_exempt }).eq("id", p.id);
@@ -200,9 +212,11 @@ export default function OvertimePage() {
         </div>
       </div>
 
+      <div className="flex flex-col gap-5">
       {/* ── 내 잔업 ── */}
       {mustCheck(me) && (
-        <section className="space-y-3">
+        <section className={cn("space-y-3", lead && "order-2")}>
+          {lead && <h2 className="text-lg font-bold text-gray-900 pt-2">내 잔업</h2>}
           <div className="grid grid-cols-2 md:grid-cols-4 gap-3">
             <Stat label="이번 주" value={`${hours(myWeek)}시간`} />
             <div className="rounded-xl border border-gray-200 bg-white px-4 py-3">
@@ -242,7 +256,7 @@ export default function OvertimePage() {
                   <th className="px-3 py-2 text-center w-16">시간</th>
                   <th className="px-3 py-2 text-left">업무</th>
                   <th className="px-3 py-2 text-left">메모</th>
-                  <th className="px-3 py-2 text-center w-24">비고</th>
+                  <th className="px-3 py-2 text-center w-32">비고</th>
                 </tr>
               </thead>
               <tbody>
@@ -262,21 +276,32 @@ export default function OvertimePage() {
                         <td className="px-3 py-2 break-keep text-gray-800">{e?.task_title ?? ""}</td>
                         <td className="px-3 py-2 break-keep text-gray-600">{e?.note ?? ""}</td>
                         <td className="px-3 py-2 text-center">
-                          {d >= settings.start_date || e ? (
+                          {e ? (
                             <button
                               onClick={() => setPick({ userId: me.id, date: d })}
-                              className={cn(
-                                "no-print text-xs px-2.5 py-1 rounded-lg",
-                                miss
-                                  ? "bg-red-600 text-white font-bold"
-                                  : e
-                                    ? "border border-gray-300 text-gray-600 hover:bg-gray-50"
-                                    : "bg-amber-500 text-white font-bold"
-                              )}
+                              className="no-print text-xs px-2.5 py-1 rounded-lg border border-gray-300 text-gray-600 hover:bg-gray-50"
                             >
-                              {e ? "고치기" : "체크"}
+                              고치기
                             </button>
-                          ) : null}
+                          ) : (
+                            <span className="no-print inline-flex gap-1">
+                              <button
+                                onClick={() => quickNone(me.id, d)}
+                                className="text-xs px-2.5 py-1 rounded-lg border-2 border-emerald-500 text-emerald-700 font-bold hover:bg-emerald-50"
+                              >
+                                없음
+                              </button>
+                              <button
+                                onClick={() => setPick({ userId: me.id, date: d })}
+                                className={cn(
+                                  "text-xs px-2.5 py-1 rounded-lg text-white font-bold",
+                                  miss ? "bg-red-600" : "bg-amber-500"
+                                )}
+                              >
+                                했음
+                              </button>
+                            </span>
+                          )}
                         </td>
                       </tr>
                     );
@@ -296,7 +321,7 @@ export default function OvertimePage() {
 
       {/* ── 팀 전체 (팀장·상무) ── */}
       {lead && (
-        <section className="space-y-3">
+        <section className="space-y-3 order-1">
           <div className="flex items-center justify-between gap-2 flex-wrap">
             <h2 className="text-lg font-bold text-gray-900">팀 전체 — {mm}월</h2>
             <div className="no-print flex items-center gap-2 flex-wrap text-xs">
@@ -515,11 +540,18 @@ export default function OvertimePage() {
         </section>
       )}
 
+      </div>
+
       {pick && (
         <OvertimeEntryModal
           date={pick.date}
           userId={pick.userId}
           existing={byKey.get(`${pick.userId}|${pick.date}`) ?? null}
+          defaultTaskId={
+            [...entries]
+              .filter((e) => e.user_id === pick.userId && e.minutes > 0 && e.task_id)
+              .sort((x, y) => y.work_date.localeCompare(x.work_date))[0]?.task_id ?? null
+          }
           slogan={settings.slogan}
           onClose={() => setPick(null)}
           onSaved={() => {
