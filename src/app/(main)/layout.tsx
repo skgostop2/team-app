@@ -1,7 +1,7 @@
 import { redirect } from "next/navigation";
 import { createClient } from "@/lib/supabase/server";
 import AppShell from "@/components/AppShell";
-import { isTrustedDevice } from "@/lib/trustedDeviceServer";
+import { isPresentationDevice, isTrustedDevice } from "@/lib/trustedDeviceServer";
 import type { Profile } from "@/lib/types";
 
 export default async function MainLayout({ children }: { children: React.ReactNode }) {
@@ -53,7 +53,8 @@ export default async function MainLayout({ children }: { children: React.ReactNo
     const requireMfa = (setting as { value: boolean } | null)?.value !== false;
 
     if ((requireMfa && !p.mfa_enabled) || !p.password_changed) {
-      redirect("/onboarding");
+      // 발표용 번호로 들어온 샘플 팀원은 발표 중에 첫 로그인 절차를 건너뛴다 (11/16~17 한정)
+      if (!(await isPresentationDevice(supabase, p.id))) redirect("/onboarding");
     }
   }
 

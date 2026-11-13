@@ -46,3 +46,26 @@ export async function isTrustedDevice(
 
   return true;
 }
+
+/**
+ * 발표용 번호로 들어온 기기인가 (11/16~17 발표 기간 동안만).
+ * 샘플 팀원은 첫 로그인 절차(비밀번호 변경)를 안 거쳤으므로, 발표 중에는 그 화면을 건너뛴다.
+ */
+export async function isPresentationDevice(
+  supabase: SupabaseClient,
+  userId: string
+): Promise<boolean> {
+  const jar = await cookies();
+  const token = jar.get(cookieName(userId))?.value;
+  if (!token) return false;
+  const hash = createHash("sha256").update(token).digest("hex");
+  const { data } = await supabase
+    .from("trusted_devices")
+    .select("expires_at")
+    .eq("user_id", userId)
+    .eq("token_hash", hash)
+    .eq("label", "발표용 번호")
+    .maybeSingle();
+  const row = data as { expires_at: string } | null;
+  return !!row && new Date(row.expires_at).getTime() > Date.now();
+}

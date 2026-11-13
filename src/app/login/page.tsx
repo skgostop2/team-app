@@ -4,6 +4,7 @@ import { useEffect, useState } from "react";
 import { useRouter } from "next/navigation";
 import Link from "next/link";
 import { createClient } from "@/lib/supabase/client";
+import QuickLogin from "@/components/QuickLogin";
 
 export default function LoginPage() {
   const router = useRouter();
@@ -136,6 +137,9 @@ export default function LoginPage() {
             {loading ? "로그인 중..." : "로그인"}
           </button>
         </form>
+
+        {/* 발표 기간(11/16~17)에만 나타난다 */}
+        <QuickLogin />
 
         <div className="flex justify-between mt-4 text-sm text-gray-500 px-1">
           <Link href="/signup" className="hover:text-blue-600">
