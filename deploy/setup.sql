@@ -1286,7 +1286,7 @@ create table if not exists public.overtime_entries (
   id uuid default gen_random_uuid() primary key,
   user_id uuid not null references public.profiles(id) on delete cascade,
   work_date date not null,
-  minutes int not null check (minutes >= 0 and minutes <= 600 and minutes % 30 = 0),
+  minutes int not null check (minutes >= 0 and minutes <= 600 and minutes % 15 = 0),
   end_time text,
   task_id uuid references public.tasks(id) on delete set null,
   task_title text,

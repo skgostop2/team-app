@@ -5,7 +5,7 @@ import type { Profile } from "./types";
 /**
  * 잔업(OT) 계산.
  *
- * 잔업은 16:30 부터 센다. 끝난 시각만 고르면 시간이 나온다 (30분 단위).
+ * 잔업은 16:30 부터 센다. 끝난 시각만 고르면 시간이 나온다 (15분 단위 — 11-13 팀장님 지시로 30분에서 바꿈).
  * 날짜는 "YYYY-MM-DD" 글자로만 다룬다 (시차로 하루가 밀리는 일을 막는다).
  */
 export const OT_START_MIN = 16 * 60 + 30;
@@ -40,20 +40,25 @@ export function otWork(e: { note: string | null; task_title: string | null }): s
   return (e.note ?? "").trim() || (e.task_title ?? "").trim();
 }
 
-/** 끝난 시각 선택지 — 17:00 ~ 24:00 */
-export const END_OPTIONS: { label: string; minutes: number }[] = Array.from({ length: 15 }).map(
+/** 잔업을 세는 단위(분) */
+export const OT_STEP = 15;
+
+/** 끝난 시각 선택지 — 16:45 ~ 24:00, 15분 간격 */
+export const END_OPTIONS: { label: string; minutes: number; hour: number }[] = Array.from({ length: 30 }).map(
   (_, i) => {
-    const total = OT_START_MIN + (i + 1) * 30;
+    const total = OT_START_MIN + (i + 1) * OT_STEP;
     const h = Math.floor(total / 60);
     const m = total % 60;
-    return { label: `${String(h).padStart(2, "0")}:${String(m).padStart(2, "0")}`, minutes: (i + 1) * 30 };
+    return { label: `${String(h).padStart(2, "0")}:${String(m).padStart(2, "0")}`, minutes: (i + 1) * OT_STEP, hour: h };
   }
 );
 
-/** 90 → "1.5" */
+/** 22시 전까지는 바로 보이고, 그 뒤는 「더 늦게」로 접는다 */
+export const LATE_FROM_MIN = 22 * 60 - OT_START_MIN;
+
+/** 90 → "1.5", 75 → "1.25" (15분 단위라 소수 둘째 자리까지) */
 export function hours(min: number): string {
-  const h = min / 60;
-  return Number.isInteger(h) ? String(h) : h.toFixed(1);
+  return String(Math.round((min / 60) * 100) / 100);
 }
 
 /** 월~금인가 */

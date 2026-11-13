@@ -87,7 +87,7 @@ export function exportOvertime(opts: {
 }) {
   const { ym, days, people, entries, totalByUser } = opts;
   const byKey = new Map(entries.map((e) => [`${e.user_id}|${e.work_date}`, e]));
-  const h = (min: number) => Math.round((min / 60) * 10) / 10;
+  const h = (min: number) => Math.round((min / 60) * 100) / 100;
 
   const head: (string | number | null)[] = ["이름", ...days.map((d) => `${Number(d.slice(8))}일`), "월 합계(h)", "누적(h)", "비고"];
   const rows: (string | number | null)[][] = [head];

@@ -203,7 +203,7 @@ export default function OvertimePage() {
             </p>
           )}
           <p className="text-xs text-gray-500 mt-1 break-keep">
-            잔업은 16:30 부터 30분 단위로 셉니다. 잔업이 없던 날도 「없음」을 눌러 둡니다.
+            잔업은 16:30 부터 15분 단위로 셉니다. 잔업이 없던 날도 「없음」을 눌러 둡니다.
           </p>
         </div>
         <div className="no-print flex items-center gap-2">
@@ -430,6 +430,8 @@ export default function OvertimePage() {
                                   }
                                   className={cn(
                                     "w-full h-7 text-xs rounded",
+                                    // 1.25 처럼 네 글자면 칸을 넘지 않게 조금 줄인다
+                                    e && hours(e.minutes).length >= 4 && "text-[10px] tracking-tighter",
                                     miss && "bg-red-100 text-red-700 font-bold",
                                     e && e.minutes > 0 && "bg-blue-50 text-blue-800 font-semibold",
                                     e && e.minutes === 0 && "text-gray-300",
